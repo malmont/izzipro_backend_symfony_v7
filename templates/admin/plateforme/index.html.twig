@@ -288,6 +288,11 @@
                 <td>{{ {reserved: 'réservé', plugged: 'branché, à confirmer', confirmed: 'confirmé', cancelled: 'annulé'}[e.status] ?? e.status }}</td>
                 <td class="small">{{ e.pluggedAt ?? '—' }}</td><td class="small">{{ e.confirmedAt ?? '—' }}</td>
                 <td>{% if e.status in ['reserved', 'plugged'] %}
+                    <form method="post" action="{{ path('admin_plateforme_loss_shipment_code', {id: e.id}) }}" class="d-inline-flex gap-1 mb-1">
+                        <input type="hidden" name="_token" value="{{ csrf_token(csrf_id) }}">
+                        <input type="text" name="code" class="form-control form-control-sm" style="width:9em" placeholder="code relu" required autocomplete="off">
+                        <button class="btn btn-sm btn-outline-secondary">Renvoyer le code</button>
+                    </form>
                     <form method="post" action="{{ path('admin_plateforme_loss_shipment_cancel', {id: e.id}) }}" onsubmit="return confirm('Annuler cette expédition ? Son code sera libéré.');">
                         <input type="hidden" name="_token" value="{{ csrf_token(csrf_id) }}"><button class="btn btn-sm btn-outline-danger">Annuler</button>
                     </form>{% endif %}</td>

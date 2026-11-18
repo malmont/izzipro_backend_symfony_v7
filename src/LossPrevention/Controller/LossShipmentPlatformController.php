@@ -19,7 +19,10 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
  * - POST { serial, code, tenantCode, orderRef? } → 200 { preview { serial, orderRef, site { code, name, host, lossPrevention }, pairing } }
  *   sans rien écrire ; avec `confirm: true` → 201 { shipment } ; 422 VALIDATION_FAILED { fields } (site inconnu, sans le module, code
  *   déjà jumelé…), 409 SHIPMENT_EXISTS ;
- * - POST /{id}/annuler → { shipment } ; 404 SHIPMENT_NOT_FOUND, 409 SHIPMENT_NOT_CANCELLABLE.
+ * - POST /{id}/annuler → { shipment } ; 404 SHIPMENT_NOT_FOUND, 409 SHIPMENT_NOT_CANCELLABLE ;
+ * - lot L6-c : la réservation rend aussi `codeSentTo` (le code parti aux administrateurs du site, jamais gardé) ; POST /{id}/code
+ *   { code } renvoie le code relu (il doit être celui de l'expédition) → { codeSentTo } ; 422 { fields.code : CODE_MISMATCH }, 404, 409
+ *   SHIPMENT_NOT_OPEN, 429.
  */
 #[Route('/api/platform/pertes/expeditions')]
 #[IsGranted('ROLE_SUPER_ADMIN')]
@@ -51,6 +54,19 @@ class LossShipmentPlatformController extends AbstractController
         }
 
         return $this->json($result, isset($result['shipment']) ? 201 : 200);
+    }
+
+    #[Route('/{id}/code', name: 'api_platform_loss_shipments_code', methods: ['POST'], requirements: ['id' => '\d+'])]
+    public function resendCode(int $id, Request $request): JsonResponse
+    {
+        $data = json_decode($request->getContent(), true);
+        try {
+            return $this->json($this->shipments->resendCode($id, is_array($data) ? $data : [], (string) $this->getUser()?->getUserIdentifier()));
+        } catch (GestionValidationException $e) {
+            return $this->json(['error' => 'VALIDATION_FAILED', 'code' => 'VALIDATION_FAILED', 'message' => 'Code invalide.', 'fields' => $e->fields], 422);
+        } catch (GestionConflictException $e) {
+            return $this->json($e->toArray(), $e->status, isset($e->details['retryAfterSeconds']) ? ['Retry-After' => (string) $e->details['retryAfterSeconds']] : []);
+        }
     }
 
     #[Route('/{id}/annuler', name: 'api_platform_loss_shipments_cancel', methods: ['POST'], requirements: ['id' => '\d+'])]

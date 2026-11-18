@@ -235,6 +235,14 @@ loss_digest:
 
 # Lot L6-b (17/11/2026) : un boîtier vendu par la plateforme est branché dans la boutique (indispensable). %serial% : son numéro de série ;
 # %site% : le nom du site. Jamais le code de l'étiquette.
+loss_box_code:
+    subject: '%site% : le code de votre boîtier'
+    title: 'Le code de votre boîtier'
+    greeting: 'Bonjour,'
+    message: 'Votre boîtier %serial% est en route. Son code : %code%. Gardez ce code : il sert si votre boîtier n''est pas reconnu au branchement (« Boîtiers », « Ajouter un boîtier »). Ne le communiquez à personne.'
+    validity: 'Ce code ne sert qu''à relier CE boîtier à votre site, et à aucun autre.'
+    ignore: 'Si vous n''avez pas acheté de boîtier, ignorez ce courriel et contactez-nous.'
+
 loss_box_cancelled:
     subject: '%site% : l''expédition de votre boîtier est annulée'
     title: 'Expédition de boîtier annulée'

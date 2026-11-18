@@ -261,11 +261,31 @@ class PlatformConsoleAdminController extends AbstractController
             }
             if ($confirm) {
                 $this->addFlash('success', sprintf('Boîtier %s réservé pour le site %s.', $result['shipment']['serial'], $result['shipment']['tenantCode']));
+                // lot L6-c : le code est parti aux administrateurs du site (jamais gardé) ; sinon, le renvoyer en relisant l'étiquette
+                $this->addFlash(($result['codeSentTo'] ?? 0) > 0 ? 'success' : 'warning', ($result['codeSentTo'] ?? 0) > 0
+                    ? sprintf('Code envoyé à %d administrateur(s) du site.', $result['codeSentTo'])
+                    : 'Le code n\'a pu être envoyé à aucun administrateur : utilisez « Renvoyer le code » en relisant l\'étiquette.');
             } else {
                 // le code n'est jamais gardé dans la session (relecture, M2) : il se relit à la confirmation
                 $request->getSession()->getFlashBag()->add('loss_shipment_preview', ['input' => array_diff_key($body, ['code' => true])] + $result['preview']);
                 $session->set('loss_shipment_preview_code', $this->shipmentsUseCase()->codeFingerprint($body['code']));
             }
+        });
+    }
+
+    /** Lot L6-c (B) : renvoyer le code d'une expédition réservée ou branchée, relu sur l'étiquette (il doit être celui de l'expédition) */
+    #[Route('/admin/plateforme/expedition/{id}/code', name: 'admin_plateforme_loss_shipment_code', methods: ['POST'], requirements: ['id' => '\d+'])]
+    public function lossShipmentCode(int $id, Request $request): Response
+    {
+        return $this->action($request, function () use ($id, $request) {
+            try {
+                $result = $this->shipmentsUseCase()->resendCode($id, ['code' => trim((string) $request->request->get('code', ''))], (string) $this->getUser()?->getUserIdentifier());
+            } catch (\App\Gestion\Services\GestionValidationException $e) {
+                throw new \InvalidArgumentException(($e->fields['code'] ?? '') === 'CODE_MISMATCH' ? 'Ce code n\'est pas celui de cette expédition : rien n\'est envoyé.' : 'Code illisible.', 0, $e);
+            } catch (\App\Gestion\Services\GestionConflictException $e) {
+                throw new \InvalidArgumentException($e->getMessage(), 0, $e);
+            }
+            $this->addFlash($result['codeSentTo'] > 0 ? 'success' : 'warning', sprintf('Code renvoyé à %d administrateur(s) du site.', $result['codeSentTo']));
         });
     }
 

@@ -231,6 +231,14 @@ loss_digest:
 
 # Lot L6-b (17/11/2026): a box sold by the platform is plugged in at the shop (indispensable). %serial%: its serial number; %site%:
 # the site's name. Never the label code.
+loss_box_code:
+    subject: '%site%: the code of your box'
+    title: 'The code of your box'
+    greeting: 'Hello,'
+    message: 'Your box %serial% is on its way. Its code: %code%. Keep this code: it is used if your box is not recognized when plugged in ("Boxes", "Add a box"). Do not share it with anyone.'
+    validity: 'This code only links THIS box to your site, and to no other.'
+    ignore: 'If you did not buy a box, ignore this e-mail and contact us.'
+
 loss_box_cancelled:
     subject: '%site%: the shipment of your box is cancelled'
     title: 'Box shipment cancelled'

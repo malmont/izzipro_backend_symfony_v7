@@ -56,6 +56,7 @@ class LossShipmentService
         private readonly LossTexts $texts,
         private readonly ?EntitlementService $entitlements = null,
         private readonly ?MessageBusInterface $bus = null,
+        private readonly ?LossBoxCodeMailer $codeMailer = null, // lot L6-c : le code envoyé au site acheteur, jamais gardé
     ) {
     }
 
@@ -86,7 +87,10 @@ class LossShipmentService
      *
      * @param array<string, mixed> $body
      *
-     * @return array<string, mixed> { shipment }
+     * Lot L6-c (A) : le code part aussitôt aux administrateurs du site acheteur (`codeSentTo`), en direct, sans être gardé ; 0 : la
+     * réservation tient, la plateforme le renverra (B, `resendCode`).
+     *
+     * @return array<string, mixed> { shipment, codeSentTo }
      *
      * @throws GestionValidationException 422 { fields } (dont `confirm: REQUIRED`), GestionConflictException 409 `SHIPMENT_EXISTS`
      */
@@ -114,8 +118,51 @@ class LossShipmentService
 
             return $id;
         });
+        $sent = $this->sendCode($id, (string) LossPairingCode::canonical($body['code']), $by);
 
-        return ['shipment' => $this->view($this->pairings->shipment($id) ?? [])];
+        return ['shipment' => $this->view($this->pairings->shipment($id) ?? []), 'codeSentTo' => $sent];
+    }
+
+    /**
+     * Lot L6-c (B) : la plateforme renvoie le code d'une expédition réservée ou branchée `{ code }`, relu sur le boîtier ou sa fiche de
+     * préparation : il doit être celui de l'expédition (empreintes comparées en temps constant). Plafonné.
+     *
+     * @param array<string, mixed> $body
+     *
+     * @return array{codeSentTo: int}
+     *
+     * @throws GestionValidationException 422 `code` (INVALID_VALUE, CODE_MISMATCH), GestionConflictException 404, 409, 429
+     */
+    public function resendCode(int $id, array $body, string $by): array
+    {
+        $wait = $this->limits->shipmentCode($id);
+        if ($wait !== null) {
+            throw new GestionConflictException('RATE_LIMITED', 'Trop d\'essais. Réessayez plus tard.', 429, ['retryAfterSeconds' => $wait]);
+        }
+        $shipment = $this->pairings->shipment($id) ?? throw new GestionConflictException(self::NOT_FOUND, 'Expédition introuvable.', 404);
+        if (!in_array($shipment['status'], [LossPairingRepository::SHIPMENT_RESERVED, LossPairingRepository::SHIPMENT_PLUGGED], true)) {
+            throw new GestionConflictException('SHIPMENT_NOT_OPEN', 'Cette expédition est déjà confirmée ou annulée.', 409);
+        }
+        $code = LossPairingCode::canonical($body['code'] ?? null);
+        if ($code === null) {
+            throw new GestionValidationException(['code' => array_key_exists('code', $body) ? 'INVALID_VALUE' : 'REQUIRED']);
+        }
+        if (!hash_equals((string) $shipment['code_hash'], $this->tokens->pairingCodeHash($code))) {
+            throw new GestionValidationException(['code' => 'CODE_MISMATCH']);
+        }
+
+        return ['codeSentTo' => $this->sendCode($id, $code, $by)];
+    }
+
+    /** Le code au site acheteur, sans rien laisser derrière : une panne ne refuse jamais la réservation */
+    private function sendCode(int $id, string $code, string $by): int
+    {
+        try {
+            return $this->codeMailer?->send($id, $code, $by) ?? 0;
+        } catch (\Throwable $e) {
+            unset($e); // jamais le message (il pourrait porter le code)
+            return 0;
+        }
     }
 
     /** L'empreinte d'un code (la même que la base garde) : la page de la plateforme compare le code relu à celui de l'aperçu ; null si invalide */

@@ -28,6 +28,12 @@ class LossShipmentUseCase
         return $this->shipments->all();
     }
 
+    /** @param array<string, mixed> $body @return array{codeSentTo: int} lot L6-c */
+    public function resendCode(int $id, array $body, string $by): array
+    {
+        return $this->shipments->resendCode($id, $body, $by);
+    }
+
     /** @return array<string, mixed> */
     public function cancel(int $id, string $by): array
     {

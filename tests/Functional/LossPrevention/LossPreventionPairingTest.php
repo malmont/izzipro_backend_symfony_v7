@@ -577,8 +577,8 @@ class LossPreventionPairingTest extends LossPreventionTestCase
         // Les journaux : celui des expéditions (base maître), celui du module, avec l'auteur ; jamais le code
         $events = $this->master->query("SELECT type FROM loss_box_shipment_event WHERE shipment_id = {$shipment['id']} ORDER BY id")->fetchAll(\PDO::FETCH_COLUMN);
         // trois saisies du code réservé par l'autre site (tracées après la réponse), sa confirmation refusée, le délai passé
-        // et la seconde confirmation, refusée (une seule fois)
-        $this->assertSame(['reserved', 'plugged', 'refused', 'refused', 'refused', 'refused', 'unplugged', 'refused', 'plugged', 'confirmed', 'refused'], $events);
+        // et la seconde confirmation, refusée (une seule fois) ; le code envoyé au site acheteur à la réservation (lot L6-c)
+        $this->assertSame(['reserved', 'code_sent', 'plugged', 'refused', 'refused', 'refused', 'refused', 'unplugged', 'refused', 'plugged', 'confirmed', 'refused'], $events);
         $this->assertSame(['code_other_site', 'code_other_site', 'code_other_site', 'other_site'], array_map(fn (string $d): string => json_decode($d, true)['reason'],
             $this->master->query("SELECT data FROM loss_box_shipment_event WHERE shipment_id = {$shipment['id']} AND type = 'refused' ORDER BY id LIMIT 4")->fetchAll(\PDO::FETCH_COLUMN)));
         // au journal du site qui a saisi : la même ligne pour un code inconnu et pour un code réservé ailleurs (7 saisies refusées)
@@ -607,6 +607,76 @@ class LossPreventionPairingTest extends LossPreventionTestCase
         $this->assertSame(1, (int) $this->db->fetchOne("SELECT COUNT(*) FROM loss_journal WHERE type = 'BOX_SHIPMENT_CANCELLED'"));
         $this->assertMatchesRegularExpression('/annulée|cancelled/u', (string) $this->db->fetchOne("SELECT title FROM notification_log WHERE kind = 'loss_box_plugged' AND user_id = ? ORDER BY id DESC LIMIT 1", [$this->adminId]));
         $this->json($platform('POST', '', ['serial' => "IZB3-$this->s", 'code' => $third, 'tenantCode' => MV_TEST_TENANT_CODE, 'confirm' => true]), 201);
+    }
+
+    /**
+     * Lot L6-c (17/11/2026, `docs/prevention-pertes.md` § 19.6) : le code de l'étiquette part UNE fois, à la réservation, aux administrateurs
+     * du site acheteur, en direct ; il n'est gardé nulle part (ni dans un message en file, ni dans une table de la plateforme). La plateforme
+     * le renvoie en le relisant : il doit être celui de l'expédition ; plafonné ; seulement pour une expédition vivante.
+     */
+    public function testTheLabelCodeGoesOnceToTheBuyerAndIsKeptNowhere(): void
+    {
+        $before = [$_ENV['MAILER_DSN'] ?? null, $_SERVER['MAILER_DSN'] ?? null];
+        $_ENV['MAILER_DSN'] = $_SERVER['MAILER_DSN'] = 'null://plateforme-envoi%40example.invalid:x@default'; // le serveur d'envoi des essais reçoit un compte
+        $limiter = null;
+        try {
+            $super = static::getContainer()->get('lexik_jwt_authentication.jwt_manager')->create($this->user(['ROLE_ADMIN', 'ROLE_SUPER_ADMIN'], 'Plateforme'));
+            $code = LossPairingCode::generate();
+            $serial = "IZC-$this->s";
+            $this->json($this->box('', ['code' => $code, 'machine' => self::MACHINE, 'version' => '1.0.0', 'arch' => 'arm64', 'serial' => $serial]));
+            // la réservation : le code part au site acheteur, en direct ; aucun message en file ne le porte
+            $this->client->disableReboot();
+            $bus = static::getContainer()->get('debug.traced.messenger.bus.default');
+            $bus->reset();
+            $reserved = $this->json($this->call('POST', '/api/platform/pertes/expeditions', ['serial' => $serial, 'code' => $code, 'tenantCode' => MV_TEST_TENANT_CODE, 'confirm' => true], $super), 201);
+            $admins = (int) $this->db->fetchOne('SELECT COUNT(*) FROM "user" WHERE roles::text LIKE \'%"ROLE_ADMIN"%\' AND roles::text NOT LIKE \'%"ROLE_SUPER_ADMIN"%\' AND deleted_at IS NULL AND is_verified = true AND email LIKE \'%@%\'');
+            $this->assertGreaterThanOrEqual(1, $reserved['codeSentTo'], 'au moins l\'administrateur du site d\'essai');
+            $this->assertSame($admins, $reserved['codeSentTo'], 'chaque administrateur du site, jamais le compte de la plateforme (lui aussi ROLE_ADMIN ici)');
+            foreach (['fr', 'en'] as $language) { // le corps porte le code (le sujet non)
+                $translator = static::getContainer()->get('translator');
+                $this->assertStringContainsString('ZZ-CODE', $translator->trans('loss_box_code.message', ['%code%' => 'ZZ-CODE', '%serial%' => 'S', '%site%' => 'X'], 'emails', $language));
+                $this->assertStringNotContainsString('ZZ-CODE', $translator->trans('loss_box_code.subject', ['%code%' => 'ZZ-CODE', '%serial%' => 'S', '%site%' => 'X'], 'emails', $language));
+            }
+            foreach ($bus->getDispatchedMessages() as $dispatched) {
+                $this->assertStringNotContainsString($code, serialize($dispatched['message']), 'aucun message en file ne porte le code');
+            }
+            $id = (int) $reserved['shipment']['id'];
+            $limiter = self::pairingLimiter('shipmentCode', '15 minutes', (string) $id);
+            $limiter->reset();
+            // rien de réversible dans la base de la plateforme : ni l'expédition, ni son journal, ni la demande ne portent le code
+            $dump = json_encode([$this->master->query("SELECT * FROM loss_box_shipment WHERE id = $id")->fetchAll(\PDO::FETCH_ASSOC),
+                $this->master->query("SELECT * FROM loss_box_shipment_event WHERE shipment_id = $id")->fetchAll(\PDO::FETCH_ASSOC), $this->master->query('SELECT * FROM loss_box_pairing')->fetchAll(\PDO::FETCH_ASSOC)]);
+            $this->assertStringNotContainsString($code, $dump);
+            $this->assertStringNotContainsString(str_replace('-', '', $code), $dump);
+            $sent = $this->master->query("SELECT actor, data FROM loss_box_shipment_event WHERE shipment_id = $id AND type = 'code_sent'")->fetch(\PDO::FETCH_ASSOC);
+            $this->assertSame([$reserved['codeSentTo'], $serial], [json_decode((string) $sent['data'], true)['admins'], json_decode((string) $sent['data'], true)['serial']], 'code envoyé à N administrateurs, avec la série');
+            // le renvoi (B) : seulement le code de CETTE expédition ; plafonné à 5 essais par quart d'heure
+            $resend = fn (mixed $tried): \Symfony\Component\HttpFoundation\Response => $this->call('POST', "/api/platform/pertes/expeditions/$id/code", ['code' => $tried], $super);
+            $this->assertSame(['code' => 'CODE_MISMATCH'], $this->json($resend(LossPairingCode::generate()), 422)['fields']);
+            $this->assertSame(['code' => 'INVALID_VALUE'], $this->json($resend('pas un code'), 422)['fields']);
+            $this->assertSame(403, $this->call('POST', "/api/platform/pertes/expeditions/$id/code", ['code' => $code], $this->adminToken)->getStatusCode(), 'la plateforme seule');
+            // essais 1 et 2 ci-dessus (un code faux, un code illisible) ; 3, 4 et 5 : le bon code, renvoyé ; le sixième attend
+            $this->assertGreaterThanOrEqual(1, $this->json($resend(strtolower($code)))['codeSentTo']);
+            $this->json($resend($code));
+            $this->json($resend($code));
+            $this->assertSame('RATE_LIMITED', $this->json($resend($code), 429)['error'], 'le sixième essai attend');
+            $limiter->reset();
+            $this->assertSame(4, (int) $this->master->query("SELECT COUNT(*) FROM loss_box_shipment_event WHERE shipment_id = $id AND type = 'code_sent'")->fetchColumn(), 'la réservation et trois renvois');
+            // une expédition annulée : plus de renvoi
+            $this->json($this->call('POST', "/api/platform/pertes/expeditions/$id/annuler", null, $super));
+            $this->assertSame('SHIPMENT_NOT_OPEN', $this->json($resend($code), 409)['error']);
+        } finally {
+            $limiter?->reset();
+            $this->client->enableReboot();
+            // la valeur des essais remise (tests/bootstrap.php), pour les essais qui suivent dans le même processus
+            [$_ENV['MAILER_DSN'], $_SERVER['MAILER_DSN']] = $before;
+            if ($before[0] === null) {
+                unset($_ENV['MAILER_DSN']);
+            }
+            if ($before[1] === null) {
+                unset($_SERVER['MAILER_DSN']);
+            }
+        }
     }
 
     // ----- aides -----

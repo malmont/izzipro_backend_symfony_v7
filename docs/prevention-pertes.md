@@ -2211,6 +2211,7 @@ choisi de basculer sans attendre, Fable relira ensuite). La liste fait foi pour 
 | B9 | boîtier, dépôt local | le commit B9 | `izzibox/canal.py` (en-tête `X-Loss-Box-Machine` avec chaque jeton), `izzibox/boitier.py` (`_canal_du_site`), faux serveur (jeton d'une heure, preuve exigée) |
 | L6-a | backend `app_v2` | le commit du lot L6-a (§ 19.4) | `ops/sql/loss_hardware_master.sql` (base maître : matériel vendu, deux offres inactives), `LossHardwareProductRepository` (validation), `LossHardwareSaleController`, `LossHardwareCatalog::forSale` |
 | L6-b (**à risque**) | backend `app_v2` | SQL maître seul, puis le lot (§ 19.5) | `ops/sql/loss_shipment_master.sql`, `LossShipmentService` (tout), les expéditions de `LossPairingRepository`, la garde et le branchement dans `LossPairingService` (`deposit`, `pair`), `LossBoxService::createPairedPrepared`, `LossBoxPluggedNotifier`, le type indispensable `loss_box_plugged` de `GestionNotificationService` |
+| L6-c | backend `app_v2` | le commit du lot L6-c (§ 19.6) | `LossBoxCodeMailer`, `EmailSenderService::sendPlatformEmailNow` (envoi sans file), `LossShipmentService::resendCode` |
 
 Vérifié sous Opus : `LossPreventionZoneTest` et le dossier du module verts ; 21 mutations sur L4-a (20 tuées, une équivalente :
 le rejeu d'une arrivée est déjà bloqué par la clé du fait et par la requête de présence) ; 12 mutations sur B5, toutes tuées.
@@ -3118,3 +3119,27 @@ deux routes de `Controller/LossBoxController`, section « Boîtiers à expédier
   branchée, revenue (`unplugged`), confirmée, refusée (dont `other_site`, avec le site qui a tenté), annulée, avec l'auteur ; jamais le code.
   Journal du module : `BOX_SHIPMENT_CONFIRMED`, `BOX_SHIPMENT_REFUSED` (jamais l'identifiant d'une expédition d'un autre site).
 - Tests : `LossPreventionPairingTest::testASoldBoxIsReservedPluggedAndConfirmedByItsOwnSiteOnly`.
+
+### 19.6 Lot L6-c codé : le code de l'étiquette, envoyé une fois et jamais gardé (17/11/2026 ; contrat validé par le chef de projet)
+
+**Lot ordinaire** : essais et mutations. **Codé sous Opus, à faire relire par Fable** (§ 17.12). Depuis L6-b le serveur ne garde ni le
+code ni rien de réversible : il ne peut pas « renvoyer » un code de lui-même. Décision du chef de projet : A + B, C (le commerçant qui
+fait renvoyer le code depuis la gestion, avec un code gardé chiffré) refusé.
+
+- **A, à la réservation** : le code, que le super administrateur a en main, part aussitôt aux administrateurs du site acheteur (jamais
+  au compte de la plateforme), dans la langue du site, avec la série : « Gardez ce code : il sert si votre boîtier n'est pas reconnu au
+  branchement. Ne le communiquez à personne. » La réponse de la réservation porte `codeSentTo` (le nombre de courriels partis) ; 0 : la
+  réservation tient, la page « Plateforme » invite à le renvoyer (B).
+- **B, le renvoi par la plateforme** : `POST /api/platform/pertes/expeditions/{id}/code { code }` → `{ codeSentTo }` (super
+  administrateur) ; le code relu doit être celui de l'expédition (empreintes comparées en temps constant ; 422 `code` `CODE_MISMATCH` ou
+  `INVALID_VALUE`), pour une expédition réservée ou branchée seulement (409 `SHIPMENT_NOT_OPEN`), 5 essais par quart d'heure et par
+  expédition (429). Bouton « Renvoyer le code » dans la section « Boîtiers à expédier » de la page « Plateforme ».
+- **Le code n'est gardé nulle part** (conditions du chef de projet) : le courriel part EN DIRECT pendant la requête, par le serveur de la
+  plateforme (`EmailSenderService::sendPlatformEmailNow`, sans file : jamais dans Redis ni dans la table des échecs) ; il n'est dans aucun
+  journal, ni dans le sujet du courriel ; une panne d'envoi ne journalise que la classe de l'exception. Les administrateurs du site
+  acheteur sont lus par une connexion à part, en lecture, sur sa base : le site de la requête ne change pas. Le journal des expéditions
+  (base maître) écrit `code_sent` avec le nombre d'administrateurs et la série, jamais le code.
+- Courriel `loss_box_code` (indispensable, `NotificationCatalog`). Code : `Services/LossBoxCodeMailer`, `LossShipmentService::reserve`
+  et `resendCode`, `LossBoxLimits::shipmentCode`.
+- Tests : `LossPreventionPairingTest::testTheLabelCodeGoesOnceToTheBuyerAndIsKeptNowhere` (aucun message en file ne porte le code, aucune
+  table de la plateforme non plus ; renvoi, refus, plafond, expédition annulée).
