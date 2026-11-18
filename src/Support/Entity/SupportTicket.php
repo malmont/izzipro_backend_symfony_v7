@@ -92,6 +92,10 @@ class SupportTicket
     #[ORM\Column(length: 20, nullable: true)]
     private ?string $category = null;
 
+    /** Correctif AIDE-APP : la version de l'application d'où vient la demande (lue par l'équipe seulement, jamais dans le fil du client) */
+    #[ORM\Column(name: 'app_version', length: 40, nullable: true)]
+    private ?string $appVersion = null;
+
     /** Lot AIDE-APP : dernière lecture de la demande par le client (« réponse non lue ») */
     #[ORM\Column(name: 'customer_read_at', type: 'datetime_immutable', nullable: true)]
     private ?\DateTimeImmutable $customerReadAt = null;
@@ -157,4 +161,6 @@ class SupportTicket
     public function getCategory(): ?string { return $this->category; }
     public function setCategory(?string $v): self { $this->category = $v; return $this; }
     public function getCustomerReadAt(): ?\DateTimeImmutable { return $this->customerReadAt; }
+    public function getAppVersion(): ?string { return $this->appVersion; }
+    public function setAppVersion(?string $v): self { $this->appVersion = $v; return $this; }
 }

@@ -165,8 +165,9 @@ sa demande tombe dans la boîte de l'Assistance du site, que le commerçant trai
   moment. Vous pouvez la contacter par le formulaire de contact de son site. »
 - `POST /api/account/support/requests` (JSON, ou multipart avec `attachments[]`) :
   - champs : `subject` (3 à 150 caractères), `message` (10 à 5 000), `category` (`order`, `delivery`, `payment`, `account`, `product`,
-    `app_problem`, `other`), `orderId?` (une commande du client seulement, sinon 422 `ORDER_NOT_FOUND`), `appVersion?` (ajoutée en fin de
-    message), `locale?` (`fr` ou `en`, sinon la langue du site) ;
+    `app_problem`, `other`), `orderId?` (une commande du client seulement, sinon 422 `ORDER_NOT_FOUND`), `appVersion?` (rangée sur la
+    demande, colonne `app_version`, lue par l'équipe sur la fiche ; jamais dans le message ni dans le fil du client : correctif du
+    18/11/2026, migration `Version20270201200000`), `locale?` (`fr` ou `en`, sinon la langue du site) ;
   - 201 `{ request { reference, subject, category, status, unread, createdAt, lastMessageAt } }` ;
   - le ticket naît avec le canal `app`, l'**application d'origine lue dans le jeton** (champ `app` d'APPS-MEMBRES : `livingmemory` ou
     `boutique`, jamais du corps), la catégorie, le nom et le courriel du compte ;
@@ -185,7 +186,7 @@ sa demande tombe dans la boîte de l'Assistance du site, que le commerçant trai
   nouveau délai ; 409 `REQUEST_CLOSED` pour une demande fermée.
 - `GET /api/account/support/requests/{reference}/attachments/{id}` : une pièce jointe du fil (jamais celle d'une note interne).
 
-Côté agent, la liste et la fiche portent `category`, `sourceApp` et `highlight` (vrai pour `app_problem` : le geste « Transmettre à
+Côté agent, la liste et la fiche portent `category`, `sourceApp`, `appVersion` et `highlight` (vrai pour `app_problem` : le geste « Transmettre à
 l'équipe technique » y est le plus utile), et la liste se filtre par `category`. Les réponses de l'équipe partent aussi par courriel si
 l'envoi du site est réglé sur `send` (par défaut `log` : rien ne part) ; le fil dans l'application est donc la voie sûre. Aucune donnée
 personnelle au-delà du compte et de ce que le client écrit ou joint. Migration `Version20270201100000` (colonnes `source_app`,
