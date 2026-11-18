@@ -19,6 +19,8 @@ class SupportTicket
     public const CHANNELS = ['agent', 'phone', 'counter', 'email', 'web', 'app', 'pos'];
     /** transitions permises : état → états suivants */
     public const TRANSITIONS = ['new' => ['open', 'closed'], 'open' => ['waiting_customer', 'closed'], 'waiting_customer' => ['open', 'closed'], 'closed' => ['open']];
+    /** Lot AIDE-APP : catégories d'une demande envoyée depuis une application du client (liste fixe, la même pour tous les sites) */
+    public const CATEGORIES = ['order', 'delivery', 'payment', 'account', 'product', 'app_problem', 'other'];
 
     #[ORM\Id]
     #[ORM\GeneratedValue]
@@ -82,6 +84,18 @@ class SupportTicket
     #[ORM\Column(name: 'created_by', length: 180, nullable: true)]
     private ?string $createdBy = null;
 
+    /** Lot AIDE-APP : application d'origine (`livingmemory`, `boutique`), lue dans le jeton du client ; vide pour les autres demandes */
+    #[ORM\Column(name: 'source_app', length: 20, nullable: true)]
+    private ?string $sourceApp = null;
+
+    /** Lot AIDE-APP : catégorie choisie par le client (`CATEGORIES`) ; vide pour les autres demandes */
+    #[ORM\Column(length: 20, nullable: true)]
+    private ?string $category = null;
+
+    /** Lot AIDE-APP : dernière lecture de la demande par le client (« réponse non lue ») */
+    #[ORM\Column(name: 'customer_read_at', type: 'datetime_immutable', nullable: true)]
+    private ?\DateTimeImmutable $customerReadAt = null;
+
     #[ORM\Column(name: 'created_at', type: 'datetime_immutable')]
     private ?\DateTimeImmutable $createdAt = null;
 
@@ -138,4 +152,9 @@ class SupportTicket
     public function setCreatedBy(?string $u): static { $this->createdBy = $u; return $this; }
     public function getCreatedAt(): ?\DateTimeImmutable { return $this->createdAt; }
     public function getUpdatedAt(): ?\DateTimeImmutable { return $this->updatedAt; }
+    public function getSourceApp(): ?string { return $this->sourceApp; }
+    public function setSourceApp(?string $v): self { $this->sourceApp = $v; return $this; }
+    public function getCategory(): ?string { return $this->category; }
+    public function setCategory(?string $v): self { $this->category = $v; return $this; }
+    public function getCustomerReadAt(): ?\DateTimeImmutable { return $this->customerReadAt; }
 }

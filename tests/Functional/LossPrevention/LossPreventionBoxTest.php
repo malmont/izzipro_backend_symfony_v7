@@ -364,10 +364,11 @@ class LossPreventionBoxTest extends LossPreventionTestCase
         // ----- Faits : un lot, une réponse par fait ; rejouable
         $this->json($beat(['now' => $now(), 'devices' => $devices])); // l'horloge du boîtier est à l'heure
         $at = gmdate('Y-m-d\TH:i:s\Z', time() - 90);
+        $zoneAt = time() - 60; // l'instant d'un fait daté dans un autre fuseau : comparé tel quel, sans dépendre de la durée de l'essai
         $fact = fn (string $k, array $over = []): array => $over + ['key' => "fait-$this->s-$k", 'type' => 'SPOT_CHECK', 'at' => $at, 'device' => "LECTEUR-$this->s", 'data' => ['identifier' => $nfc, 'technology' => 'nfc']];
         $batch = [
             $fact('a', ['seq' => 7]),
-            $fact('b', ['type' => 'ZONE_SEEN', 'zone' => 'exit', 'data' => ['identifier' => implode(':', str_split(strtolower($uhf), 2))], 'at' => gmdate('Y-m-d\TH:i:s', time() + 7200 - 60) . '+02:00']),
+            $fact('b', ['type' => 'ZONE_SEEN', 'zone' => 'exit', 'data' => ['identifier' => implode(':', str_split(strtolower($uhf), 2))], 'at' => gmdate('Y-m-d\TH:i:s', $zoneAt + 7200) . '+02:00']),
             $fact('a'), // même clé dans le même lot
             $fact('c', ['type' => 'PIECE_SOLD']),
             ['type' => 'SPOT_CHECK'],
@@ -388,7 +389,9 @@ class LossPreventionBoxTest extends LossPreventionTestCase
         ];
         $pieceEvents = fn (): int => (int) $this->db->fetchOne('SELECT COUNT(*) FROM loss_piece_event');
         $before = $pieceEvents();
+        $sentFrom = time();
         $sent = $this->json($this->box('POST', '/faits', ['facts' => $batch], $token));
+        $sentTo = time();
         $this->assertSame(['received', 'accepted', 'duplicates', 'refused', 'results', 'serverTime'], array_keys($sent));
         $this->assertSame([19, 3, 1, 15], [$sent['received'], $sent['accepted'], $sent['duplicates'], $sent['refused']]);
         $k = fn (string $x): string => "fait-$this->s-$x";
@@ -408,8 +411,11 @@ class LossPreventionBoxTest extends LossPreventionTestCase
             ['SPOT_CHECK', gmdate('Y-m-d H:i:s', strtotime($at)), null, $piece, $tagIds[$nfc], 'box', "b$id:" . $k('p'), false, ['zone' => 'floor'], $id, $reader],
         ], array_map(fn (array $r): array => [$r['type'], $r['type'] === 'ZONE_SEEN' ? '(vérifiée plus bas)' : $r['occurred_at'], $r['user_id'], (int) $r['piece_id'], (int) $r['tag_id'], $r['source'], $r['event_key'],
             (bool) $r['exercise'], json_decode($r['data'], true), (int) $r['box_id'], (int) $r['device_id']], $written));
-        $this->assertEqualsWithDelta(time() - 60, strtotime($written[1]['occurred_at'] . ' UTC'), 5, 'l\'heure du boîtier, ramenée en UTC');
-        $this->assertEqualsWithDelta(time(), strtotime($written[0]['received_at'] . ' UTC'), 5, 'l\'heure de réception');
+        // indépendant de l'horloge et de la charge (demande du chef, 18/11/2026) : l'instant exact du fait, et la réception entre le début et
+        // la fin de l'envoi
+        $this->assertSame($zoneAt, strtotime($written[1]['occurred_at'] . ' UTC'), 'l\'heure du boîtier, ramenée en UTC');
+        $received = strtotime($written[0]['received_at'] . ' UTC');
+        $this->assertTrue($received >= $sentFrom && $received <= $sentTo, 'l\'heure de réception, pendant l\'envoi');
         // Rejouer le même lot : rien de plus ; les faits reçus répondent « déjà connu »
         $replayed = $this->json($this->box('POST', '/faits', ['facts' => $batch], $token));
         $this->assertSame([19, 0, 4, 15, $before + 3], [$replayed['received'], $replayed['accepted'], $replayed['duplicates'], $replayed['refused'], $pieceEvents()]);

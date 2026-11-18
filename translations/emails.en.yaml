@@ -336,3 +336,16 @@ group_invitation:
     message: 'The group "%group%" (head: %head%) invites your shop %site% to join it. %consent% To accept or refuse, open your administration space: the request is waiting in the "Group" tab.'
     validity: 'The invitation is valid for %days% days. Without an answer, it expires.'
     ignore: 'If you do not know this group, refuse the invitation or ignore this message: nothing changes without your consent.'
+
+bug_report_answer:
+    subject: 'Your report no. %id%: %status%'
+    title: 'Your report'
+    greeting: 'Hello,'
+    message: 'The technical team has handled your report no. %id%. Status: %status%.'
+    answer: 'Their answer:'
+    where: 'You can find your reports under “My reports” in your application.'
+    status:
+        received: 'received'
+        in_progress: 'in progress'
+        fixed: 'fixed'
+        wont_fix: 'will not be fixed'

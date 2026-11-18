@@ -96,6 +96,7 @@ final class NotificationCatalog
         'platform_feature_request' => [self::INTERNAL, null],
         'platform_pos_health_copy' => [self::INTERNAL, null],
         'platform_incidents_digest' => [self::INTERNAL, null], // lot INC-1a : courriel du jour des incidents, à l'adresse de la plateforme
+        'platform_bug_report_answer' => [self::INDISPENSABLE, null], // lot INC-3 : la plateforme répond au signalement d'un membre du personnel
     ];
 
     /** @var array<string, list<string>> fichier de `src/` qui envoie un courriel → les types qu'il envoie */
@@ -129,6 +130,7 @@ final class NotificationCatalog
         'src/Services/PosAuditService/PosReceiptMailer.php' => ['pos_receipt'],
         'src/Services/PosStripeService/PosHealthService.php' => [self::POS_HEALTH_ALERT, 'platform_pos_health_copy'],
         'src/Incident/Command/PlatformIncidentsDigestCommand.php' => ['platform_incidents_digest'],
+        'src/Incident/Services/BugReportMailer.php' => ['platform_bug_report_answer'],
         'src/Services/ReservationService/ReservationMailerService.php' => ['booking_customer', self::BOOKING_NEW, 'customer_message'], // customer_message : demande d'un formulaire à étapes
         'src/Services/SubscriptionService/SubscriptionMailer.php' => ['subscription_notice'],
         'src/Support/Services/SupportAgentService.php' => ['support_agent_invitation'],

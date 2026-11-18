@@ -23,6 +23,8 @@ final class AdminEntryBannerExtension extends AbstractExtension
         private readonly RequestStack $requests,
         private readonly TenantPublicHostResolver $hosts,
         private readonly Security $security,
+        private readonly ?\App\Services\TenantConnectionManager $tenants = null,
+        private readonly ?\App\Services\Platform\TenantDatabaseConnector $databases = null,
     ) {
     }
 
@@ -53,7 +55,31 @@ final class AdminEntryBannerExtension extends AbstractExtension
         // déjà « Agence X, prénom » et « Groupe X, prénom »
         $as = $user instanceof User ? ExternalOperator::platformLabel((string) $user->getFirstname()) : (string) $user?->getUserIdentifier();
 
+        $expires = is_string($entry['expiresAt'] ?? null) ? $entry['expiresAt'] : null;
+        $homeTime = null;
+        if ($expires !== null) {
+            try {
+                // retouche du propriétaire (18/11/2026) : l'échéance dite à l'heure du site d'attache, l'UTC en second
+                $homeTime = (new \DateTimeImmutable($expires))->setTimezone($this->homeTimezone($entry['home']))->format('H \h i');
+            } catch (\Throwable) {
+                $homeTime = null;
+            }
+        }
+
         return ['site' => $entry['target'], 'siteName' => (string) ($site['name'] ?? $entry['target']), 'host' => isset($site['host']) ? (string) $site['host'] : null,
-            'as' => $as, 'home' => $entry['home'], 'homeName' => (string) ($home['name'] ?? $entry['home']), 'expiresAt' => is_string($entry['expiresAt'] ?? null) ? $entry['expiresAt'] : null];
+            'as' => $as, 'home' => $entry['home'], 'homeName' => (string) ($home['name'] ?? $entry['home']), 'expiresAt' => $expires, 'expiresHomeTime' => $homeTime];
+    }
+
+    /** Le fuseau du site d'attache, lu dans SA base (la requête est sur le site visé), par la règle de l'horloge du magasin */
+    private function homeTimezone(string $home): \DateTimeZone
+    {
+        $stmt = $this->tenants?->getPdoMaster()->prepare('SELECT dbname FROM tenants WHERE code = ?');
+        $stmt?->execute([$home]);
+        $db = $stmt?->fetchColumn();
+        $row = is_string($db) && $this->databases !== null
+            ? ($this->databases->pdo($db)->query('SELECT e.pos_timezone, a.country, a.state FROM entreprise e LEFT JOIN address_entreprise a ON a.entreprise_id = e.id ORDER BY e.id LIMIT 1')->fetch(\PDO::FETCH_ASSOC) ?: [])
+            : [];
+
+        return new \DateTimeZone(\App\Services\CaisseService\StoreClock::resolveFrom($row['pos_timezone'] ?? null, $row['country'] ?? null, $row['state'] ?? null)['timezone']);
     }
 }

@@ -229,6 +229,8 @@ security:
         #    le jeton de l'utilisateur s'il y en a un, sinon sans jeton (limite par site et par IP, plafond des incidents nouveaux par site et
         #    par jour, App\Incident\Services\PlatformIncidentService). Écrit dans la base maître seulement, jamais dans le site.
         - { path: ^/api/incidents/report$, methods: [POST], roles: PUBLIC_ACCESS }
+        # 🔹 Signalements (lot INC-3, 18/11/2026) : le PERSONNEL du site seul ; un client s'adresse à l'Assistance du commerçant
+        - { path: ^/api/incidents/bug-reports$, roles: [ROLE_ADMIN, ROLE_POS_MANAGER, ROLE_USER_POS] }
         # Profil public d'une application du site (20/10/2026) : lecture sans connexion
         - { path: ^/api/app-profile/, methods: [GET], roles: PUBLIC_ACCESS }
         # Conditions d'une famille d'applications (APPS-MEMBRES M1, 14/11/2026) : lues sans connexion par l'inscription et l'écran « Rejoindre »
@@ -267,6 +269,8 @@ security:
         - { path: ^/api/order/create-multi-payment, roles: [ROLE_USER_POS, ROLE_POS_MANAGER, ROLE_ADMIN] }
         # Suppression du compte par le client de la boutique (01/11/2026)
         - { path: ^/api/account$, methods: [DELETE], roles: ROLE_USER_INTERNET }
+        # 🔹 « Aide et support » des applications du client (lot AIDE-APP, 18/11/2026) : le compte client connecté seul ; il ne lit que SES demandes
+        - { path: ^/api/account/support/, roles: ROLE_USER_INTERNET }
         - { path: ^/api, roles: [ROLE_USER_INTERNET, ROLE_USER_POS, ROLE_POS_MANAGER, ROLE_ADMIN] }
 
         

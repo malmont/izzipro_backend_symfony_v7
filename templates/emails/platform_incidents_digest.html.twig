@@ -25,7 +25,15 @@
                                 </ul>
                             {% endif %}
                         {% endfor %}
-                        <p>Détail et suivi : EasyAdmin, page « Plateforme », « Incidents ». Aucun courriel les jours sans incident.</p>
+                        {% if digest.unanswered is defined and digest.unanswered is not empty %}
+                            <h2 style="font-size: 16px; margin: 18px 0 8px;">Signalements sans réponse depuis 48 heures ({{ digest.unanswered|length }})</h2>
+                            <ul style="padding-left: 18px;">
+                                {% for report in digest.unanswered %}
+                                    <li style="margin-bottom: 8px;"><strong>{{ report.app }}</strong> · {{ report.tenantCode }} · n° {{ report.id }}<br>{{ report.description|slice(0, 200) }}</li>
+                                {% endfor %}
+                            </ul>
+                        {% endif %}
+                        <p>Détail et suivi : EasyAdmin, page « Plateforme », « Incidents » et « Signalements ». Aucun courriel les jours sans rien.</p>
                     </td>
                 </tr>
             </table>

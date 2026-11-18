@@ -92,6 +92,7 @@ class ModuleAccessService
         '#^/api/statistiques(?!/(chiffre-affaires|nombre-commandes|panier-moyen)/pos(/|$))#' => self::MANAGEMENT,
         '#^/api/payments/statistics(?!/pos(/|$))#' => self::MANAGEMENT,
         '#^/api/support(/|$)#' => self::SUPPORT, // module Assistance (lot 1, 12/11/2026)
+        '#^/api/account/support/requests(/|$)#' => self::SUPPORT, // lot AIDE-APP : les demandes du client (la disponibilité, elle, répond toujours)
     ];
 
     /**

@@ -91,7 +91,7 @@ class SupportRoleMatrixTest extends WebTestCase
         }
         $this->assertSame([], $violations, 'ROLE_SUPPORT n\'obtient rien de plus qu\'un anonyme hors du module');
         $this->assertLessThanOrEqual(4, $sameAsAnonymous, 'les refus sans le code de la garde restent une poignée de routes publiques');
-        $this->assertSame(14, $served, 'les 14 routes du module (8 du lot 1 ; lot SUPPORT-WEB : moi, agents, commande par référence, inviter, relancer, retirer)');
+        $this->assertSame(15, $served, 'les 15 routes du module (8 du lot 1 ; lot SUPPORT-WEB : moi, agents, commande par référence, inviter, relancer, retirer ; lot INC-3 : transmettre à l\'équipe technique)');
     }
 
     private function status(string $method, string $path, ?string $token): int

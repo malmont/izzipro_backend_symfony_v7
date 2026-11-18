@@ -341,3 +341,16 @@ group_invitation:
     message: 'Le groupe « %group% » (siège : %head%) invite votre boutique %site% à le rejoindre. %consent% Pour accepter ou refuser, ouvrez votre espace d''administration : la demande vous attend dans l''onglet « Groupe ».'
     validity: 'L''invitation vaut %days% jours. Sans réponse, elle expire.'
     ignore: 'Si vous ne connaissez pas ce groupe, refusez l''invitation ou ignorez ce message : rien ne change sans votre accord.'
+
+bug_report_answer:
+    subject: 'Votre signalement n° %id% : %status%'
+    title: 'Votre signalement'
+    greeting: 'Bonjour,'
+    message: 'L''équipe technique a traité votre signalement n° %id%. État : %status%.'
+    answer: 'Sa réponse :'
+    where: 'Vous retrouvez vos signalements dans « Mes signalements » de votre application.'
+    status:
+        received: 'reçu'
+        in_progress: 'en cours'
+        fixed: 'corrigé'
+        wont_fix: 'ne sera pas corrigé'

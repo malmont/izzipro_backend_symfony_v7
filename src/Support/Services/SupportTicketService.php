@@ -43,7 +43,7 @@ class SupportTicketService
     {
         $where = ['1 = 1'];
         $params = [];
-        foreach (['status' => SupportTicket::STATUSES, 'priority' => SupportTicket::PRIORITIES, 'channel' => SupportTicket::CHANNELS] as $field => $allowed) {
+        foreach (['status' => SupportTicket::STATUSES, 'priority' => SupportTicket::PRIORITIES, 'channel' => SupportTicket::CHANNELS, 'category' => SupportTicket::CATEGORIES] as $field => $allowed) {
             if (($q[$field] ?? '') !== '') {
                 $values = array_values(array_intersect(explode(',', (string) $q[$field]), $allowed));
                 if ($values === []) {
@@ -381,6 +381,9 @@ class SupportTicketService
             'awaitingReply' => $t->getStatus() !== 'closed' && $t->getLastCustomerMessageAt() !== null && ($t->getFirstResponseAt() === null || $t->getLastCustomerMessageAt() > $t->getFirstResponseAt()) && $t->getDueAt() !== null,
             'firstResponseAt' => $iso($t->getFirstResponseAt()), 'lastMessageAt' => $iso($t->getLastMessageAt()), 'closedAt' => $iso($t->getClosedAt()),
             'anonymized' => $t->getAnonymizedAt() !== null, 'createdAt' => $iso($t->getCreatedAt()), 'updatedAt' => $iso($t->getUpdatedAt()),
+            // lot AIDE-APP : la demande envoyée depuis une application du client ; un problème de l'application est mis en avant (le geste
+            // « Transmettre à l'équipe technique » y est le plus utile)
+            'category' => $t->getCategory(), 'sourceApp' => $t->getSourceApp(), 'highlight' => $t->getCategory() === 'app_problem',
         ];
     }
 
