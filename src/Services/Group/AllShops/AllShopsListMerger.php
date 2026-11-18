@@ -26,7 +26,8 @@ final class AllShopsListMerger
             }
             $total += (int) $shop['data']['total'];
             foreach ($shop['data']['rows'] as $row) {
-                $rows[] = ['site' => $shop['site'], 'currency' => $shop['currency']] + $row;
+                // la devise de la ligne est celle de sa COMMANDE (fournisseur) : jamais remplacée ; celle de la boutique à côté
+                $rows[] = $row + ['site' => $shop['site'], 'siteCurrency' => $shop['currency']];
             }
         }
         usort($rows, static fn (array $a, array $b): int => [(string) ($a['commande']['date'] ?? ''), $a['site'], (int) ($a['id'] ?? 0)]
@@ -102,6 +103,7 @@ final class AllShopsListMerger
                 foreach ($part['data']['months'] ?? [] as $m) {
                     $key = sprintf('%04d-%02d', (int) $m['year'], (int) $m['month']);
                     $byMonth[$key]['blocks'][] = $m;
+                    $byMonth[$key]['shops'][] = $part['site'];
                 }
             }
             ksort($byMonth);
@@ -110,7 +112,7 @@ final class AllShopsListMerger
                 $elapsed = array_unique(array_map(static fn (array $m) => $m['elapsed'], $b['blocks']));
                 $months[] = ['key' => $key, 'month' => (int) substr($key, 5, 2), 'year' => (int) substr($key, 0, 4),
                     'from' => min(array_column($b['blocks'], 'from')), 'to' => max(array_column($b['blocks'], 'to')),
-                    'elapsed' => count($elapsed) === 1 ? $elapsed[0] : 'partial'] + self::block($b['blocks']);
+                    'elapsed' => count($elapsed) === 1 ? $elapsed[0] : 'partial', 'shops' => $b['shops']] + self::block($b['blocks']);
             }
             $starts = array_values(array_unique(array_map(static fn (array $p) => $p['data']['fiscalYear']['startMonth'] ?? null, $parts)));
             $sumTotals = self::block(array_map(static fn (array $p): array => $p['data']['totals'], $parts));

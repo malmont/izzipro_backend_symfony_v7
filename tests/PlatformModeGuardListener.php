@@ -15,8 +15,8 @@ use PHPUnit\Framework\TestSuite;
  *
  * À la fin de chaque essai, le mode est relu ; s'il vaut « live », il est remis à « demo » et l'essai est nommé. Un essai qui laisse le mode
  * en « live » ÉCHOUE : il doit le remettre lui-même (`tearDown`), ou ne pas le changer pour toute la plateforme (le lecteur ou le service
- * reçoit alors une plateforme simulée, comme `GroupAllShopsTest`). La mémoire du mode (60 s) est vidée par `PlatformModeService::setMode`
- * de l'essai suivant qui le pose ; la remise faite ici ne passe que par la base.
+ * reçoit alors une plateforme simulée, comme `GroupAllShopsTest`). La remise passe par la base, puis par `PlatformModeService::setMode`
+ * dans un noyau d'essai, qui vide aussi la mémoire du mode (60 s, partagée par les essais).
  */
 final class PlatformModeGuardListener implements TestListener
 {
@@ -37,6 +37,15 @@ final class PlatformModeGuardListener implements TestListener
             $pdo->exec("UPDATE platform_settings SET value = 'demo', updated_by = 'garde-fou des essais' WHERE key = 'mode'");
         } catch (\Throwable) {
             return; // base maître d'essai illisible : rien à remettre
+        }
+        // la mémoire du mode (60 s, partagée d'un essai à l'autre) : vidée par le service lui-même, dans un noyau d'essai démarré pour l'occasion
+        try {
+            $kernel = new \App\Kernel('test', true);
+            $kernel->boot();
+            $kernel->getContainer()->get('test.service_container')->get(\App\Services\Platform\PlatformModeService::class)->setMode('demo', 'garde-fou des essais');
+            $kernel->shutdown();
+        } catch (\Throwable) {
+            // la base est remise ; la mémoire expire d'elle-même en 60 s
         }
         if (($result = $test->getTestResultObject()) !== null) {
             $result->addFailure($test, new \PHPUnit\Framework\AssertionFailedError(

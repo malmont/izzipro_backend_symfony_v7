@@ -42,7 +42,8 @@ final class GroupScope
         'gestion_tresorerie_soldes' => ['path' => '/api/gestion/tresorerie/soldes', 'module' => null, 'refused' => [], 'cache' => false],
         'gestion_tresorerie_mouvements' => ['path' => '/api/gestion/tresorerie/mouvements', 'module' => null, 'refused' => [], 'cache' => false],
         // l'année : chaque boutique garde son exercice, réunion par mois civil ; les leviers (`pricePercent`) restent à la boutique
-        'gestion_statistiques_annee' => ['path' => '/api/gestion/statistiques/annee', 'module' => null, 'refused' => ['pricePercent'], 'cache' => true],
+        // `year` refusé : une année se lit dans l'exercice de chaque boutique, qui diffère (l'année demandée n'existerait pas partout)
+        'gestion_statistiques_annee' => ['path' => '/api/gestion/statistiques/annee', 'module' => null, 'refused' => ['pricePercent', 'year'], 'cache' => true],
         // le résultat du groupe sur des DATES (une période est propre à un site) : route du groupe seulement
         'gestion_groupe_resultat' => ['path' => '/api/gestion/groupe/resultat', 'module' => null, 'refused' => [], 'cache' => true],
     ];
@@ -63,7 +64,7 @@ final class GroupScope
         // lot G-3 : ventes et marge (statistiques), frais variables à leur date (port d'achat, publicité, notes, voyages), frais fixes
         // (mouvements prévus), budgets des périodes (projection), archive d'avant la migration, fiche et calendrier du site
         'gestion_statistiques_annee' => ['address_entreprise', 'booking', 'collections', 'commande', 'commande_line', 'entreprise', 'frais_de_port',
-            'gestion_budget_line', 'gestion_cash_balance', 'gestion_cash_movement', 'gestion_cash_setting', 'gestion_reprise', 'gestion_stock_snapshot',
+            'gestion_advice', 'gestion_budget_line', 'gestion_cash_balance', 'gestion_cash_movement', 'gestion_cash_setting', 'gestion_reprise', 'gestion_stock_snapshot',
             'gestion_trip', 'import_order', 'import_order_line', 'marketing_campaign', 'note_de_frais', 'order', 'order_items', 'payments', 'period_result',
             'pos_gift_card', 'pos_gift_card_transaction', 'product', 'product_variant'],
         'gestion_groupe_resultat' => ['address_entreprise', 'booking', 'collections', 'commande', 'commande_line', 'entreprise', 'frais_de_port',

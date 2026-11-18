@@ -55,7 +55,7 @@ class GestionStatisticsController extends AbstractController
     public function year(Request $request): JsonResponse
     {
         // lot G-3 : « Toutes les boutiques » : chaque boutique à son exercice, réunion par mois civil (`pricePercent` refusé par la garde)
-        $yearQuery = array_intersect_key($request->query->all(), ['year' => 1]);
+        $yearQuery = []; // `year` refusé par la garde : l'exercice en cours de chaque boutique
         $locale = $this->locale($request);
         $group = $this->allShops?->forRequest($request, 'gestion_statistiques_annee', ['query' => $yearQuery, 'locale' => $locale],
             fn (): array => ['data' => $this->years->overview($yearQuery, $locale)], \App\Services\Group\AllShops\AllShopsListMerger::year(...));

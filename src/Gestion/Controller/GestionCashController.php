@@ -37,6 +37,10 @@ class GestionCashController extends AbstractController
         $group = $this->allShops?->forRequest($request, 'gestion_tresorerie_soldes', ['limit' => $limit], fn (): array => ['data' => $this->useCase->balances($limit)],
             static fn (array $shops): array => \App\Services\Group\AllShops\AllShopsListMerger::balances($shops, $limit));
 
+        if ($group !== null) {
+            $group['shops'] = array_map(static fn (array $s): array => array_diff_key($s, ['data' => 1]), $group['shops']); // les soldes sont dans `totals`
+        }
+
         return $this->json($group ?? $this->useCase->balances($limit));
     }
 
@@ -86,6 +90,8 @@ class GestionCashController extends AbstractController
             fn (): array => ['data' => $this->useCase->movements(is_string($category) ? strtolower(trim($category)) : null, $this->locale($request), false)],
             \App\Services\Group\AllShops\AllShopsListMerger::movements(...));
         if ($group !== null) {
+            $group['shops'] = array_map(static fn (array $s): array => array_diff_key($s, ['data' => 1]), $group['shops']); // les mouvements sont dans `totals`
+
             return $this->json($group);
         }
 

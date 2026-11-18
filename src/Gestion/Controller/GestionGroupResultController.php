@@ -40,7 +40,13 @@ class GestionGroupResultController extends AbstractController
             $period = (new Collections())->setNomCollection($from . ' – ' . $to)
                 ->setStartDateCollection(new \DateTime($from))->setEndDateCollection(new \DateTime($to));
 
-            return ['data' => $this->calculator->compute($period, null)];
+            $data = $this->calculator->compute($period, null);
+            // les remarques des frais fixes citent des notes de frais par leur nom (« Salaire … ») : jamais au directeur
+            foreach ($data['fixedCosts']['caveats'] ?? [] as $i => $caveat) {
+                unset($data['fixedCosts']['caveats'][$i]['notes']);
+            }
+
+            return ['data' => $data];
         }, AllShopsListMerger::result(...));
 
         return $this->json($group);
