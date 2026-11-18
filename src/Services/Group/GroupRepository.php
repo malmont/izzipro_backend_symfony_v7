@@ -40,6 +40,21 @@ class GroupRepository
         return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
     }
 
+    /**
+     * Lot G-2 : les boutiques ouvertes du groupe avec leur base, le siège d'abord, pour « Toutes les boutiques ». Une boutique sans ligne
+     * dans `tenants` garde un `dbname` nul : elle sera listée en erreur, jamais lue ailleurs.
+     *
+     * @return list<array{tenant_code: string, name: ?string, dbname: ?string, origin: string}>
+     */
+    public function shopDatabases(int $groupId): array
+    {
+        $stmt = $this->pdo()->prepare("SELECT s.tenant_code, t.name, t.dbname, s.origin FROM shop_group_sites s LEFT JOIN tenants t ON t.code = s.tenant_code
+            WHERE s.group_id = ? AND s.left_at IS NULL ORDER BY (s.origin = 'head') DESC, s.id");
+        $stmt->execute([$groupId]);
+
+        return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+    }
+
     public function create(string $code, string $name, string $head, int $maxShops, ?string $by): int
     {
         $pdo = $this->pdo();

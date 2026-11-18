@@ -113,7 +113,9 @@ class ContextService
                 $sites[] = $this->site($site, $current, self::SITE_FAMILIES, static fn (string $role): bool => $role === 'ROLE_ADMIN') + ['home' => false];
             }
 
-            return ['mode' => self::MODE_GROUP, 'site' => $current, 'agency' => null, 'group' => ['id' => (int) $group['id'], 'name' => (string) $group['name'], 'role' => 'head'],
+            // lot G-2 : `allShops`, les routes qui savent réunir toutes les boutiques (en-tête X-Group-Scope: all, sur le site du siège)
+            return ['mode' => self::MODE_GROUP, 'site' => $current, 'agency' => null, 'group' => ['id' => (int) $group['id'], 'name' => (string) $group['name'], 'role' => 'head',
+                'allShops' => \App\Services\Group\AllShops\GroupScope::routes()],
                 'sites' => $sites, 'all' => null];
         }
         $sites = [];

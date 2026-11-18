@@ -57,3 +57,5 @@ cents dans la devise du site, jour et heures au fuseau du magasin. Route ajouté
 Sans cache. Mesuré sur les données de demo le 12/11/2026 : environ 45 ms par appel (96 ms au premier), pour une cible de 300 ms.
 `generatedAt` date la réponse. Si un cache devenait nécessaire : 60 secondes par site, avec les étiquettes des composants lus
 (commandes, trésorerie, produits, tickets), que toute écriture vide aussitôt.
+
+Lot G-2 (18/11/2026) : avec l'en-tête `X-Group-Scope: all`, le directeur d'un groupe lit cette route pour toutes ses boutiques, réunies par devise : `docs/ecrans-et-contextes.md` § 13.

@@ -579,6 +579,56 @@ Essai : `tests/Functional/Group/GroupEntryTest.php` (dont une sonde de toutes le
 - **RETOUR** vaut pour le directeur (« Revenir au siège »). Mutations : 14/15 tuées (G3 : la liste des actions d'EasyAdmin est vérifiée deux
   fois, couper l'une ne rouvre rien).
 
+## 13. Lot G-2 : « Toutes les boutiques » (18/11/2026, contrat validé par le chef, 3 ajouts)
+
+Le directeur d'un groupe lit plusieurs écrans de la gestion pour toutes ses boutiques à la fois, en lecture seule. Code :
+`src/Services/Group/AllShops/` (`GroupScope`, `GroupScopeSubscriber`, `AllShopsReader`, `AllShopsMerger`).
+
+- **Mode** : en-tête `X-Group-Scope: all`, sur le site du SIÈGE, par un administrateur du siège connecté avec SON compte (jamais un
+  opérateur entré, jamais un compte de la plateforme). Groupe actif, siège, module Multi-boutiques actif au siège : relus à chaque requête.
+  Sinon 403 `GROUP_SCOPE_FORBIDDEN`. Valeur autre que `all` : 400 `GROUP_SCOPE_INVALID`.
+- **Lecture seule** : avec l'en-tête, toute méthode autre que GET répond 403 `GROUP_SCOPE_READ_ONLY`. Une route hors de la liste blanche,
+  ou un paramètre propre à un site (`sections`, `periodId` des statistiques), répond 400 `GROUP_SCOPE_UNSUPPORTED` : jamais les seules
+  données du siège servies en silence. Garde : `GroupScopeSubscriber`, priorité 6 (après le pare-feu et la garde d'entrée).
+- **Routes** (`GroupScope::ROUTES`, lues par `/api/me/contexts` dans `group.allShops`) : `GET /api/gestion/statistiques` (sans `sections`
+  ni `periodId`), `GET /api/gestion/journee`, `GET /api/gestion/pertes` (analyse jamais lancée : `analyse=0` imposé).
+- **Réponse** : `{ scope: 'group', group { id, name }, generatedAt, truncated, totals [ par devise ], shops [ { site, name, head, status,
+  currency, timezone, data } ] }`. `status` : `ok`, `module_off` (la boutique n'a pas le module de la route ou de la gestion), `error`
+  (code `SHOP_UNAVAILABLE` seul, le détail au journal du serveur), `timeout`, `skipped`. `data` est la réponse de la route lue seule dans
+  cette boutique, telle quelle (garde-fou d'identité dans `GroupAllShopsTest`) ; pour les pertes, une liste blanche de champs.
+- **Totaux par devise**, jamais deux devises additionnées ; seules les boutiques `ok` y entrent (`totals[].shops`).
+  - Statistiques : les sommes brutes de chaque boutique (ventes brutes, retours, coût, coût inconnu, commandes) repassent par
+    `GestionStatisticsService::metrics()` : taux de marge, panier et taux de retour recalculés, jamais moyennés. Points du graphique
+    réunis par clé. Une comparaison absente d'une boutique (an dernier, valeur passée du stock) : le total ne porte que celles qui l'ont,
+    remarque `PARTIAL_COMPARISON`. Remarques réunies par code avec leurs boutiques ; le texte n'est gardé que s'il est le même partout.
+  - Journée : sommes champ par champ, listes réunies par canal et par moyen ; comparaison au même jour de semaine recalculée sur les
+    seules boutiques qui ont un historique (`shops`), `asOf` nul ; plus ancienne commande à expédier ; trésorerie : somme des soldes et
+    état le plus grave ; instants de lecture nuls.
+  - Pertes : comptes et montants sommés ; période qui couvre celle de chaque boutique ; postes de caisse jamais réunis (propres à chaque
+    boutique). Par poste et par jour, jamais
+    par personne : la part ne porte ni la notice aux salariés ni aucun nom (`AllShopsMerger::lossPart`).
+- **Lecture boutique par boutique** dans la requête (`AllShopsReader`) : changement de site, puis retour au siège dans un `finally`, même
+  si une boutique lève une exception. Chaque boutique est lue dans une transaction `READ ONLY` annulée à la fin : une lecture qui tenterait
+  d'écrire échoue (statut `error`), elle n'écrit rien. Une erreur de validation (422) remonte telle quelle.
+- **Délai et budget** : échéance de 3 s pour la lecture ENTIÈRE d'une boutique (ou ce qui reste du budget), comptée dès le changement de
+  site : devise, fuseau, modules, empreinte et part sont lus dans la transaction, sous `statement_timeout` et `lock_timeout` locaux (un
+  verrou posé par une migration ne pend pas la requête). L'intergiciel DBAL `ShopDeadline` refuse toute requête après l'échéance et
+  resserre `statement_timeout` au temps restant (dépassement de 200 ms au plus) ; il ne fait rien hors de cette lecture. Une boutique
+  qui dépasse : `timeout`, jamais des chiffres partiels (ni servis, ni gardés en cache), même si un service a avalé l'annulation.
+  Budget de la réponse : 15 s, les boutiques restantes en `skipped`. Plafond : 20 boutiques (`truncated`). Deux codes de site sur la
+  même base : lue et comptée une fois, le second en `duplicate` (`sameAs`).
+- **Cache** (statistiques et journée ; jamais les pertes) : la part d'une boutique, 5 minutes, sous les étiquettes du site et de sa base
+  (posées par `AllShopsReader`, permis dans `CacheTagConventionTest` : la part est lue depuis l'hôte du siège). Clé des statistiques bornée
+  à `range`, `from`, `to`, `source` et la langue (`GroupScope::STATISTICS_PARAMS`).
+  La clé porte le jour de la boutique et l'EMPREINTE des tables lues (`GroupScope::TABLES`, compteurs d'écritures de PostgreSQL) : une
+  écriture dans une table lue, par Doctrine ou en SQL, périme la part dès que PostgreSQL l'a comptée (à la fin de la requête qui écrit ;
+  au plus 10 s pour un worker qui garde sa connexion). Garde-fou `GroupScopeReadTablesTest` : toute table lue par la route doit être
+  dans la liste.
+- Relecture neuve en deux passes et mutations (16 + 8) : toutes tuées sauf deux mutants équivalents (le forçage `analyse=0`, déjà
+  posé par `['analyse' => '0'] + …` ; le contrôle `tripped`, impliqué par la durée).
+- Mesure (environnement d'essai, 3 boutiques, noyau en débogage) : statistiques du mois 265 ms à froid, 121 à 141 ms en cache (193 ms
+  seule) ; journée 377 ms à froid, 114 ms en cache (161 ms seule) ; pertes 151 ms (jamais en cache).
+
 ## Tenir cette fiche à jour
 
 À chaque écran, famille ou liste hors écran ajoutés ; à chaque champ sensible trouvé ; à chaque mode nouveau.

@@ -46,6 +46,18 @@ class GestionStatisticsService
      */
     public function overview(array $query, string $locale, ?\DateTimeImmutable $today = null): array
     {
+        return $this->overviewWithSums($query, $locale, $today)[0];
+    }
+
+    /**
+     * Lot G-2 : la réponse de la route, et à côté les SOMMES brutes d'où sortent ses indicateurs (ventes brutes, retours, coût inconnu,
+     * coût, commandes, locations, abonnements ; par plage et par point du graphique), pour que « Toutes les boutiques » recalcule les taux
+     * à partir des sommes réunies, jamais à partir de taux arrondis. La réponse est exactement celle de `overview()`.
+     *
+     * @return array{0: array<string, mixed>, 1: array<string, mixed>}
+     */
+    public function overviewWithSums(array $query, string $locale, ?\DateTimeImmutable $today = null): array
+    {
         $asked = GestionStatisticsSections::parse($query['sections'] ?? null);
         $today ??= $this->calendar->today();
         $todayKey = $today->format('Y-m-d');
@@ -86,6 +98,7 @@ class GestionStatisticsService
         // Points du graphique (jusqu'à aujourd'hui) et l'an dernier aligné (mêmes dates décalées d'un an)
         $points = [];
         $series = [];
+        $lyPoints = [];
         $buckets = self::buckets($cur[0], min($cur[1], $todayKey), $granularity);
         foreach ($buckets as [$key, $from, $to]) {
             $pm = self::metrics(self::slice($daily, $from, $to));
@@ -93,6 +106,7 @@ class GestionStatisticsService
             $points[] = ['key' => $key, 'from' => $from, 'to' => $to, 'revenue' => $pm['revenue'], 'grossMargin' => $pm['grossMargin'], 'orders' => $pm['orders'],
                 'lastYear' => ['revenue' => $pl['revenue'], 'grossMargin' => $lyArchive ? null : $pl['grossMargin'], 'orders' => $pl['orders']]];
             $series[] = $pm;
+            $lyPoints[] = $pl;
         }
         $spark = fn (string $k) => array_map(fn ($pm) => $pm[$k], $series);
 
@@ -133,7 +147,7 @@ class GestionStatisticsService
             'cur' => $cur, 'prev' => $prev, 'ly' => $ly, 'buckets' => $buckets, 'granularity' => $granularity, 'source' => $source, 'sourceKey' => $sourceKey, 'locale' => $locale, 'today' => $today,
         ])];
 
-        return [
+        $response = [
             'currency' => $this->currency?->code() ?? TenantCurrencyProvider::DEFAULT,
             'source' => $sourceKey,
             'range' => ['type' => $type, 'from' => $cur[0], 'to' => $cur[1], 'days' => $days, 'granularity' => $granularity],
@@ -150,6 +164,34 @@ class GestionStatisticsService
             'chart' => ['granularity' => $granularity, 'points' => $points],
             'caveats' => $caveats,
         ] + $sections;
+        // sommes brutes : l'an dernier tel que la réponse le lit (archive : seuls ventes, commandes et panier ; sans données : rien)
+        $raw = static fn (?array $metrics): ?array => $metrics === null ? null : self::sums($metrics);
+        $lyRaw = !$hasLy ? null : ($lyArchive ? ['archive' => true] + self::sums($ml) : self::sums($ml));
+        $sums = [
+            'current' => $raw($m), 'previous' => $raw($mp), 'lastYear' => $lyRaw,
+            'points' => array_map(static fn (array $p, array $pm, array $pl): array => ['key' => $p['key'], 'from' => $p['from'], 'to' => $p['to']] + self::sums($pm)
+                + ['lastYear' => self::sums($pl)], $points, $series, $lyPoints),
+            'archive' => $lyArchive,
+            'stock' => ['now' => $stockNow['saleValue'], 'cost' => $stockNow['costValue'], 'previous' => $stockPrev['saleValue'] ?? null, 'lastYear' => $stockLy['saleValue'] ?? null],
+        ];
+
+        return [$response, $sums];
+    }
+
+    /**
+     * Lot G-2 : les sommes d'un résultat de `metrics()`, sous la forme d'une ligne de jour que `metrics()` relit (réunir plusieurs boutiques =
+     * passer leurs lignes à `metrics()`).
+     *
+     * @param array<string, mixed> $m
+     * @return array<string, int>
+     */
+    public static function sums(array $m): array
+    {
+        return [
+            'sales_amount' => (int) $m['salesGross'], 'returns_amount' => (int) $m['returns'], 'unknown_revenue' => (int) $m['unknown'],
+            'cogs' => (int) ($m['revenue'] - $m['unknown'] - $m['grossMargin']), 'orders_sold' => (int) $m['orders'], 'orders_returned' => (int) $m['returnOrders'],
+            'rentals' => (int) $m['rentals'], 'subscriptions' => (int) $m['subscriptions'],
+        ];
     }
 
     /**

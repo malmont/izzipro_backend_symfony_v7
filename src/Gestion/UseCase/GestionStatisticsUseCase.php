@@ -15,4 +15,16 @@ class GestionStatisticsUseCase
     {
         return $this->statistics->overview($query, $locale);
     }
+
+    /**
+     * Lot G-2 : la réponse et ses sommes brutes (« Toutes les boutiques »)
+     *
+     * @return array{data: array<string, mixed>, sums: array<string, mixed>}
+     */
+    public function overviewWithSums(array $query, string $locale): array
+    {
+        [$data, $sums] = $this->statistics->overviewWithSums($query, $locale);
+
+        return ['data' => $data, 'sums' => $sums];
+    }
 }

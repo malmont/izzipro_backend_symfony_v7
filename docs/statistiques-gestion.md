@@ -242,3 +242,5 @@ Un nombre rond sort en entier dans le JSON (`100`, pas `100.0`), comme dans S1.
 aucune ; restent la caisse (`payments/statistics/pos`, `chiffre-affaires/pos`, `nombre-commandes/pos`) et d'anciennes versions installées
 de l'application. Leur retrait est une décision à part, route par route, quand le journal du serveur ne montre plus d'appel sur une durée
 convenue.
+
+Lot G-2 (18/11/2026) : avec l'en-tête `X-Group-Scope: all`, le directeur d'un groupe lit cette route pour toutes ses boutiques, réunies par devise : `docs/ecrans-et-contextes.md` § 13.

@@ -23,6 +23,9 @@ class CacheTagConventionTest extends TestCase
         // lot AG-3d : « Tous mes clients » d'une agence, lignes de plusieurs sites lues de la base maître (cache.app), hors du registre par
         // nature ; seul ce service pose et vide l'étiquette (`forgetIn`), les autres l'appellent
         'src/Services/Agency/AgencyClientsService.php',
+        // lot G-2 : part d'une boutique dans « Toutes les boutiques », lue depuis l'hôte du SIÈGE (TenantCacheService la refuserait : hôte
+        // inconnu de la boutique) ; étiquettes du site et de sa base seulement (`tenantTag`, `databaseTag`), vidées par toute invalidation du site
+        'src/Services/Group/AllShops/AllShopsReader.php',
     ];
 
     /** `$item->tag(…)` encore écrit dans une fonction de calcul : plus aucun depuis le lot 4 (28/10/2026) */

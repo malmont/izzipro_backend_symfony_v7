@@ -19,7 +19,8 @@ class GestionStatisticsController extends AbstractController
 {
     public function __construct(private readonly GestionStatisticsUseCase $useCase, private readonly GestionYearUseCase $years, private readonly ?EmailLocale $siteLocale = null,
         private readonly ?\App\Import\OrderArchive $archive = null, private readonly ?\App\Services\BoutiqueSettingsService\TenantCurrencyProvider $currency = null,
-        private readonly ?\Symfony\Contracts\Translation\TranslatorInterface $translator = null)
+        private readonly ?\Symfony\Contracts\Translation\TranslatorInterface $translator = null,
+        private readonly ?\App\Services\Group\AllShops\AllShopsReader $allShops = null)
     {
     }
 
@@ -66,7 +67,19 @@ class GestionStatisticsController extends AbstractController
     #[Route('/api/gestion/statistiques', name: 'gestion_statistiques', methods: ['GET'])]
     public function overview(Request $request): JsonResponse
     {
-        return $this->json($this->useCase->overview($request->query->all(), $this->locale($request)));
+        $query = $request->query->all();
+        $locale = $this->locale($request);
+        // lot G-2 : « Toutes les boutiques » (en-tête X-Group-Scope, garde GroupScopeSubscriber) : chaque boutique, puis les totaux par devise
+        // seuls les paramètres qui changent la lecture entrent dans la clé du cache (un paramètre de plus ne force pas une relecture)
+        $groupQuery = array_intersect_key($query, array_flip(\App\Services\Group\AllShops\GroupScope::STATISTICS_PARAMS));
+        ksort($groupQuery);
+        $group = $this->allShops?->forRequest($request, 'gestion_statistiques', ['query' => $groupQuery, 'locale' => $locale],
+            fn (): array => $this->useCase->overviewWithSums($groupQuery, $locale), \App\Services\Group\AllShops\AllShopsMerger::statistics(...));
+        if ($group !== null) {
+            return $this->json($group);
+        }
+
+        return $this->json($this->useCase->overview($query, $locale));
     }
 
     private function locale(Request $request): string
