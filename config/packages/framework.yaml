@@ -9,6 +9,10 @@ framework:
     trusted_headers: ['x-forwarded-for']
     csrf_protection: true
     http_method_override: false
+    # Lot INC-1a (18/11/2026, décision du chef de projet) : une \Error (TypeError…) levée pendant une requête passe aussi par
+    # kernel.exception, comme une exception : réponse JSON neutre (ApiExceptionListener) au lieu d'une 500 brute, et incident de la
+    # plateforme. Défaut de Symfony 7. Lu par le seul noyau HTTP (`http_kernel`) : la console et les workers ne changent pas.
+    handle_all_throwables: true
 
     # Enables session support. Note that the session will ONLY be started if you read or write from it.
     # Remove or comment this section to explicitly disable session support.

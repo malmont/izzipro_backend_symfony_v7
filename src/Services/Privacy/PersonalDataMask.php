@@ -34,6 +34,24 @@ final class PersonalDataMask
         return '•••• ' . substr($code, -4);
     }
 
+    /**
+     * Un texte libre (message d'erreur, écran, valeur d'un contexte) : courriels masqués, numéros de 7 chiffres ou plus réduits à leurs
+     * 4 derniers, jetons (JWT, valeurs de « password », « token », « secret », « authorization »…, longues suites de 32 caractères)
+     * remplacés. Un nom ne se reconnaît pas dans un texte libre : les champs d'un nom ne sont jamais acceptés (liste blanche).
+     * Espaces réduits, `$max` caractères au plus.
+     */
+    public static function text(string $text, int $max = 300): string
+    {
+        $text = (string) preg_replace('/\beyJ[A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]+(?:\.[A-Za-z0-9_\-]+)?/', '[jeton]', $text);
+        $text = (string) preg_replace('/\b(bearer|token|password|passwd|pwd|secret|api[_\-]?key|authorization|cookie|pin|otp)\b(\s*[:=]\s*|\s+)(?!\[jeton\])\S+/i', '$1$2[masqué]', $text);
+        $text = (string) preg_replace_callback('/[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}/', fn (array $m): string => (string) self::email($m[0]), $text);
+        $text = (string) preg_replace('/\b[A-Za-z0-9_\-]{32,}\b/', '[jeton]', $text);
+        $text = (string) preg_replace_callback('/\+?\d[\d\s().\-]{5,}\d/', fn (array $m): string => strlen((string) preg_replace('/\D+/', '', $m[0])) >= 7 ? (string) self::phone($m[0]) : $m[0], $text);
+        $text = trim((string) preg_replace('/\s+/u', ' ', $text));
+
+        return mb_substr($text, 0, $max);
+    }
+
     public static function name(string $text): string
     {
         $text = trim($text);

@@ -1,0 +1,7 @@
+[Unit]
+Description=Izzipro : courriel du jour des incidents de la plateforme, puis purge (app:platform:incidents-digest)
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/docker exec -w /var/www symfony_app_v2 php bin/console app:platform:incidents-digest --no-interaction

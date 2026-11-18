@@ -28,6 +28,8 @@
         {% for message in messages %}<div class="alert alert-{{ label }}">{{ message }}</div>{% endfor %}
     {% endfor %}
 
+    <p class="mb-3"><a class="btn btn-sm btn-outline-dark" href="{{ incidentsUrl ?? path('admin_plateforme_incidents') }}">Incidents de la plateforme</a></p>
+
     <div class="card mb-3 plateforme-mode">
         <div class="card-body d-flex flex-wrap align-items-center gap-3">
             <div>

@@ -156,7 +156,7 @@ final class ScreenRegistry
         '@memoires' => 'Mémoires Vivantes et Living Memory : livres, chapitres, invitations',
         '@boussole' => 'Boussole ESG : espace des entreprises',
         '@boitier' => 'Boîtier de la prévention des pertes (matériel)',
-        '@technique' => 'Technique : état du serveur, webhooks, fichiers, synchronisation du front, création de site par clé',
+        '@technique' => 'Technique : état du serveur, webhooks, fichiers, synchronisation du front, création de site par clé, erreurs remontées par les applications',
         '@ancien' => 'Anciennes pages de la boutique servies par le backend',
     ];
 
@@ -180,6 +180,7 @@ final class ScreenRegistry
         ['#^/api/shipping/(buy|parcels)$#', 'ventes.commandes'],
         ['#^/api/(tenant|app|app-profile|apps|mobile)(/|$)#', '@apps'],
         ['#^/api/(health|webhooks|landingpage-config)(/|$)#', '@technique'],
+        ['#^/api/incidents/report$#', '@technique'], // lot INC-1a : le gestionnaire d'erreurs d'une application
         // (API Platform : sa documentation, ses erreurs, ses contextes JSON-LD, son point d'entrée)
         ['#^/api/(\.well-known|errors|validation_errors|docs|contexts)([./]|$)#', '@technique'],
         ['#^/api/(\{index\}|index)(\.[^/]+)?$#', '@technique'],
