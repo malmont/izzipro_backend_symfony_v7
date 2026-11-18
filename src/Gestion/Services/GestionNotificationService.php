@@ -45,13 +45,18 @@ class GestionNotificationService
     public const LOSS_DIGEST = 'loss_digest';
     /** Point de la semaine (lot NOTIF) : courriel de suivi qui se coupe ici, indépendamment du niveau */
     public const WEEKLY_DIGEST = 'weekly_digest';
-    public const KINDS = [self::LOW_STOCK => true, self::DUPLICATE_INVOICE => true, self::CASH_CRITICAL => true, self::TRIP_BUDGET => true, self::LOSS_DIGEST => true, self::WEEKLY_DIGEST => true, self::LOSS_EXIT => true]; // trip_budget : lot B1a ; cash_critical : lot B1b-1 ; loss_exit : lot L5-d
+    /** Prévention des pertes (lot L6-b) : un boîtier vendu est branché dans la boutique, à confirmer. INDISPENSABLE : sans interrupteur */
+    public const LOSS_BOX_PLUGGED = 'loss_box_plugged';
+    /** Lot L6-b : les types indispensables du téléphone : toujours allumés, jamais filtrés par le niveau, jamais comptés dans le plafond du jour */
+    public const INDISPENSABLE = [self::LOSS_BOX_PLUGGED];
+    public const KINDS = [self::LOW_STOCK => true, self::DUPLICATE_INVOICE => true, self::CASH_CRITICAL => true, self::TRIP_BUDGET => true, self::LOSS_DIGEST => true, self::WEEKLY_DIGEST => true, self::LOSS_EXIT => true, self::LOSS_BOX_PLUGGED => true]; // trip_budget : lot B1a ; cash_critical : lot B1b-1 ; loss_exit : lot L5-d ; loss_box_plugged : lot L6-b
     /** Canal d'un type : `push` (téléphone) par défaut ; `email` pour ceux listés ici */
     public const EMAIL_KINDS = [self::LOSS_DIGEST, self::WEEKLY_DIGEST];
     /** Lot NOTIF-1, type → [famille, sujet] : `urgent` part dès le niveau « Essentiel », `followup` (suivi) est regroupé par les niveaux */
     public const FAMILIES = [
         self::LOW_STOCK => ['followup', 'management'], self::DUPLICATE_INVOICE => ['followup', 'management'], self::CASH_CRITICAL => ['urgent', 'management'],
         self::TRIP_BUDGET => ['followup', 'management'], self::LOSS_DIGEST => ['followup', 'loss'], self::WEEKLY_DIGEST => ['followup', null], self::LOSS_EXIT => ['urgent', 'loss'],
+        self::LOSS_BOX_PLUGGED => ['indispensable', 'loss'],
     ];
     public const CASH_REPEAT_DAYS = 7;
     public const DAILY_HOUR = 10;
@@ -87,10 +92,10 @@ class GestionNotificationService
         $prefs = $this->log()->preferences($userId);
         $kinds = [];
         foreach (self::KINDS as $kind => $available) {
-            if (in_array($kind, [self::LOSS_DIGEST, self::LOSS_EXIT], true)) { // disponibles seulement si le droit du module Prévention des pertes est accordé au site
+            if (in_array($kind, [self::LOSS_DIGEST, self::LOSS_EXIT, self::LOSS_BOX_PLUGGED], true)) { // disponibles seulement si le droit du module Prévention des pertes est accordé au site
                 $available = $this->modules !== null && $this->lossPreventionGranted();
             }
-            $kinds[] = ['kind' => $kind, 'label' => $this->translator->trans("notifications.kinds.$kind", [], 'gestion', $locale), 'enabled' => $prefs[$kind] ?? true, 'available' => $available,
+            $kinds[] = ['kind' => $kind, 'label' => $this->translator->trans("notifications.kinds.$kind", [], 'gestion', $locale), 'enabled' => in_array($kind, self::INDISPENSABLE, true) || ($prefs[$kind] ?? true), 'available' => $available,
                 'channel' => in_array($kind, self::EMAIL_KINDS, true) ? 'email' : 'push', 'family' => self::FAMILIES[$kind][0], 'subject' => self::FAMILIES[$kind][1]];
         }
 
@@ -145,6 +150,8 @@ class GestionNotificationService
                 $fields["kinds.$kind"] = 'UNKNOWN_KIND';
             } elseif (!is_bool($enabled)) {
                 $fields["kinds.$kind"] = 'MUST_BE_BOOLEAN';
+            } elseif (!$enabled && in_array($kind, self::INDISPENSABLE, true)) {
+                $fields["kinds.$kind"] = 'NOT_SWITCHABLE'; // lot L6-b : un type indispensable ne se coupe pas
             }
         }
         if ($fields !== []) {
@@ -267,7 +274,8 @@ class GestionNotificationService
     {
         $now ??= new \DateTimeImmutable('now', new \DateTimeZone('UTC'));
         $day = $this->clock->day($now);
-        if (!($this->log()->preferences($userId)[$kind] ?? true) || !$this->isAdmin($userId) || !$this->levelAllows($userId, $kind, $day, $exercise)) {
+        $indispensable = in_array($kind, self::INDISPENSABLE, true); // lot L6-b : ni préférence, ni niveau, ni plafond
+        if (!$this->isAdmin($userId) || (!$indispensable && (!($this->log()->preferences($userId)[$kind] ?? true) || !$this->levelAllows($userId, $kind, $day, $exercise)))) {
             return null;
         }
         // lot L5-d : la dernière notification du plafond propre d'un type dit qu'il y en a d'autres (« voir la liste ») ; jamais en exercice

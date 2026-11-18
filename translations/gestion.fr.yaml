@@ -67,6 +67,7 @@ notifications:
         loss_digest: 'Prévention des pertes : résumé du jour par courriel'
         weekly_digest: 'Point de la semaine par courriel'
         loss_exit: 'Prévention des pertes : article à la sortie sans vente'
+        loss_box_plugged: 'Prévention des pertes : votre boîtier est branché'
     # Lot NOTIF-1 : niveaux des courriels de suivi (écran « Notifications »)
     levels:
         site: 'Comme le site'
@@ -99,6 +100,12 @@ notifications:
     cash_critical:
         title: Trésorerie basse
         body: 'Le solde prévu descend à %amount% le %date%.'
+    loss_box_plugged_cancelled:
+        title: 'Expédition de boîtier annulée'
+        body: 'La plateforme a annulé l''expédition du boîtier %serial%. Ne le confirmez pas.'
+    loss_box_plugged:
+        title: 'Votre boîtier est branché'
+        body: 'Le boîtier %serial% est branché dans votre boutique. Confirmez « C''est bien mon boîtier » dans les 72 heures. Si vous n''avez rien branché, ne confirmez pas et contactez-nous.'
     loss_exit:
         title: 'Article à la sortie, à vérifier'
         body: '%zone%, %time% : un article suivi passe sans vente reliée. À vérifier, sans retenir ni accuser personne.'

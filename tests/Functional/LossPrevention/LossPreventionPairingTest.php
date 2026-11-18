@@ -40,14 +40,14 @@ class LossPreventionPairingTest extends LossPreventionTestCase
         $this->ip = self::address();
         $this->flags(true, true);
         $this->master = static::getContainer()->get(TenantConnectionManager::class)->getPdoMaster();
-        $this->master->exec('DELETE FROM loss_box_pairing');
+        $this->master->exec('DELETE FROM loss_box_shipment_event; DELETE FROM loss_box_shipment; DELETE FROM loss_box_pairing');
         self::resetPairingSiteLimit();
     }
 
     protected function tearDown(): void
     {
         try {
-            $this->master->exec('DELETE FROM loss_box_pairing');
+            $this->master->exec('DELETE FROM loss_box_shipment_event; DELETE FROM loss_box_shipment; DELETE FROM loss_box_pairing');
             self::resetPairingSiteLimit();
             foreach ([[MV_TEST_TENANT2_DB, MV_TEST_TENANT2_CODE], [MV_TEST_TENANT_DB, MV_TEST_TENANT_CODE]] as [$db, $code]) {
                 $this->provider->switchTenant($db, $code);
@@ -455,6 +455,228 @@ class LossPreventionPairingTest extends LossPreventionTestCase
         $otherCode = LossPairingCode::generate();
         $this->json($this->box('', ['code' => $otherCode] + $request, $polls));
         $this->assertSame('waiting', $this->json($this->box('/etat', ['code' => $otherCode, 'machine' => self::MACHINE], $polls))['status']);
+    }
+
+    /**
+     * Lot L6-b (17/11/2026, `docs/prevention-pertes.md` § 19.5) : un boîtier vendu est réservé pour UN site, reconnu au premier
+     * branchement, confirmé par ce site seul, dans les 72 h. Un code réservé ne se jumelle jamais à un autre site.
+     */
+    public function testASoldBoxIsReservedPluggedAndConfirmedByItsOwnSiteOnly(): void
+    {
+        $super = static::getContainer()->get('lexik_jwt_authentication.jwt_manager')->create($this->user(['ROLE_ADMIN', 'ROLE_SUPER_ADMIN'], 'Plateforme'));
+        // un téléphone inscrit : la notification est tentée pour de bon, et journalisée
+        $this->json($this->admin('POST', '/api/notifications/appareils', ['token' => "jeton-$this->s", 'platform' => 'admin']), 201);
+        $platform = fn (string $method, string $path, ?array $body = null): Response => $this->call($method, '/api/platform/pertes/expeditions' . $path, $body, $super);
+        $code = LossPairingCode::generate();
+        $serial = "IZB-$this->s";
+        $order = ['serial' => $serial, 'code' => strtolower(str_replace('-', ' ', $code)), 'tenantCode' => MV_TEST_TENANT_CODE, 'orderRef' => 'CMD-1'];
+        $shipments = fn (): int => (int) $this->master->query('SELECT COUNT(*) FROM loss_box_shipment')->fetchColumn();
+        $request = ['code' => $code, 'machine' => self::MACHINE, 'version' => '1.0.0', 'arch' => 'arm64', 'serial' => strtolower($serial)];
+        $proof = ['code' => $code, 'machine' => self::MACHINE];
+        // Un boîtier NON préparé (aucune demande déposée) ne se réserve pas : son code serait au premier qui le lit en chemin
+        $this->assertSame(['code' => 'NOT_PREPARED'], $this->json($this->call('POST', '/api/platform/pertes/expeditions', $order, $super), 422)['fields']);
+        // La préparation, à l'entrepôt : le boîtier branché une fois dépose sa demande (sa machine est fixée)
+        $this->assertSame('waiting', $this->json($this->box('', $request))['status']);
+        // Seul le super administrateur ; l'aperçu n'écrit rien et nomme le site visé
+        $this->assertSame([403, 403], [$this->call('GET', '/api/platform/pertes/expeditions', null, $this->adminToken)->getStatusCode(), $this->call('POST', '/api/platform/pertes/expeditions', $order, $this->adminToken)->getStatusCode()]);
+        $preview = $this->json($platform('POST', '', $order))['preview'];
+        $this->assertSame([$serial, 'CMD-1', MV_TEST_TENANT_CODE, true, 'waiting'], [$preview['serial'], $preview['orderRef'], $preview['site']['code'], $preview['site']['lossPrevention'], $preview['pairing']]);
+        $this->assertNotSame('', (string) $preview['site']['name']);
+        $this->assertSame(0, $shipments(), 'l\'aperçu n\'écrit rien');
+        foreach ([['tenantCode' => 'site-inconnu', 'f' => 'tenantCode', 'v' => 'UNKNOWN_SITE'], ['code' => 'pas un code', 'f' => 'code', 'v' => 'INVALID_VALUE'], ['serial' => 'x', 'f' => 'serial', 'v' => 'INVALID_VALUE']] as $wrong) {
+            [$field, $value] = [$wrong['f'], $wrong['v']];
+            unset($wrong['f'], $wrong['v']);
+            $this->assertSame([$field => $value], $this->json($platform('POST', '', $wrong + $order), 422)['fields']);
+        }
+        // un site sans le module est refusé (plateforme en service)
+        static::getContainer()->get(\App\Services\Platform\PlatformModeService::class)->setMode('live', 'test');
+        try {
+            $this->assertSame(['tenantCode' => 'MODULE_INACTIVE'], $this->json($platform('POST', '', ['tenantCode' => MV_TEST_TENANT2_CODE] + $order), 422)['fields']);
+        } finally {
+            static::getContainer()->get(\App\Services\Platform\PlatformModeService::class)->setMode('demo', 'test');
+        }
+        $shipment = $this->json($platform('POST', '', $order + ['confirm' => true]), 201)['shipment'];
+        $this->assertSame(['reserved', $serial, MV_TEST_TENANT_CODE], [$shipment['status'], $shipment['serial'], $shipment['tenantCode']]);
+        // La série : celle que la machine de ce code a dite en déposant sa demande. Deux boîtiers échangés à la saisie ne se réservent pas ;
+        // une machine qui ne l'a pas dite non plus
+        $swapped = LossPairingCode::generate();
+        $this->json($this->box('', ['code' => $swapped, 'serial' => "AUTRE-$this->s"] + $request));
+        $this->assertSame(['serial' => 'SERIAL_MISMATCH'], $this->json($platform('POST', '', ['serial' => "IZB9-$this->s", 'code' => $swapped] + $order), 422)['fields']);
+        $silent = LossPairingCode::generate();
+        $this->json($this->box('', array_diff_key(['code' => $silent] + $request, ['serial' => true])));
+        $this->assertSame(['serial' => 'SERIAL_UNKNOWN'], $this->json($platform('POST', '', ['serial' => "IZB8-$this->s", 'code' => $silent] + $order), 422)['fields']);
+        $this->assertSame(['serial' => 'INVALID_VALUE'], $this->json($this->box('', ['code' => LossPairingCode::generate(), 'serial' => 'x'] + $request), 422)['fields']);
+        $this->assertSame('SHIPMENT_EXISTS', $this->json($platform('POST', '', $order + ['confirm' => true]), 409)['error']);
+        $this->assertSame('SHIPMENT_EXISTS', $this->json($platform('POST', '', ['serial' => strtolower($serial)] + $order + ['confirm' => true]), 409)['error'], 'une série, quelle que soit la casse');
+        // La réservation ne branche rien (le boîtier est encore à l'entrepôt) : aucun avis
+        $this->assertSame('reserved', (string) $this->master->query("SELECT status FROM loss_box_shipment WHERE id = {$shipment['id']}")->fetchColumn());
+        $this->assertSame(0, (int) $this->db->fetchOne("SELECT COUNT(*) FROM notification_log WHERE kind = 'loss_box_plugged'"));
+        $listed = json_encode($this->json($platform('GET', '')));
+        foreach (['code_hash', 'codeHash', 'keyHash', 'key_hash', $code] as $never) {
+            $this->assertStringNotContainsString($never, $listed, "« $never » n'est jamais rendu");
+        }
+
+        // Le premier branchement dans la boutique : la première question du boîtier après la réservation branche l'expédition, et
+        // l'administrateur du site est prévenu
+        $this->assertSame('waiting', $this->json($this->box('/etat', $proof))['status']);
+        $row = $this->master->query("SELECT status, key_hash IS NOT NULL AS prepared FROM loss_box_shipment WHERE id = {$shipment['id']}")->fetch(\PDO::FETCH_ASSOC);
+        $this->assertSame(['plugged', true], [$row['status'], in_array($row['prepared'], [true, 't', 1, '1'], true)]);
+        $this->assertSame(1, (int) $this->db->fetchOne("SELECT COUNT(*) FROM notification_log WHERE kind = 'loss_box_plugged' AND user_id = ?", [$this->adminId]), 'prévenu sur son téléphone');
+
+        // Un autre site : la saisie du code réservé reçoit le refus d'un code INCONNU, au mot près et à peu près dans la même durée
+        $elsewhere = $this->adminOfSecondSite();
+        $timed = function (string $tried) use ($elsewhere): array {
+            $start = microtime(true);
+            $body = $this->json($this->pair(['code' => $tried, 'name' => 'Ailleurs'], $elsewhere, MV_TEST_TENANT2_HOST), 404);
+
+            return [$body, microtime(true) - $start];
+        };
+        $timed(LossPairingCode::generate()); // à chaud
+        $times = ['reserved' => [], 'unknown' => []];
+        foreach ([1, 2, 3] as $ignored) {
+            [$reserved, $times['reserved'][]] = $timed($code);
+            [$unknown, $times['unknown'][]] = $timed(LossPairingCode::generate());
+            $this->assertSame($unknown, $reserved, 'le même refus qu\'un code inconnu');
+        }
+        sort($times['reserved']);
+        sort($times['unknown']);
+        $this->assertLessThan(0.25, abs($times['reserved'][1] - $times['unknown'][1]), 'la même durée (médianes)');
+        // la confirmation par un autre site : 404 ; la liste de l'autre site est vide
+        $toSecond = fn (string $method, string $path): Response => $this->call($method, self::BOXES . $path . '?locale=fr', $method === 'POST' ? [] : null, $elsewhere);
+        $this->client->getCookieJar()->clear();
+        $this->client->request('GET', 'https://' . MV_TEST_TENANT2_HOST . self::BOXES . '/a-confirmer?locale=fr', [], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT2_HOST, 'HTTP_ACCEPT' => 'application/json', 'HTTP_AUTHORIZATION' => 'Bearer ' . $elsewhere, 'REMOTE_ADDR' => self::address()]);
+        $this->assertSame([], $this->json($this->client->getResponse())['boxes']);
+        $this->client->getCookieJar()->clear();
+        $this->client->request('POST', 'https://' . MV_TEST_TENANT2_HOST . self::BOXES . '/a-confirmer/' . $shipment['id'] . '?locale=fr', [], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT2_HOST, 'CONTENT_TYPE' => 'application/json', 'HTTP_ACCEPT' => 'application/json', 'HTTP_AUTHORIZATION' => 'Bearer ' . $elsewhere, 'REMOTE_ADDR' => self::address()], '{}');
+        $this->assertSame('SHIPMENT_NOT_FOUND', $this->json($this->client->getResponse(), 404)['error']);
+        $this->assertSame([0, 'plugged'], [$this->boxes(2), (string) $this->master->query("SELECT status FROM loss_box_shipment WHERE id = {$shipment['id']}")->fetchColumn()]);
+
+        // Le site acheteur voit le boîtier branché ; passé 72 h, la confirmation est refusée et l'expédition revient à « réservée »
+        $pending = $this->json($this->admin('GET', self::BOXES . '/a-confirmer'));
+        $this->assertSame([[(int) $shipment['id'], $serial]], array_map(fn (array $b): array => [$b['id'], $b['serial']], $pending['boxes']));
+        $this->assertSame(['id', 'serial', 'pluggedAt', 'pluggedAgo', 'confirmBefore'], array_keys($pending['boxes'][0]));
+        $this->assertStringContainsString('ne confirmez pas', $pending['notice']);
+        // le compte de la plateforme ne confirme pas à la place du commerçant
+        $this->assertSame('SHIPMENT_NOT_FOUND', $this->json($this->call('POST', self::BOXES . '/a-confirmer/' . $shipment['id'] . '?locale=fr', [], $super), 404)['error']);
+        $this->master->exec("UPDATE loss_box_shipment SET plugged_at = plugged_at - INTERVAL '73 hours' WHERE id = {$shipment['id']}");
+        $this->assertSame('SHIPMENT_NOT_FOUND', $this->json($this->admin('POST', self::BOXES . '/a-confirmer/' . $shipment['id'], []), 404)['error']);
+        $this->assertSame(['reserved', null], array_values($this->master->query("SELECT status, key_hash FROM loss_box_shipment WHERE id = {$shipment['id']}")->fetch(\PDO::FETCH_ASSOC)));
+        $this->assertSame(0, $this->boxes());
+        // un nouveau branchement relance l'avis (ici un redépôt de la demande) ; la confirmation crée le boîtier dans CE site, que la
+        // machine reçoit
+        $this->json($this->box('', $request));
+        $this->assertSame(2, (int) $this->db->fetchOne("SELECT COUNT(*) FROM notification_log WHERE kind = 'loss_box_plugged' AND user_id = ?", [$this->adminId]));
+        $box = $this->json($this->admin('POST', self::BOXES . '/a-confirmer/' . $shipment['id'], ['name' => "Vendu $this->s"]), 201)['box'];
+        $this->assertSame([1, 'confirmed'], [$this->boxes(), (string) $this->master->query("SELECT status FROM loss_box_shipment WHERE id = {$shipment['id']}")->fetchColumn()]);
+        $given = $this->json($this->box('/etat', $proof));
+        $this->assertSame(['paired', $box['id']], [$given['status'], $given['box']['id']], 'la machine qui a déposé ce code reçoit le boîtier confirmé');
+        $this->assertSame('SHIPMENT_NOT_FOUND', $this->json($this->admin('POST', self::BOXES . '/a-confirmer/' . $shipment['id'], []), 404)['error'], 'une seule fois');
+        // L'annulation d'une expédition confirmée est refusée, et ne touche pas au boîtier
+        $this->assertSame('SHIPMENT_NOT_CANCELLABLE', $this->json($platform('POST', '/' . $shipment['id'] . '/annuler'), 409)['error']);
+        $this->assertSame([1, 'active'], [$this->boxes(), $this->sheet((int) $box['id'])['status']]);
+        // Les journaux : celui des expéditions (base maître), celui du module, avec l'auteur ; jamais le code
+        $events = $this->master->query("SELECT type FROM loss_box_shipment_event WHERE shipment_id = {$shipment['id']} ORDER BY id")->fetchAll(\PDO::FETCH_COLUMN);
+        // trois saisies du code réservé par l'autre site (tracées après la réponse), sa confirmation refusée, le délai passé
+        // et la seconde confirmation, refusée (une seule fois) ; le code envoyé au site acheteur à la réservation (lot L6-c)
+        $this->assertSame(['reserved', 'code_sent', 'plugged', 'refused', 'refused', 'refused', 'refused', 'unplugged', 'refused', 'plugged', 'confirmed', 'refused'], $events);
+        $this->assertSame(['code_other_site', 'code_other_site', 'code_other_site', 'other_site'], array_map(fn (string $d): string => json_decode($d, true)['reason'],
+            $this->master->query("SELECT data FROM loss_box_shipment_event WHERE shipment_id = {$shipment['id']} AND type = 'refused' ORDER BY id LIMIT 4")->fetchAll(\PDO::FETCH_COLUMN)));
+        // au journal du site qui a saisi : la même ligne pour un code inconnu et pour un code réservé ailleurs (7 saisies refusées)
+        $this->provider->switchTenant(MV_TEST_TENANT2_DB, MV_TEST_TENANT2_CODE);
+        $this->assertSame(['unknown'], array_values(array_unique(array_map(fn (string $d): string => json_decode($d, true)['reason'],
+            $this->provider->getEntityManager()->getConnection()->fetchFirstColumn("SELECT data FROM loss_journal WHERE type = 'BOX_PAIRING_REFUSED'")))));
+        $this->assertGreaterThanOrEqual(7, (int) $this->provider->getEntityManager()->getConnection()->fetchOne("SELECT COUNT(*) FROM loss_journal WHERE type = 'BOX_PAIRING_REFUSED'"));
+        $this->provider->switchTenant(MV_TEST_TENANT_DB, MV_TEST_TENANT_CODE);
+        $journal = $this->db->fetchAllAssociative("SELECT type, user_id FROM loss_journal WHERE type IN ('BOX_SHIPMENT_CONFIRMED', 'BOX_SHIPMENT_REFUSED') ORDER BY id DESC LIMIT 2");
+        // de la plus récente à la plus ancienne : la seconde confirmation refusée, puis la confirmation
+        $this->assertSame([['BOX_SHIPMENT_REFUSED', $this->adminId], ['BOX_SHIPMENT_CONFIRMED', $this->adminId]], array_map(fn (array $r): array => [$r['type'], (int) $r['user_id']], $journal));
+        $this->assertStringNotContainsString($code, json_encode($this->master->query('SELECT * FROM loss_box_shipment_event')->fetchAll(\PDO::FETCH_ASSOC)));
+
+        // Le secours : le site acheteur saisit le code d'un boîtier réservé pour lui ; une réservation annulée libère son code
+        $second = LossPairingCode::generate();
+        $this->json($this->box('', ['code' => $second, 'serial' => "IZB2-$this->s"] + $request));
+        $other = $this->json($platform('POST', '', ['serial' => "IZB2-$this->s", 'code' => $second] + $order + ['confirm' => true]), 201)['shipment'];
+        $this->json($this->pair(['code' => $second, 'name' => "Saisi $this->s"]), 201);
+        $this->assertSame('confirmed', (string) $this->master->query("SELECT status FROM loss_box_shipment WHERE id = {$other['id']}")->fetchColumn());
+        $third = LossPairingCode::generate();
+        $this->json($this->box('', ['code' => $third, 'serial' => "IZB3-$this->s"] + $request));
+        $cancelled = $this->json($platform('POST', '', ['serial' => "IZB3-$this->s", 'code' => $third] + $order + ['confirm' => true]), 201)['shipment'];
+        // branchée dans la boutique, puis annulée par la plateforme : le site l'apprend (son journal, un avis)
+        $this->json($this->box('/etat', ['code' => $third, 'machine' => self::MACHINE]));
+        $this->assertSame('cancelled', $this->json($platform('POST', '/' . $cancelled['id'] . '/annuler'))['shipment']['status']);
+        $this->assertSame(1, (int) $this->db->fetchOne("SELECT COUNT(*) FROM loss_journal WHERE type = 'BOX_SHIPMENT_CANCELLED'"));
+        $this->assertMatchesRegularExpression('/annulée|cancelled/u', (string) $this->db->fetchOne("SELECT title FROM notification_log WHERE kind = 'loss_box_plugged' AND user_id = ? ORDER BY id DESC LIMIT 1", [$this->adminId]));
+        $this->json($platform('POST', '', ['serial' => "IZB3-$this->s", 'code' => $third, 'tenantCode' => MV_TEST_TENANT_CODE, 'confirm' => true]), 201);
+    }
+
+    /**
+     * Lot L6-c (17/11/2026, `docs/prevention-pertes.md` § 19.6) : le code de l'étiquette part UNE fois, à la réservation, aux administrateurs
+     * du site acheteur, en direct ; il n'est gardé nulle part (ni dans un message en file, ni dans une table de la plateforme). La plateforme
+     * le renvoie en le relisant : il doit être celui de l'expédition ; plafonné ; seulement pour une expédition vivante.
+     */
+    public function testTheLabelCodeGoesOnceToTheBuyerAndIsKeptNowhere(): void
+    {
+        $before = [$_ENV['MAILER_DSN'] ?? null, $_SERVER['MAILER_DSN'] ?? null];
+        $_ENV['MAILER_DSN'] = $_SERVER['MAILER_DSN'] = 'null://plateforme-envoi%40example.invalid:x@default'; // le serveur d'envoi des essais reçoit un compte
+        $limiter = null;
+        try {
+            $super = static::getContainer()->get('lexik_jwt_authentication.jwt_manager')->create($this->user(['ROLE_ADMIN', 'ROLE_SUPER_ADMIN'], 'Plateforme'));
+            $code = LossPairingCode::generate();
+            $serial = "IZC-$this->s";
+            $this->json($this->box('', ['code' => $code, 'machine' => self::MACHINE, 'version' => '1.0.0', 'arch' => 'arm64', 'serial' => $serial]));
+            // la réservation : le code part au site acheteur, en direct ; aucun message en file ne le porte
+            $this->client->disableReboot();
+            $bus = static::getContainer()->get('debug.traced.messenger.bus.default');
+            $bus->reset();
+            $reserved = $this->json($this->call('POST', '/api/platform/pertes/expeditions', ['serial' => $serial, 'code' => $code, 'tenantCode' => MV_TEST_TENANT_CODE, 'confirm' => true], $super), 201);
+            $admins = (int) $this->db->fetchOne('SELECT COUNT(*) FROM "user" WHERE roles::text LIKE \'%"ROLE_ADMIN"%\' AND roles::text NOT LIKE \'%"ROLE_SUPER_ADMIN"%\' AND deleted_at IS NULL AND is_verified = true AND email LIKE \'%@%\'');
+            $this->assertGreaterThanOrEqual(1, $reserved['codeSentTo'], 'au moins l\'administrateur du site d\'essai');
+            $this->assertSame($admins, $reserved['codeSentTo'], 'chaque administrateur du site, jamais le compte de la plateforme (lui aussi ROLE_ADMIN ici)');
+            foreach (['fr', 'en'] as $language) { // le corps porte le code (le sujet non)
+                $translator = static::getContainer()->get('translator');
+                $this->assertStringContainsString('ZZ-CODE', $translator->trans('loss_box_code.message', ['%code%' => 'ZZ-CODE', '%serial%' => 'S', '%site%' => 'X'], 'emails', $language));
+                $this->assertStringNotContainsString('ZZ-CODE', $translator->trans('loss_box_code.subject', ['%code%' => 'ZZ-CODE', '%serial%' => 'S', '%site%' => 'X'], 'emails', $language));
+            }
+            foreach ($bus->getDispatchedMessages() as $dispatched) {
+                $this->assertStringNotContainsString($code, serialize($dispatched['message']), 'aucun message en file ne porte le code');
+            }
+            $id = (int) $reserved['shipment']['id'];
+            $limiter = self::pairingLimiter('shipmentCode', '15 minutes', (string) $id);
+            $limiter->reset();
+            // rien de réversible dans la base de la plateforme : ni l'expédition, ni son journal, ni la demande ne portent le code
+            $dump = json_encode([$this->master->query("SELECT * FROM loss_box_shipment WHERE id = $id")->fetchAll(\PDO::FETCH_ASSOC),
+                $this->master->query("SELECT * FROM loss_box_shipment_event WHERE shipment_id = $id")->fetchAll(\PDO::FETCH_ASSOC), $this->master->query('SELECT * FROM loss_box_pairing')->fetchAll(\PDO::FETCH_ASSOC)]);
+            $this->assertStringNotContainsString($code, $dump);
+            $this->assertStringNotContainsString(str_replace('-', '', $code), $dump);
+            $sent = $this->master->query("SELECT actor, data FROM loss_box_shipment_event WHERE shipment_id = $id AND type = 'code_sent'")->fetch(\PDO::FETCH_ASSOC);
+            $this->assertSame([$reserved['codeSentTo'], $serial], [json_decode((string) $sent['data'], true)['admins'], json_decode((string) $sent['data'], true)['serial']], 'code envoyé à N administrateurs, avec la série');
+            // le renvoi (B) : seulement le code de CETTE expédition ; plafonné à 5 essais par quart d'heure
+            $resend = fn (mixed $tried): \Symfony\Component\HttpFoundation\Response => $this->call('POST', "/api/platform/pertes/expeditions/$id/code", ['code' => $tried], $super);
+            $this->assertSame(['code' => 'CODE_MISMATCH'], $this->json($resend(LossPairingCode::generate()), 422)['fields']);
+            $this->assertSame(['code' => 'INVALID_VALUE'], $this->json($resend('pas un code'), 422)['fields']);
+            $this->assertSame(403, $this->call('POST', "/api/platform/pertes/expeditions/$id/code", ['code' => $code], $this->adminToken)->getStatusCode(), 'la plateforme seule');
+            // essais 1 et 2 ci-dessus (un code faux, un code illisible) ; 3, 4 et 5 : le bon code, renvoyé ; le sixième attend
+            $this->assertGreaterThanOrEqual(1, $this->json($resend(strtolower($code)))['codeSentTo']);
+            $this->json($resend($code));
+            $this->json($resend($code));
+            $this->assertSame('RATE_LIMITED', $this->json($resend($code), 429)['error'], 'le sixième essai attend');
+            $limiter->reset();
+            $this->assertSame(4, (int) $this->master->query("SELECT COUNT(*) FROM loss_box_shipment_event WHERE shipment_id = $id AND type = 'code_sent'")->fetchColumn(), 'la réservation et trois renvois');
+            // une expédition annulée : plus de renvoi
+            $this->json($this->call('POST', "/api/platform/pertes/expeditions/$id/annuler", null, $super));
+            $this->assertSame('SHIPMENT_NOT_OPEN', $this->json($resend($code), 409)['error']);
+        } finally {
+            $limiter?->reset();
+            $this->client->enableReboot();
+            // la valeur des essais remise (tests/bootstrap.php), pour les essais qui suivent dans le même processus
+            [$_ENV['MAILER_DSN'], $_SERVER['MAILER_DSN']] = $before;
+            if ($before[0] === null) {
+                unset($_ENV['MAILER_DSN']);
+            }
+            if ($before[1] === null) {
+                unset($_SERVER['MAILER_DSN']);
+            }
+        }
     }
 
     // ----- aides -----

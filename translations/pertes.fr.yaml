@@ -618,6 +618,11 @@ hardware:
                 allows: 'Commencer avec quelques dizaines de puces.'
                 limits: 'Deux gestes : coller, puis lire.'
 # Boîtiers de la boutique (lot L3-a, 15/11/2026, docs/prevention-pertes.md § 16)
+shipments:
+    notice: 'Un boîtier vendu par la plateforme est branché dans votre boutique. Vérifiez que le numéro de série affiché est celui écrit sur votre boîtier. Si vous n''avez pas branché de boîtier, ou si le numéro diffère, ne confirmez pas et contactez-nous.'
+    defaultName: 'Boîtier de la boutique'
+    error:
+        SHIPMENT_NOT_FOUND: 'Ce boîtier n''est plus à confirmer.'
 boxes:
     status:
         pending: En attente de sa machine

@@ -619,6 +619,11 @@ hardware:
                 allows: 'Starting with a few dozen tags.'
                 limits: 'Two moves: stick, then read.'
 # Shop boxes (lot L3-a, 2026-11-15, docs/prevention-pertes.md § 16)
+shipments:
+    notice: 'A box sold by the platform is plugged in at your shop. Check that the serial number shown is the one written on your box. If you did not plug in a box, or if the number differs, do not confirm and contact us.'
+    defaultName: 'Shop box'
+    error:
+        SHIPMENT_NOT_FOUND: 'This box is no longer waiting for confirmation.'
 boxes:
     status:
         pending: Waiting for its machine

@@ -145,16 +145,26 @@ class LossBoxService
      */
     public function createPaired(string $name, ?string $place, string $code, string $locale, int $userId): int
     {
-        return $this->transaction(function () use ($name, $place, $code, $locale, $userId): int {
+        return $this->createPairedPrepared($name, $place, $this->tokens->pairingKeyHash($this->site(), $code), $this->tokens->pairingRef($this->site(), $code), $locale, $userId);
+    }
+
+    /**
+     * Lot L6-b (§ 19.5) : le même boîtier jumelé, créé à partir des empreintes déjà préparées au branchement d'un boîtier expédié (le
+     * code n'est gardé nulle part). `$keyHash` et `$ref` doivent avoir été calculés pour CE site (`LossBoxToken::pairingKeyHash`,
+     * `pairingRef`, sur le code et l'aléa du jumelage) : c'est le seul chemin qui écrit un boîtier jumelé.
+     */
+    public function createPairedPrepared(string $name, ?string $place, string $keyHash, string $ref, string $locale, int $userId): int
+    {
+        return $this->transaction(function () use ($name, $place, $keyHash, $ref, $locale, $userId): int {
             $repository = $this->repository();
             $this->emProvider->getEntityManager()->getConnection()->executeStatement('SELECT pg_advisory_xact_lock(' . LossBoxRepository::CREATE_LOCK . ')');
             if ($repository->liveCount(false) >= self::BOX_LIMIT) {
                 throw new GestionConflictException('BOX_LIMIT_REACHED', $this->texts->t('boxes.error.BOX_LIMIT_REACHED', $locale, ['limit' => self::BOX_LIMIT]), 409, ['limit' => self::BOX_LIMIT]);
             }
             $now = self::now();
-            $id = $repository->create($name, $place, $this->tokens->pairingKeyHash($this->site(), $code), null, false, $userId, $now);
+            $id = $repository->create($name, $place, $keyHash, null, false, $userId, $now);
             // la marque du jumelage reste dans ce fait (un fait ne se modifie jamais) : elle survit à une remise à zéro de la clé
-            $repository->event($id, null, LossBoxEvent::BOX_CREATED, $userId, false, ['pairing' => true, 'ref' => $this->tokens->pairingRef($this->site(), $code)], $now);
+            $repository->event($id, null, LossBoxEvent::BOX_CREATED, $userId, false, ['pairing' => true, 'ref' => $ref], $now);
 
             return $id;
         });

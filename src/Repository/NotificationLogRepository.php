@@ -33,7 +33,8 @@ class NotificationLogRepository extends EntityRepository
     public function countToday(int $userId, string $storeDay): int
     {
         // lot L5-d : les types à plafond propre (alerte de sortie) ne comptent pas dans le compte commun du téléphone
-        $own = array_keys(\App\Gestion\Services\GestionNotificationService::OWN_DAILY_CAP);
+        // lot L6-b : les types indispensables non plus (jamais comptés)
+        $own = [...array_keys(\App\Gestion\Services\GestionNotificationService::OWN_DAILY_CAP), ...\App\Gestion\Services\GestionNotificationService::INDISPENSABLE];
 
         return (int) $this->getEntityManager()->getConnection()->fetchOne(
             "SELECT COUNT(*) FROM notification_log WHERE channel = 'push' AND user_id = ? AND store_day = ? AND status IN (?, ?, ?)"
