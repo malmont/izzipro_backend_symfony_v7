@@ -225,6 +225,10 @@ security:
         #    fermé par App\LossPrevention\LossBoxGuardSubscriber (jeton signé X-Loss-Box, relu à chaque appel), sauf l'inscription (clé du
         #    boîtier) et l'échange de jeton, limités en débit. Le boîtier ne lit rien du site.
         - { path: ^/api/pertes/boitier/, roles: PUBLIC_ACCESS }
+        # 🔹 Incidents de la plateforme (lot INC-1a, 18/11/2026) : le gestionnaire d'erreurs de chaque application signale une erreur, avec
+        #    le jeton de l'utilisateur s'il y en a un, sinon sans jeton (limite par site et par IP, plafond des incidents nouveaux par site et
+        #    par jour, App\Incident\Services\PlatformIncidentService). Écrit dans la base maître seulement, jamais dans le site.
+        - { path: ^/api/incidents/report$, methods: [POST], roles: PUBLIC_ACCESS }
         # Profil public d'une application du site (20/10/2026) : lecture sans connexion
         - { path: ^/api/app-profile/, methods: [GET], roles: PUBLIC_ACCESS }
         # Conditions d'une famille d'applications (APPS-MEMBRES M1, 14/11/2026) : lues sans connexion par l'inscription et l'écran « Rejoindre »

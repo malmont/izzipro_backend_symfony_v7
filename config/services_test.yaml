@@ -143,3 +143,7 @@ services:
         autowire: true
         autoconfigure: true
         public: true
+    # Lot INC-1a : une \Error levée dans un contrôleur, sur demande d'un essai (en-tête X-Test-Raise)
+    App\Tests\Fake\FakeControllerErrorListener:
+        tags:
+            - { name: kernel.event_listener, event: kernel.controller, priority: -1024 }

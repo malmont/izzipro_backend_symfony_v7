@@ -238,9 +238,7 @@ class GroupEntryTest extends WebTestCase
         foreach (static::getContainer()->get('router')->getRouteCollection() as $name => $route) {
             $path = $route->getPath();
             if (str_contains($path, '{') || !str_starts_with($path, '/api/') || ($route->getMethods() !== [] && !in_array('GET', $route->getMethods(), true))
-                || EntryModeGuardSubscriber::groupDecision('GET', $path) !== null
-                // table `admin_presets` de la base maître de production, absente du modèle des tests : 500 pour TOUT compte en essai
-                || $path === '/api/admin-settings/presets') {
+                || EntryModeGuardSubscriber::groupDecision('GET', $path) !== null) {
                 continue;
             }
             $count++;

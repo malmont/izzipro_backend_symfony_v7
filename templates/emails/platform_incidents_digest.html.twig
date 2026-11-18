@@ -1,0 +1,35 @@
+{% extends 'base.email.html.twig' %}
+
+{% block title %}Incidents de la plateforme : {{ digest.new|length }} nouveaux, {{ digest.reopened|length }} revenus{% endblock %}
+
+{% block body %}
+{# Lot INC-1a : incidents des dernières 24 heures, sans donnée personnelle (messages déjà masqués à l'écriture) #}
+<table width="100%" border="0" cellspacing="0" cellpadding="0" style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+    <tr>
+        <td align="center">
+            <table width="600" border="0" cellspacing="0" cellpadding="0" style="background-color: #ffffff; border-radius: 12px; overflow: hidden;">
+                <tr>
+                    <td align="center" style="background: #1e293b; padding: 28px 20px;">
+                        <h1 style="color: #ffffff; margin: 0; font-size: 20px; font-weight: 700;">Incidents de la plateforme</h1>
+                    </td>
+                </tr>
+                <tr>
+                    <td style="padding: 30px; font-size: 15px; color: #1e293b;">
+                        {% for group in [{title: 'Nouveaux depuis 24 heures', items: digest.new}, {title: 'Revenus après correction', items: digest.reopened}] %}
+                            {% if group.items is not empty %}
+                                <h2 style="font-size: 16px; margin: 18px 0 8px;">{{ group.title }} ({{ group.items|length }})</h2>
+                                <ul style="padding-left: 18px;">
+                                    {% for incident in group.items %}
+                                        <li style="margin-bottom: 8px;"><strong>{{ incident.app }}</strong>{% if incident.tenantCode %} · {{ incident.tenantCode }}{% endif %} · {{ incident.level }} · {{ incident.count }} fois<br>{{ incident.message }}{% if incident.screen or incident.route %}<br><span style="color: #64748b;">{{ incident.screen ?? incident.route }}</span>{% endif %}</li>
+                                    {% endfor %}
+                                </ul>
+                            {% endif %}
+                        {% endfor %}
+                        <p>Détail et suivi : EasyAdmin, page « Plateforme », « Incidents ». Aucun courriel les jours sans incident.</p>
+                    </td>
+                </tr>
+            </table>
+        </td>
+    </tr>
+</table>
+{% endblock %}

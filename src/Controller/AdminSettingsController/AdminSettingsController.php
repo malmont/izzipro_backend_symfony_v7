@@ -166,6 +166,8 @@ class AdminSettingsController extends AbstractController
     }
 
     #[Route('/api/admin-settings/presets', name: 'save_admin_preset', methods: ['POST'])]
+    // lot PRESETS (18/11/2026) : la table admin_presets est dans la BASE MAÎTRE, commune à tous les sites : jamais écrite par l'administrateur d'un site
+    #[\Symfony\Component\Security\Http\Attribute\IsGranted('ROLE_SUPER_ADMIN')]
     public function savePreset(Request $request): JsonResponse
     {
         $pdo = $this->connectionManager->getPdoMaster();
@@ -196,6 +198,8 @@ class AdminSettingsController extends AbstractController
     }
 
     #[Route('/api/admin-settings/presets/{id}', name: 'delete_admin_preset', methods: ['DELETE'], requirements: ['id' => '\d+'])]
+    // lot PRESETS (18/11/2026) : la table admin_presets est dans la BASE MAÎTRE, commune à tous les sites : jamais écrite par l'administrateur d'un site
+    #[\Symfony\Component\Security\Http\Attribute\IsGranted('ROLE_SUPER_ADMIN')]
     public function deletePreset(int $id): JsonResponse
     {
         $pdo = $this->connectionManager->getPdoMaster();

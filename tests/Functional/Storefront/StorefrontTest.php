@@ -468,7 +468,7 @@ class StorefrontTest extends WebTestCase
         sort($classes['showcase']);
         // les routes servies à tous, toujours : écrites en toutes lettres
         $this->assertSame([
-            'account_otp', 'api_app_activate', 'api_app_profile', 'api_currencies_get', 'api_entreprise_get', 'api_entreprise_update', 'api_landingpage_config_rollback',
+            'account_otp', 'api_app_activate', 'api_app_profile', 'api_currencies_get', 'api_entreprise_get', 'api_entreprise_update', 'api_incidents_report', 'api_landingpage_config_rollback',
             'api_landingpage_config_status', 'api_landingpage_config_sync', 'api_login', 'api_logout', 'api_mobile_app_theme', 'api_otp_verify', 'api_password_reset_confirm',
             'api_password_reset_verify', 'api_site_storefront', 'api_site_storefront_preview', 'api_stripe_webhook', 'api_tenant_check', 'api_tenant_check_mobile', 'api_tenant_hosts',
             'api_token_refresh', 'api_webhook_revenuecat', 'app_home', 'app_login', 'app_logout', 'app_memoiresvivantes_luluwebhook_handleluluwebhook', 'app_password_reset_confirm',

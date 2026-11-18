@@ -261,7 +261,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (668)
+## Boutique et commun (672)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -278,9 +278,9 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | DELETE | `/api/account/memberships/{app}` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\AppMembershipController\AppMembershipController::leave` |
 | GET | `/api/account/memberships` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\AppMembershipController\AppMembershipController::memberships` |
 | DELETE | `/api/account` | ROLE_USER_INTERNET | `Controller\Account\AccountApiController::delete` |
-| DELETE | `/api/admin-settings/presets/{id}` | ROLE_ADMIN | `Controller\AdminSettingsController\AdminSettingsController::deletePreset` |
+| DELETE | `/api/admin-settings/presets/{id}` | ROLE_ADMIN + `#[IsGranted(ROLE_SUPER_ADMIN)]` | `Controller\AdminSettingsController\AdminSettingsController::deletePreset` |
 | GET | `/api/admin-settings/presets` | PUBLIC_ACCESS | `Controller\AdminSettingsController\AdminSettingsController::getPresets` |
-| POST | `/api/admin-settings/presets` | ROLE_ADMIN | `Controller\AdminSettingsController\AdminSettingsController::savePreset` |
+| POST | `/api/admin-settings/presets` | ROLE_ADMIN + `#[IsGranted(ROLE_SUPER_ADMIN)]` | `Controller\AdminSettingsController\AdminSettingsController::savePreset` |
 | GET | `/api/admin-settings` | PUBLIC_ACCESS | `Controller\AdminSettingsController\AdminSettingsController::getAdminSettings` |
 | PUT | `/api/admin-settings` | ROLE_ADMIN | `Controller\AdminSettingsController\AdminSettingsController::updateAdminSettings` |
 | GET | `/api/adresses/` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\AdressController\AdressApiController::getUserAdresses` |
@@ -625,6 +625,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | POST | `/api/import-invitation/accept` | PUBLIC_ACCESS | `Import\Controller\ImportInvitationController::accept` |
 | POST | `/api/import-invitation/decline` | PUBLIC_ACCESS | `Import\Controller\ImportInvitationController::decline` |
 | POST | `/api/import-invitation/verify` | PUBLIC_ACCESS | `Import\Controller\ImportInvitationController::verify` |
+| POST | `/api/incidents/report` | PUBLIC_ACCESS | `Incident\Controller\IncidentReportController::report` |
 | POST | `/api/me/contexts/enter` | IS_AUTHENTICATED_FULLY | `Controller\Account\MeContextsController::enter` |
 | GET | `/api/me/contexts` | IS_AUTHENTICATED_FULLY | `App\Controller\Account\MeContextsController` |
 | DELETE | `/api/media/{id}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\MediaApiController\MediaApiController::delete` |
@@ -681,6 +682,9 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/api/platform/entitlements` | ROLE_SUPER_ADMIN + `#[IsGranted(ROLE_SUPER_ADMIN)]` | `Controller\PlatformController\PlatformEntitlementsController::list` |
 | POST | `/api/platform/entitlements` | ROLE_SUPER_ADMIN + `#[IsGranted(ROLE_SUPER_ADMIN)]` | `Controller\PlatformController\PlatformEntitlementsController::grant` |
 | GET | `/api/platform/events` | ROLE_SUPER_ADMIN + `#[IsGranted(ROLE_SUPER_ADMIN)]` | `Controller\PlatformController\PlatformEntitlementsController::events` |
+| GET | `/api/platform/incidents/{id}` | ROLE_SUPER_ADMIN + `#[IsGranted(ROLE_SUPER_ADMIN)]` | `Incident\Controller\PlatformIncidentController::get` |
+| PATCH | `/api/platform/incidents/{id}` | ROLE_SUPER_ADMIN + `#[IsGranted(ROLE_SUPER_ADMIN)]` | `Incident\Controller\PlatformIncidentController::update` |
+| GET | `/api/platform/incidents` | ROLE_SUPER_ADMIN + `#[IsGranted(ROLE_SUPER_ADMIN)]` | `Incident\Controller\PlatformIncidentController::list` |
 | PUT | `/api/platform/offers/{code}` | ROLE_SUPER_ADMIN + `#[IsGranted(ROLE_SUPER_ADMIN)]` | `Controller\PlatformController\PlatformOffersController::put` |
 | GET | `/api/platform/offers` | ROLE_SUPER_ADMIN + `#[IsGranted(ROLE_SUPER_ADMIN)]` | `Controller\PlatformController\PlatformOffersController::list` |
 | POST | `/api/platform/pertes/expeditions/{id}/annuler` | ROLE_SUPER_ADMIN + `#[IsGranted(ROLE_SUPER_ADMIN)]` | `LossPrevention\Controller\LossShipmentPlatformController::cancel` |
@@ -974,7 +978,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/shared-media` | aucune règle | `Controller\SharedMediaApiController\SharedMediaApiController::list` |
 | GET, HEAD | `/uploads/{path}` | aucune règle | `Controller\Storage\BucketSimulatorController::serve` |
 
-## Administration (EasyAdmin) (121)
+## Administration (EasyAdmin) (123)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -1052,6 +1056,8 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | POST | `/admin/plateforme/expedition` | ROLE_SUPER_ADMIN | `Controller\Admin\PlatformConsoleAdminController::lossShipment` |
 | POST | `/admin/plateforme/ia-credits` | ROLE_SUPER_ADMIN | `Controller\Admin\PlatformConsoleAdminController::aiCredits` |
 | POST | `/admin/plateforme/ia-defauts` | ROLE_SUPER_ADMIN | `Controller\Admin\PlatformConsoleAdminController::aiDefaults` |
+| POST | `/admin/plateforme/incidents/{id}` | ROLE_SUPER_ADMIN | `Controller\Admin\PlatformIncidentsAdminController::update` |
+| GET | `/admin/plateforme/incidents` | ROLE_SUPER_ADMIN | `Controller\Admin\PlatformIncidentsAdminController::index` |
 | POST | `/admin/plateforme/livraison/credit` | ROLE_SUPER_ADMIN | `Controller\Admin\PlatformConsoleAdminController::shippingCredit` |
 | POST | `/admin/plateforme/livraison/frais` | ROLE_SUPER_ADMIN | `Controller\Admin\PlatformConsoleAdminController::shippingFees` |
 | POST | `/admin/plateforme/materiel/{code}` | ROLE_SUPER_ADMIN | `Controller\Admin\PlatformConsoleAdminController::lossHardware` |

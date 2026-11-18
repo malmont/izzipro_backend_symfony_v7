@@ -102,6 +102,8 @@ $master->exec('CREATE TABLE tenants (id SERIAL PRIMARY KEY, code VARCHAR(50) NOT
 $master->exec('CREATE TABLE landing_config_sync (id SERIAL PRIMARY KEY, created_at TIMESTAMP(0) WITHOUT TIME ZONE NOT NULL, action VARCHAR(10) NOT NULL, version VARCHAR(100) DEFAULT NULL, author VARCHAR(255) NOT NULL, result VARCHAR(32) NOT NULL, details TEXT DEFAULT NULL)');
 // Clés d'activation des applications mobiles (scripts/migrate_master_app_keys.sh)
 $master->exec('CREATE TABLE tenant_app_keys (id SERIAL PRIMARY KEY, tenant_code VARCHAR(50) NOT NULL, app VARCHAR(20) NOT NULL, key_hash VARCHAR(64) NOT NULL UNIQUE, key_hint VARCHAR(30) NOT NULL, label VARCHAR(100) NOT NULL, created_by VARCHAR(255) NOT NULL, created_at TIMESTAMP(0) WITHOUT TIME ZONE NOT NULL DEFAULT NOW(), expires_at TIMESTAMP(0) WITHOUT TIME ZONE DEFAULT NULL, revoked_at TIMESTAMP(0) WITHOUT TIME ZONE DEFAULT NULL, last_used_at TIMESTAMP(0) WITHOUT TIME ZONE DEFAULT NULL, last_device VARCHAR(100) DEFAULT NULL, use_count INT NOT NULL DEFAULT 0, cash_register_id INT DEFAULT NULL, cash_register_name VARCHAR(100) DEFAULT NULL)');
+// Lot PRESETS (18/11/2026) : préréglages d'administration communs à tous les sites (table de la base maître réelle, même forme)
+$master->exec("CREATE TABLE IF NOT EXISTS admin_presets (id SERIAL PRIMARY KEY, title VARCHAR(255) NOT NULL, settings TEXT NOT NULL, created_at TIMESTAMP(0) WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP)");
 // Tableau de bord technique (03/11/2026) : mesures et seuils (ops/sql/tech_metrics_master.sql, même SQL que la base maître réelle)
 $master->exec(file_get_contents(__DIR__ . '/../ops/sql/tech_metrics_master.sql'));
 // Console de pilotage (04/11/2026) : réglages de la plateforme (mode demo par défaut), droits d'usage, offres (ops/sql/platform_master.sql)
@@ -120,6 +122,8 @@ $master->exec(file_get_contents(__DIR__ . '/../ops/sql/loss_shipment_master.sql'
 $master->exec(file_get_contents(__DIR__ . '/../ops/sql/assistance_master.sql'));
 // Multi-boutiques (lot G-1a, 18/11/2026) : groupes, boutiques, invitations, journal (ops/sql/groups_master.sql, même SQL que la base maître réelle)
 $master->exec(file_get_contents(__DIR__ . '/../ops/sql/groups_master.sql'));
+// Incidents de la plateforme (lot INC-1a, 18/11/2026) : erreurs des applications et pannes du serveur (ops/sql/platform_incident_master.sql)
+$master->exec(file_get_contents(__DIR__ . '/../ops/sql/platform_incident_master.sql'));
 // Codes courts fixes des sites de test (31/10/2026) : MVT001 et MVT002 (alphabet Crockford)
 $insertTenant = $master->prepare('INSERT INTO tenants (code, name, dbname, custom_domain, short_code) VALUES (?, ?, ?, ?, ?)');
 $insertTenant->execute([MV_TEST_TENANT_CODE, 'Tenant de test', MV_TEST_TENANT_DB, MV_TEST_TENANT_HOST, 'MVT001']);
