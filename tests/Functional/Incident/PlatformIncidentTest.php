@@ -99,6 +99,26 @@ class PlatformIncidentTest extends WebTestCase
         static::getContainer()->get(IncidentLimits::class)->reset('anonymous', MV_TEST_TENANT_CODE . '|10.98.0.1');
     }
 
+    /** INC-2 (18/11/2026) : la Boussole et Mémoires Vivantes se nomment ; les répétitions regroupées par l'application comptent */
+    public function testBoussoleAndMemoiresAreKnownAndRepeatsCountWithoutBeingStored(): void
+    {
+        foreach (['boussole', 'memoires'] as $app) {
+            $this->assertSame($app, $this->row($this->json('POST', '/api/incidents/report', ['app' => $app, 'message' => "Écran de $app : erreur"], null, 202)['incidentId'])['app']);
+        }
+        $first = $this->json('POST', '/api/incidents/report', ['app' => 'pos', 'message' => 'Imprimante muette', 'context' => ['repeats' => 5, 'component' => 'printer']], null, 202);
+        $row = $this->row($first['incidentId']);
+        $this->assertSame([5, ['component' => 'printer']], [(int) $row['count'], json_decode((string) $row['context'], true)], 'compte de 5, la clé repeats n\'est pas gardée au contexte');
+        $this->assertSame(5, (int) $this->master->query('SELECT repeats FROM platform_incident_event WHERE incident_id = ' . $first['incidentId'])->fetchColumn());
+        $this->json('POST', '/api/incidents/report', ['app' => 'pos', 'message' => 'Imprimante muette'], null, 202);
+        $this->assertSame(6, (int) $this->row($first['incidentId'])['count'], 'sans repeats : un de plus');
+        $this->json('POST', '/api/incidents/report', ['app' => 'pos', 'message' => 'Imprimante muette', 'context' => ['repeats' => PlatformIncidentService::MAX_REPEATS]], null, 202);
+        $this->assertSame(6 + PlatformIncidentService::MAX_REPEATS, (int) $this->row($first['incidentId'])['count']);
+        foreach ([0, PlatformIncidentService::MAX_REPEATS + 1, '3', 2.5, -1] as $bad) {
+            $this->assertSame(['context.repeats' => 'INVALID_VALUE'], $this->json('POST', '/api/incidents/report', ['app' => 'pos', 'message' => 'Imprimante muette', 'context' => ['repeats' => $bad]], null, 422)['fields'], var_export($bad, true));
+        }
+        $this->assertSame(6 + PlatformIncidentService::MAX_REPEATS, (int) $this->row($first['incidentId'])['count'], 'un refus ne compte pas');
+    }
+
     public function testNewIncidentsWithoutTokenAreCappedPerSiteAndDayAndCountedBeyond(): void
     {
         $x = $this->json('POST', '/api/incidents/report', ['app' => 'boutique', 'message' => 'Panier : total introuvable'], null, 202);

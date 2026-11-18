@@ -130,7 +130,8 @@ unique, site, application, version, écran ou route, gravité, message de 200 ca
 occurrences par incident : date, version, empreinte du compte, identifiant de requête, répétitions). Code : `src/Incident/`.
 
 - **`POST /api/incidents/report`** `{ app, appVersion?, screen?, route?, level?, message, context? }` → 202 `{ incidentId, fingerprint }`.
-  - `app` : `web`, `boutique`, `pos`, `mobile`, `livingmemory`, `gestion` (`backend` est réservé au serveur) ; `level` : `error` (défaut),
+  - `app` : `web`, `boutique`, `pos`, `mobile`, `livingmemory`, `gestion`, et depuis INC-2 `boussole` et `memoires` (`backend` est
+    réservé au serveur) ; `level` : `error` (défaut),
     `crash`, `warning` ; `appVersion` : 40 caractères `[\w.+-]`.
   - Le **site** est celui de la requête (hôte ou jeton), jamais celui du corps ; l'**empreinte** est calculée par le serveur (site,
     application, écran ou route, message normalisé : chiffres, identifiants et jetons sans effet), jamais reprise du corps.
@@ -140,6 +141,9 @@ occurrences par incident : date, version, empreinte du compte, identifiant de re
   - **Contexte** : liste blanche `url`, `method`, `httpStatus`, `errorCode`, `component`, `action`, `os`, `osVersion`, `device`, `locale`,
     `online`, `durationMs`, `stack` (1 500 caractères), valeurs simples seulement, 2 Ko au plus (la pile part la première). Tout autre
     champ (un nom, un courriel, un corps de requête) est retiré.
+  - **INC-2 (18/11/2026) : `context.repeats`**, entier de 1 à 1 000 (défaut 1) : les répétitions de la même erreur que l'application a
+    regroupées (au plus un envoi par empreinte et par minute côté client), ajoutées au compte de l'incident et gardées sur l'occurrence
+    (`repeats`), jamais au contexte ; autre valeur : 422 `fields.context.repeats: INVALID_VALUE`. Contrat des applications : § « Lot INC-2 ».
   - **Avec le jeton** de l'utilisateur : 120 rapports par site et par compte en 5 minutes ; le compte n'est gardé que par une empreinte
     (16 caractères). Un jeton expiré : 401 du pare-feu, renvoyer sans jeton.
   - **Sans jeton** : 30 rapports par site et par adresse IP en 5 minutes (429 `RATE_LIMITED`, `Retry-After`), et au plus **50 incidents
@@ -171,6 +175,25 @@ occurrences par incident : date, version, empreinte du compte, identifiant de re
 - Essais : `tests/Functional/Incident/PlatformIncidentTest.php` (masquage et garde-fou, regroupement, site de la requête, limites,
   plafond du jour, \Error et rafale, cloisonnement, écran, courriel et purge). Une \Error naît dans un contrôleur par
   `tests/Fake/FakeControllerErrorListener` (environnement de test seulement, en-tête `X-Test-Raise`).
+
+## Lot INC-2 : ce que chaque application envoie (contrat validé par le chef le 18/11/2026)
+
+Relayé par le chef à toutes les sessions des applications (MAUI, caisse Flutter, commerce mobile Flutter, Living Memory, web Next,
+Boussole, Mémoires Vivantes web), qui codent mais ne poussent qu'après la mise en ligne d'INC-1a et de INC-2 (A + B).
+- Mêmes en-têtes du site que les autres appels ; jeton si connecté (401 : renvoyer une fois sans jeton) ; `X-Request-Id` facultatif.
+- Web avec cookie de connexion (`auth_token_<site>`) : l'en-tête `X-XSRF-TOKEN` égal au cookie `XSRF-TOKEN_<site>` est exigé, comme pour
+  tout POST du web (`CsrfValidationListener`) ; un 403 CSRF se renvoie une fois sans cookies (rapport anonyme).
+- Champs du § « Lot INC-1a » ; `appVersion` publiée ; `screen` stable sans identifiant ; `route` aux identifiants remplacés (`{id}`) ;
+  `device` = MODÈLE seulement (jamais le nom de l'appareil) ; `stack` : 10 lignes, sans valeur de variable ; corps de 4 Ko au plus.
+- Quand envoyer : erreur non attrapée (`error`) ; plantage noté puis envoyé au lancement suivant (`crash`, une fois) ; même appel au
+  backend en échec 3 fois en 5 minutes alors que l'appareil est en ligne (`warning`, `errorCode: NETWORK`, `httpStatus: 0`).
+- Quand ne PAS envoyer : 4xx attendus (400, 401, 403, 404, 409, 422, 429) ; **toute 5xx du backend** (déjà enregistrée par le serveur) ;
+  hors connexion (file locale de 20 rapports, 24 heures, un envoi toutes les 2 secondes au retour du réseau) ; annulations, extensions
+  du navigateur, versions de développement.
+- Regroupement : empreinte locale `app + screen + message` (chiffres remplacés), au plus un envoi par empreinte et par minute avec
+  `context.repeats` ; au plus 30 rapports par session de l'application.
+- Aucune donnée personnelle (nom, courriel, téléphone, adresse, numéros, texte saisi, corps, en-têtes, jetons, nom de l'appareil, capture,
+  identifiant du compte) ; le masquage du serveur est un filet, pas une permission.
 
 ## Point de reprise (18/11/2026, arrêt du soir demandé par le propriétaire)
 
