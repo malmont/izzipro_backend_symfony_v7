@@ -41,9 +41,12 @@ class GestionGroupResultController extends AbstractController
                 ->setStartDateCollection(new \DateTime($from))->setEndDateCollection(new \DateTime($to));
 
             $data = $this->calculator->compute($period, null);
-            // les remarques des frais fixes citent des notes de frais par leur nom (« Salaire … ») : jamais au directeur
+            // les remarques des frais fixes citent des notes de frais par leur nom (« Salaire … »), dans `notes` ET dans le texte : jamais au
+            // directeur ; il reçoit le code et le nombre de notes, sans texte
             foreach ($data['fixedCosts']['caveats'] ?? [] as $i => $caveat) {
-                unset($data['fixedCosts']['caveats'][$i]['notes']);
+                if (array_key_exists('notes', $caveat)) {
+                    $data['fixedCosts']['caveats'][$i] = ['code' => $caveat['code'] ?? null, 'text' => null, 'count' => count((array) $caveat['notes'])];
+                }
             }
 
             return ['data' => $data];

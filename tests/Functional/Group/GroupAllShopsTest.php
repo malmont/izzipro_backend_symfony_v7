@@ -451,6 +451,9 @@ class GroupAllShopsTest extends WebTestCase
             }
             $this->assertSame($latest, array_sum(array_column($balances['totals'], 'balance')));
             $this->assertContains(MV_TEST_TENANT2_CODE, array_column(array_merge(...array_column($balances['totals'], 'rows')), 'site'));
+            foreach (array_merge(...array_column($balances['totals'], 'rows')) as $row) {
+                $this->assertArrayNotHasKey('note', $row, 'texte libre de la boutique : jamais au directeur');
+            }
         } finally {
             $this->pdo(MV_TEST_TENANT2_DB)->exec("DELETE FROM gestion_cash_balance WHERE note = 'g3-{$this->tag}'");
         }
@@ -499,12 +502,24 @@ class GroupAllShopsTest extends WebTestCase
         $this->assertSame(422, $this->request('GET', "/api/gestion/groupe/resultat?from=$to&to=$from", $director, MV_TEST_TENANT_HOST, GroupScope::VALUE, null)->getStatusCode());
         $this->assertSame(422, $this->request('GET', '/api/gestion/groupe/resultat?from=2026-02-30&to=2026-03-01', $director, MV_TEST_TENANT_HOST, GroupScope::VALUE, null)->getStatusCode());
 
+        // une note de frais qui nomme un salarié, recoupée par un frais fixe : ni son nom ni son texte ne remontent au directeur
+        $shopPdo = $this->pdo(MV_TEST_TENANT2_DB);
+        $shopPdo->exec("INSERT INTO gestion_cash_movement (label, category, direction, amount_cents, start_date, recurrence, end_date, notes, fixed_cost, created_by, created_at, updated_at)
+            VALUES ('Loyer', 'rent', 'out', 100000, '$from', 'monthly', NULL, 'g3-{$this->tag}', TRUE, 'essai', NOW(), NOW())");
+        $shopPdo->exec("INSERT INTO note_de_frais (id, name, description, montant, date) VALUES (nextval('note_de_frais_id_seq'), 'Salaire Marie Témoin', 'g3-{$this->tag}', 5000, '$from')");
         $count = fn (string $db): array => array_map(fn (string $t): int => (int) $this->pdo($db)->query("SELECT COUNT(*) FROM $t")->fetchColumn(), ['collections' => 'collections', 'period_result' => 'period_result', 'gestion_stock_snapshot' => 'gestion_stock_snapshot']);
-        $before = [$count(MV_TEST_TENANT_DB), $count(MV_TEST_TENANT2_DB)];
-        $all = $this->json('GET', "/api/gestion/groupe/resultat?from=$from&to=$to", $director, MV_TEST_TENANT_HOST, GroupScope::VALUE);
-        $this->json('GET', '/api/gestion/statistiques/annee', $director, MV_TEST_TENANT_HOST, GroupScope::VALUE);
-        $this->assertSame($before, [$count(MV_TEST_TENANT_DB), $count(MV_TEST_TENANT2_DB)], 'aucune période, aucun résultat figé, aucun instantané');
+        try {
+            $before = [$count(MV_TEST_TENANT_DB), $count(MV_TEST_TENANT2_DB)];
+            $all = $this->json('GET', "/api/gestion/groupe/resultat?from=$from&to=$to", $director, MV_TEST_TENANT_HOST, GroupScope::VALUE);
+            $this->json('GET', '/api/gestion/statistiques/annee', $director, MV_TEST_TENANT_HOST, GroupScope::VALUE);
+            $this->assertSame($before, [$count(MV_TEST_TENANT_DB), $count(MV_TEST_TENANT2_DB)], 'aucune période, aucun résultat figé, aucun instantané');
+        } finally {
+            $shopPdo->exec("DELETE FROM gestion_cash_movement WHERE notes = 'g3-{$this->tag}'");
+            $shopPdo->exec("DELETE FROM note_de_frais WHERE description = 'g3-{$this->tag}'");
+        }
         $this->assertSame([GroupScope::OK, GroupScope::OK], array_column($all['shops'], 'status'));
+        $this->assertStringNotContainsString('Marie', (string) json_encode($all, JSON_UNESCAPED_UNICODE), 'aucun nom de note de frais au directeur');
+        $this->assertContains(['code' => 'FIXED_COSTS_MAY_OVERLAP_NOTES', 'text' => null, 'count' => 1], $all['shops'][1]['data']['fixedCosts']['caveats']);
         foreach ($all['shops'] as $shop) {
             $this->assertSame([$from, $to, null], [$shop['data']['period']['start'], $shop['data']['period']['end'], $shop['data']['period']['id']]);
         }

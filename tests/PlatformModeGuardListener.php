@@ -22,30 +22,33 @@ final class PlatformModeGuardListener implements TestListener
 {
     use TestListenerDefaultImplementation;
 
-    private ?\PDO $pdo = null;
-
     public function endTest(Test $test, float $time): void
     {
         if (!$test instanceof TestCase || !defined('MV_TEST_MASTER_DB')) {
             return;
         }
         try {
-            $pdo = $this->pdo();
+            $pdo = $this->pdo(); // ouverte et fermée à chaque essai : aucune connexion gardée pendant la suite
             if ($pdo === null || $pdo->query("SELECT value FROM platform_settings WHERE key = 'mode'")->fetchColumn() !== 'live') {
                 return;
             }
             $pdo->exec("UPDATE platform_settings SET value = 'demo', updated_by = 'garde-fou des essais' WHERE key = 'mode'");
         } catch (\Throwable) {
             return; // base maître d'essai illisible : rien à remettre
+        } finally {
+            $pdo = null;
         }
         // la mémoire du mode (60 s, partagée d'un essai à l'autre) : vidée par le service lui-même, dans un noyau d'essai démarré pour l'occasion
+        $kernel = new \App\Kernel('test', true);
         try {
-            $kernel = new \App\Kernel('test', true);
             $kernel->boot();
             $kernel->getContainer()->get('test.service_container')->get(\App\Services\Platform\PlatformModeService::class)->setMode('demo', 'garde-fou des essais');
-            $kernel->shutdown();
         } catch (\Throwable) {
             // la base est remise ; la mémoire expire d'elle-même en 60 s
+        } finally {
+            $kernel->shutdown();
+            unset($kernel);
+            gc_collect_cycles(); // connexions du noyau rendues tout de suite (le coupe-circuit les compte)
         }
         if (($result = $test->getTestResultObject()) !== null) {
             $result->addFailure($test, new \PHPUnit\Framework\AssertionFailedError(
@@ -55,15 +58,12 @@ final class PlatformModeGuardListener implements TestListener
 
     private function pdo(): ?\PDO
     {
-        if ($this->pdo === null) {
-            $u = parse_url((string) (getenv('DATABASE_URL') ?: ($_SERVER['DATABASE_URL'] ?? '')));
-            if (!is_array($u) || !isset($u['host'])) {
-                return null;
-            }
-            $this->pdo = new \PDO(sprintf('pgsql:host=%s;port=%d;dbname=%s', $u['host'], $u['port'] ?? 5432, MV_TEST_MASTER_DB), urldecode($u['user'] ?? ''), urldecode($u['pass'] ?? ''),
-                [\PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION]);
+        $u = parse_url((string) (getenv('DATABASE_URL') ?: ($_SERVER['DATABASE_URL'] ?? '')));
+        if (!is_array($u) || !isset($u['host'])) {
+            return null;
         }
 
-        return $this->pdo;
+        return new \PDO(sprintf('pgsql:host=%s;port=%d;dbname=%s', $u['host'], $u['port'] ?? 5432, MV_TEST_MASTER_DB), urldecode($u['user'] ?? ''), urldecode($u['pass'] ?? ''),
+            [\PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION]);
     }
 }

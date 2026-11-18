@@ -30,8 +30,9 @@ final class AllShopsListMerger
                 $rows[] = $row + ['site' => $shop['site'], 'siteCurrency' => $shop['currency']];
             }
         }
-        usort($rows, static fn (array $a, array $b): int => [(string) ($a['commande']['date'] ?? ''), $a['site'], (int) ($a['id'] ?? 0)]
-            <=> [(string) ($b['commande']['date'] ?? ''), $b['site'], (int) ($b['id'] ?? 0)]);
+        // même ordre que la base (`c.date ASC` : une commande sans date en dernier), sinon la page réunie ne serait pas celle des boutiques
+        usort($rows, static fn (array $a, array $b): int => [(string) ($a['commande']['date'] ?? '9999'), $a['site'], (int) ($a['id'] ?? 0)]
+            <=> [(string) ($b['commande']['date'] ?? '9999'), $b['site'], (int) ($b['id'] ?? 0)]);
 
         return ['rows' => array_slice($rows, ($page - 1) * $limit, $limit), 'total' => $total];
     }
@@ -51,6 +52,7 @@ final class AllShopsListMerger
             $rows = [];
             foreach ($parts as $part) {
                 foreach ($part['data'] as $row) {
+                    unset($row['note']); // texte libre de la boutique (peut nommer quelqu'un) : jamais au directeur
                     $rows[] = ['site' => $part['site']] + $row;
                 }
             }
@@ -77,6 +79,7 @@ final class AllShopsListMerger
             $rows = [];
             foreach ($parts as $part) {
                 foreach ($part['data'] as $row) {
+                    unset($row['notes']); // texte libre de la boutique (peut nommer quelqu'un) : jamais au directeur
                     $rows[] = ['site' => $part['site']] + $row;
                 }
             }
