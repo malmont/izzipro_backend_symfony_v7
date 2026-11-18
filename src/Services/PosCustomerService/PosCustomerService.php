@@ -2,6 +2,7 @@
 
 namespace App\Services\PosCustomerService;
 
+use App\Services\Privacy\PersonalDataMask;
 use App\Entity\Caisse;
 use App\Entity\Entreprise;
 use App\Entity\Order;
@@ -138,19 +139,15 @@ class PosCustomerService
         return 'FD-' . substr($m[1], 0, 4) . '-' . substr($m[1], 4, 4);
     }
 
+    /** Masques communs (lot DON-1, `App\Services\Privacy\PersonalDataMask`) : mêmes formes pour l'affichage au caissier et pour le journal */
     public static function maskPhone(?string $phone): ?string
     {
-        return $phone === null ? null : '•••• ' . substr(preg_replace('/\D+/', '', $phone) ?? '', -4);
+        return PersonalDataMask::phone($phone);
     }
 
     public static function maskEmail(?string $email): ?string
     {
-        if ($email === null) {
-            return null;
-        }
-        [$user, $domain] = array_pad(explode('@', $email, 2), 2, '');
-
-        return mb_substr($user, 0, 1) . '***@' . $domain;
+        return PersonalDataMask::email($email);
     }
 
     public static function isManager(User $user): bool
@@ -273,14 +270,18 @@ class PosCustomerService
         $pos = [];
         $web = [];
         $kind = 'name';
-        $logged = $q;
+        // Lot DON-1 (18/11/2026, `docs/audit-donnees.md`) : AUCUN texte de recherche n'est écrit en clair au journal de caisse, qui est
+        // inaltérable (on ne pourrait plus l'effacer) : un nom par sa première lettre, un code de fidélité par ses 4 derniers caractères,
+        // comme le courriel et le téléphone. Les lignes déjà écrites ne sont pas touchées.
+        $logged = PersonalDataMask::name($q);
         if (($code = self::normalizeLoyaltyCode($q)) !== null) {
             $kind = 'loyaltyCode';
+            $logged = PersonalDataMask::code($code);
             $pos = $conn->fetchFirstColumn('SELECT id FROM pos_customer WHERE loyalty_code = ? AND erased_at IS NULL AND merged_into_id IS NULL', [$code]);
         } elseif (str_contains($q, '@')) {
             $kind = 'email';
             $email = self::normalizeEmail($q);
-            $logged = self::maskEmail($email ?? $q);
+            $logged = $email !== null ? PersonalDataMask::email($email) : PersonalDataMask::name($q); // un courriel illisible ne laisse rien passer après « @ »
             if ($email !== null) {
                 $pos = $conn->fetchFirstColumn('SELECT id FROM pos_customer WHERE email = ? AND erased_at IS NULL AND merged_into_id IS NULL ORDER BY id', [$email]);
                 if ($settings['linkEnabled']) {

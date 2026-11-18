@@ -4,6 +4,7 @@ namespace App\Tests\Functional\Boutique;
 
 use App\Entity\User;
 use App\Services\BoutiqueDemoService\BoutiqueDemoSeeder;
+use App\Services\Privacy\PersonalDataMask;
 use App\Services\PosAuditService\PosPinService;
 use App\Services\PosOfflineService\PosOfflineCalculator;
 use App\Services\PosOfflineService\PosOfflineSyncService;
@@ -316,6 +317,43 @@ class PosCustomerApiTest extends WebTestCase
         $this->db->executeStatement('UPDATE product_variant SET stock_quantity = 500, price = NULL WHERE id = ?', [$id]);
 
         return $id;
+    }
+
+    /**
+     * Lot DON-1 (18/11/2026, `docs/audit-donnees.md`) : aucun texte de recherche n'arrive en clair au journal de caisse, qui est
+     * inaltérable. Chaque recherche (nom, nom avec accents ou espaces, téléphone, courriel valide ou illisible, code de fidélité, rien
+     * trouvé) laisse une seule forme permise : une lettre suivie de « *** », un courriel masqué, ou 4 caractères après « •••• ».
+     */
+    public function testNoSearchTextReachesTheTillJournalInClear(): void
+    {
+        $manager = $this->loginAs(['ROLE_USER_POS', 'ROLE_POS_MANAGER']);
+        static::getContainer()->get(PosPinService::class)->set($manager, '2468');
+        $this->terminal = $this->posTerminal();
+        $this->request('POST', '/api/caisse/open', ['cashRegisterId' => $this->register, 'cashFund' => 20000]);
+        $this->loginAs(['ROLE_USER_POS']);
+        $c = $this->json($this->request('POST', '/api/pos/customers', ['firstName' => 'Éloïse', 'lastName' => 'Dubé-Lachance', 'phone' => '(438) 555-9876', 'email' => 'Eloise.DL@Example.invalid', 'consents' => ['loyalty' => true]], ['HTTP_IDEMPOTENCY_KEY' => self::uuid()]), 201);
+        $loyalty = (string) $c['loyalty']['code'];
+        $before = (int) $this->db->fetchOne('SELECT COALESCE(MAX(id), 0) FROM pos_audit_log');
+        $typed = ['Dubé', 'éloïse dubé', 'Lachance', '  Dubé-Lachance  ', '(438) 555-9876', '4385559876', 'eloise.dl@example.invalid', 'x@Dubé Lachance', 'IZ-F-' . $loyalty, $loyalty, 'personne-inconnue'];
+        foreach ($typed as $q) {
+            $this->assertSame(200, $this->request('GET', '/api/pos/customers?q=' . urlencode($q))->getStatusCode(), $q);
+        }
+        $logs = array_map(fn (string $p): array => json_decode($p, true)['data'], $this->db->fetchFirstColumn("SELECT payload FROM pos_audit_log WHERE type = 'CUSTOMER_SEARCHED' AND id > ? ORDER BY id", [$before]));
+        $this->assertCount(count($typed), $logs, 'une ligne par recherche');
+        $queries = array_column($logs, 'query');
+        $this->assertCount(count($typed), $queries, 'chaque ligne porte sa requête masquée');
+        foreach ($queries as $i => $logged) {
+            $this->assertMatchesRegularExpression('/^(\X\*\*\*|\X\*\*\*@[a-z0-9.\-]+|•••• [0-9A-Z]{4})$/u', (string) $logged, "forme permise seulement pour « {$typed[$i]} »");
+        }
+        $all = mb_strtolower(implode(' ', $queries));
+        $core = strtoupper(str_replace(['IZ-F-', 'FD-', '-'], '', $loyalty));
+        foreach (['dubé', 'lachance', 'éloïse', 'eloise', 'personne', 'inconnue', '5559876', '4385559876', mb_strtolower($core)] as $clear) {
+            $this->assertStringNotContainsString($clear, $all, "« $clear » jamais en clair au journal");
+        }
+        $this->assertSame(['name', 'name', 'name', 'name', 'phone', 'phone', 'email', 'email', 'loyaltyCode', 'loyaltyCode', 'name'], array_column($logs, 'kind'), 'le genre de la recherche reste écrit');
+        // le masque commun lui-même (il servira aussi aux incidents) : espaces retirés, une seule lettre, rien pour un texte vide
+        $this->assertSame(['D***', 'é***', ''], [PersonalDataMask::name('  Dubé  '), PersonalDataMask::name('éloïse'), PersonalDataMask::name('   ')]);
+        $this->assertSame(['D***', 'é***', 'L***', 'D***', '•••• 9876', '•••• 9876', 'e***@example.invalid', 'x***', '•••• ' . substr($core, -4), '•••• ' . substr($core, -4), 'p***'], $queries);
     }
 
     private function posTerminal(): string
