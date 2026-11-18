@@ -28,13 +28,7 @@
 {% endblock %}
 
 {% block main %}
-    {# Lot AG-3c : une entrée ouverte par le sélecteur de sites (compte de la plateforme) se voit et se quitte #}
-    {% if entryBanner is defined and entryBanner %}
-    <div class="alert alert-warning d-flex justify-content-between align-items-center" data-entry-banner>
-        <span>Entrée tracée dans ce site depuis {{ entryBanner.home }}{% if entryBanner.expiresAt %}, jusqu'à {{ entryBanner.expiresAt|date('H:i', 'UTC') }} (UTC){% endif %}.</span>
-        <form method="post" action="{{ path('admin_entree_quitter') }}" class="m-0"><input type="hidden" name="_token" value="{{ csrf_token('admin_entree_quitter') }}"><button type="submit" class="btn btn-sm btn-outline-danger">Quitter ce site</button></form>
-    </div>
-    {% endif %}
+    {# Lot BANDEAU (18/11/2026) : le bandeau d'une entrée est posé sur toutes les pages par la mise en page (admin/entree/_bandeau.html.twig) #}
     {# Lot AG-3c : les modules du site et leur état (droit ET interrupteur) ; le menu ne montre que les écrans des modules actifs #}
     {% if modulesTile is defined and modulesTile %}
     <div class="card border-0 shadow-sm rounded-lg mb-4 p-3 bg-white" data-modules-tile>

@@ -429,6 +429,16 @@ vide la session et renvoie à la connexion du site d'attache (`/?tenant=<site d'
 
 Essai : `tests/Functional/Security/AdminEntryTest.php` (5 essais ; 7 mutations des correctifs, toutes tuées).
 
+### 9.1 Lot BANDEAU (18/11/2026, demande du propriétaire)
+
+Pendant une entrée, TOUTES les pages d'EasyAdmin (mise en page surchargée `templates/bundles/EasyAdminBundle/layout.html.twig`, bloc
+`content_header_wrapper`) et les pages d'administration hors d'EasyAdmin (`base_admin.html.twig`) portent le bandeau
+`admin/entree/_bandeau.html.twig` : « Vous êtes dans <nom du site> (<adresse>) en tant que <Plateforme, prénom | Agence X, prénom | Groupe X,
+prénom> », le site d'attache, l'échéance, et « Quitter » (fermeture de l'entrée, retour à la connexion du site d'attache). Données :
+`App\Twig\AdminEntryBannerExtension` (`admin_entry_banner()`), lues de l'entrée de la session et de la base maître ; jamais une adresse de
+courriel. L'ancien bandeau, posé sur le seul accueil, est retiré. « Revenir au site d'attache sans nouvelle connexion » : lot RETOUR, à part.
+Essai : `AdminEntryTest::testTheBannerNamesTheSiteAndTheOperatorOnAListAndADetailPage` (liste, fiche, page nommée).
+
 ## 10. Lot AG-3d : « Tous mes clients » et « Taxes vérifiées par le commerçant » (18/11/2026, contrat validé par le chef)
 
 ### 10.1 « Tous mes clients »

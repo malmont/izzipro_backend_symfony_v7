@@ -1,0 +1,3 @@
+{% extends '@!EasyAdmin/layout.html.twig' %}
+{# Lot BANDEAU (18/11/2026) : le bandeau d'une entrée dans un autre site, en tête du contenu de TOUTES les pages d'EasyAdmin #}
+{% block content_header_wrapper %}{{ include('admin/entree/_bandeau.html.twig') }}{{ parent() }}{% endblock %}

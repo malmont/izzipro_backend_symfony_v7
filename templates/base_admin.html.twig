@@ -30,6 +30,8 @@
     </nav>
 
     <div class="container mt-4">
+      {# Lot BANDEAU (18/11/2026) : les pages d'administration hors d'EasyAdmin portent aussi le bandeau d'une entrée #}
+      {{ include('admin/entree/_bandeau.html.twig') }}
       {% block body %}{% endblock %}
     </div>
 
