@@ -23,8 +23,11 @@ class AgencyController extends AbstractController
 {
     public function __construct(private readonly AgencyContext $context, private readonly AgencyService $agencies, private readonly AgencySiteRequestService $requests,
         private readonly \App\Services\Storefront\StorefrontService $storefront, private readonly \App\Services\Agency\Assistance\AssistanceService $assistance,
-        private readonly ?\App\Services\Agency\AgencyClientsService $clientsList = null) // lot AG-3d : « Tous mes clients »
-    {
+        private readonly ?\App\Services\Agency\AgencyClientsService $clientsList = null, // lot AG-3d : « Tous mes clients »
+        // lot IA-B : l'assistant de l'agence, avec les unités du site d'attache
+        private readonly ?\App\Services\Agency\AgencyAssistantService $assistant = null,
+        private readonly ?\App\Services\LandingAiService\LandingAiQuotaService $quota = null,
+    ) {
     }
 
     /** Mon agence → 200 `{ agency, role }` : son état, la fin de son essai, combien de sites sur combien ; `role` : manager | member */
@@ -62,6 +65,56 @@ class AgencyController extends AbstractController
      * les sites : JAMAIS un chiffre d'affaires, un nombre de commandes, de clients ou d'avis, un montant. Agence suspendue : lisible,
      * `canEnter` faux.
      */
+    /**
+     * Lot IA-B : l'assistant de l'agence `{ messages: [{ role: user | assistant, content }], locale? }` → 200 `{ reply, actions: [{ id, tool,
+     * input, summary, needs: [adminEmail] }], links, usage, credits }`. Unités du SITE D'ATTACHE : 402 `AI_CREDITS_EXHAUSTED` à épuisement,
+     * jamais un débit sur un client. 422 `VALIDATION_FAILED`. Agence suspendue : lecture seule.
+     */
+    #[Route('/assistant', name: 'api_agency_assistant_chat', methods: ['POST'])]
+    public function assistantChat(Request $request): JsonResponse
+    {
+        return $this->handle(function () use ($request): JsonResponse {
+            $agency = $this->context->current();
+            $body = $this->body($request);
+            $messages = is_array($body['messages'] ?? null) ? array_values($body['messages']) : [];
+            $valid = $messages !== [] && count($messages) <= \App\Services\Agency\AgencyAssistantService::MAX_MESSAGES && ($messages[array_key_last($messages)]['role'] ?? null) === 'user';
+            foreach ($messages as $m) {
+                $valid = $valid && is_array($m) && in_array($m['role'] ?? null, ['user', 'assistant'], true) && is_string($m['content'] ?? null) && trim($m['content']) !== '';
+            }
+            if (!$valid) {
+                return $this->json(['error' => 'VALIDATION_FAILED', 'code' => 'VALIDATION_FAILED', 'message' => 'messages : 1 à 20 messages { role, content }, le dernier de l\'agence', 'errors' => [['path' => 'messages', 'message' => 'liste attendue']]], 422);
+            }
+            try {
+                $result = $this->assistant->chat($agency, $messages, $this->by(), ($body['locale'] ?? 'fr') === 'en' ? 'en' : 'fr');
+            } catch (\App\Services\LandingAiService\LandingAiException $e) {
+                $code = match ($e->getStatusCode()) { 402 => 'AI_CREDITS_EXHAUSTED', 429 => 'AI_TOO_MANY_FAILURES', default => 'AI_UNAVAILABLE' };
+
+                return $this->json(['error' => $code, 'code' => $code, 'message' => $e->getMessage()], $e->getStatusCode(), $e->getHeaders());
+            }
+
+            return $this->json($result + ['credits' => $this->quota?->credits()]);
+        });
+    }
+
+    /**
+     * Lot IA-B : confirmer une proposition de l'assistant, responsable de l'agence seulement. `propose_site` : `{ adminEmail, adminFirstName?,
+     * adminLastName? }` saisis dans le récapitulatif (jamais passés par le modèle) → 202 `{ tool, request }`, par le chemin d'AG-2 (ses limites et
+     * ses refus) ; 404 `ACTION_NOT_FOUND` (inconnue ou expirée après 15 min).
+     */
+    #[Route('/assistant/actions/{id}/confirm', name: 'api_agency_assistant_confirm', methods: ['POST'], requirements: ['id' => '[a-f0-9]{16}'])]
+    public function assistantConfirm(string $id, Request $request): JsonResponse
+    {
+        return $this->handle(function () use ($id, $request): JsonResponse {
+            $agency = $this->manager();
+            $user = $this->getUser();
+            try {
+                return $this->json($this->assistant->confirm($agency, $id, $this->body($request), $this->by(), $user instanceof \App\Entity\User ? $user : null), 202);
+            } catch (\OutOfBoundsException $e) {
+                return $this->json(['error' => 'ACTION_NOT_FOUND', 'code' => 'ACTION_NOT_FOUND', 'message' => $e->getMessage()], 404);
+            }
+        });
+    }
+
     #[Route('/clients', name: 'api_agency_clients', methods: ['GET'])]
     public function clients(): JsonResponse
     {

@@ -461,6 +461,24 @@ Essai : `tests/Functional/Security/AdminEntryTest.php` (5 essais ; 7 mutations d
 
 Essai : `tests/Functional/Platform/AgencyClientsTest.php`.
 
+## 11. Lot IA-B : l'assistant de l'agence (18/11/2026, contrat validé par le chef)
+
+- `POST /api/agency/assistant` `{ messages, locale? }` (compte d'agence, sur son site d'attache) → `{ reply, actions: [{ id, tool, input, summary,
+  needs }], links, usage, credits }` ; `POST /api/agency/assistant/actions/{id}/confirm` (responsable de l'agence seulement, 15 min) → 202.
+  `AgencyAssistantService`.
+- Lectures : « Tous mes clients » (sans chiffre), les demandes de création (sans destinataire), la disponibilité d'une adresse de site, l'aide.
+  Proposition : `propose_site` (questions une à une, puis un RÉCAPITULATIF) ; la confirmation passe par le chemin d'AG-2 (`POST /api/agency/sites` :
+  limites, file, refus repris tels quels). `open_client` mène à « Entrer » : l'assistant ne lit jamais un site client.
+- **Adresse de l'administrateur à inviter** : jamais par le modèle. Elle se saisit dans le récapitulatif (`adminEmail` du corps de la
+  confirmation, validée par le serveur) ; le modèle voit `adminEmailProvided: false`. Toute adresse de courriel, dans un message de l'agence,
+  un résultat d'outil ou le tour du modèle renvoyé au suivant, est masquée (`[adresse]`) avant l'envoi.
+- **Unités** : celles du site d'attache de l'agence, avec son plafond mensuel ; épuisées : 402 `AI_CREDITS_EXHAUSTED`, jamais un débit sur un
+  client.
+- Agence suspendue : les outils de proposition ne sont pas donnés au modèle, et refusés s'il les invente. Textes lus = données ; aucune écriture
+  sans confirmation ; trace `agency_assistant` / `confirm` au journal du site d'attache (« par l'assistant, confirmé par <prénom> »).
+
+Essai : `tests/Functional/Platform/AgencyAssistantTest.php` (5 mutations des filtres, toutes tuées).
+
 ## Tenir cette fiche à jour
 
 À chaque écran, famille ou liste hors écran ajoutés ; à chaque champ sensible trouvé ; à chaque mode nouveau.
