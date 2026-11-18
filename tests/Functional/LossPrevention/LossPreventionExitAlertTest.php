@@ -346,10 +346,17 @@ class LossPreventionExitAlertTest extends LossPreventionTestCase
         return $this->fact('ZONE_SEEN', $zone === 'floor' ? "RAYON-$this->s" : "LECTEUR-$this->s", $identifier, $zone, $shift);
     }
 
+    /**
+     * L'instant de référence de l'essai, FIGÉ au premier fait (demande du chef, 18/11/2026) : 5 secondes après le début d'une minute, il y a
+     * une dizaine de minutes. Deux faits de même décalage tombent toujours dans la MÊME minute, quelle que soit la durée de l'essai sous charge.
+     */
+    private ?int $t0 = null;
+
     /** @return array{0: string, 1: ?string} */
     private function fact(string $type, string $device, string $identifier, string $zone, int $shift = 0): array
     {
-        $fact = ['key' => 'alerte-' . $this->s . '-' . str_pad((string) ++$this->n, 4, '0', STR_PAD_LEFT), 'type' => $type, 'at' => gmdate('Y-m-d\TH:i:s\Z', time() - 600 + $shift),
+        $this->t0 ??= intdiv(time() - 600, 60) * 60 + 5;
+        $fact = ['key' => 'alerte-' . $this->s . '-' . str_pad((string) ++$this->n, 4, '0', STR_PAD_LEFT), 'type' => $type, 'at' => gmdate('Y-m-d\TH:i:s\Z', $this->t0 + $shift),
             'device' => $device, 'zone' => $zone, 'data' => ['identifier' => $identifier]];
         $result = $this->json($this->channel('POST', '/faits', ['facts' => [$fact]], $this->token))['results'][0];
 

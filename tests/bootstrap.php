@@ -151,6 +151,11 @@ foreach ([MV_TEST_TENANT_DB, MV_TEST_TENANT2_DB] as $db) {
     foreach (\DoctrineMigrations\Version20270201100000::STATEMENTS as $sql) {
         $tenantDb->exec($sql);
     }
+    // PROVISOIRE, correctif AIDE-APP (18/11/2026) : la migration Version20270201200000, de la même façon
+    require_once dirname(__DIR__) . '/migrations/Version20270201200000.php';
+    foreach (\DoctrineMigrations\Version20270201200000::STATEMENTS as $sql) {
+        $tenantDb->exec($sql);
+    }
     $tenantDb = null;
 }
 

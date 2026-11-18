@@ -132,12 +132,12 @@ class SupportCustomerService
             ->setCustomerUserId($customer->getId())->setCustomerName($name)->setCustomerEmail($customer->getEmail())
             ->setCustomerLocale(is_string($locale) && $locale !== '' ? $locale : (in_array($this->locales->siteLocale(), ['fr', 'en'], true) ? $this->locales->siteLocale() : 'fr'))
             ->setOrderId($orderId)->setCreatedBy('client')->setDueAt($this->settings->due($now))->setLastMessageAt($now)->setLastCustomerMessageAt($now)
-            ->setSourceApp(in_array($source, [AppFamilies::LIVINGMEMORY, AppFamilies::BOUTIQUE], true) ? $source : null)->setCategory((string) $category);
+            ->setSourceApp(in_array($source, [AppFamilies::LIVINGMEMORY, AppFamilies::BOUTIQUE], true) ? $source : null)->setCategory((string) $category)
+            ->setAppVersion(is_string($version) && $version !== '' ? $version : null); // pour l'équipe seulement, jamais dans le message du client
         $em->persist($ticket);
         $em->flush();
         $ticket->setReference(sprintf('AS-%06d', (int) $ticket->getId()));
-        $suffix = is_string($version) && $version !== '' ? "\n\n(version de l'application : $version)" : '';
-        $message = (new SupportMessage())->setTicket($ticket)->setAuthorType('customer')->setAuthorName($name ?? $customer->getEmail())->setBody($text . $suffix)->setCreatedAt($now);
+        $message = (new SupportMessage())->setTicket($ticket)->setAuthorType('customer')->setAuthorName($name ?? $customer->getEmail())->setBody($text)->setCreatedAt($now);
         $em->persist($message);
         $em->flush();
         $this->attach($ticket, $message, $files, $mimes, $now);

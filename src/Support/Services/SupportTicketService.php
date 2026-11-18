@@ -383,7 +383,7 @@ class SupportTicketService
             'anonymized' => $t->getAnonymizedAt() !== null, 'createdAt' => $iso($t->getCreatedAt()), 'updatedAt' => $iso($t->getUpdatedAt()),
             // lot AIDE-APP : la demande envoyée depuis une application du client ; un problème de l'application est mis en avant (le geste
             // « Transmettre à l'équipe technique » y est le plus utile)
-            'category' => $t->getCategory(), 'sourceApp' => $t->getSourceApp(), 'highlight' => $t->getCategory() === 'app_problem',
+            'category' => $t->getCategory(), 'sourceApp' => $t->getSourceApp(), 'appVersion' => $t->getAppVersion(), 'highlight' => $t->getCategory() === 'app_problem',
         ];
     }
 

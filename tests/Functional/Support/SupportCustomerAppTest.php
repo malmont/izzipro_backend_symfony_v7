@@ -63,9 +63,13 @@ class SupportCustomerAppTest extends WebTestCase
         $mine = $this->json('GET', '/api/account/support/requests', null, $aliceToken, 200)['requests'];
         $this->assertSame([[$sent['reference'], 'answered', true]], array_map(fn ($r) => [$r['reference'], $r['status'], $r['unread']], $mine));
         $thread = $this->json('GET', '/api/account/support/requests/' . $sent['reference'], null, $aliceToken, 200);
-        $this->assertSame([['customer', 'L\'enregistrement audio s\'arrête au bout de dix secondes.' . "\n\n(version de l'application : 1.9.2)"], ['team', 'Mettez l\'application à jour, puis réessayez.']],
+        $this->assertSame([['customer', 'L\'enregistrement audio s\'arrête au bout de dix secondes.'], ['team', 'Mettez l\'application à jour, puis réessayez.']],
             array_map(fn ($m) => [$m['from'], $m['body']], $thread['messages']));
         $this->assertStringNotContainsString('note interne', json_encode($thread));
+        // correctif AIDE-APP : la version de l'application n'apparaît jamais dans le fil du client ; l'équipe la lit sur la fiche
+        $this->assertStringNotContainsString('1.9.2', json_encode($thread));
+        $this->assertSame('1.9.2', $this->json('GET', "/api/support/tickets/$id", null, $agent, 200)['appVersion']);
+        $this->assertSame('1.9.2', $row['app_version']);
         $this->assertFalse($thread['request']['unread']);
         $this->assertFalse($this->json('GET', '/api/account/support/requests', null, $aliceToken, 200)['requests'][0]['unread'], 'la lecture du fil remet le point à faux');
         // le client répond : la demande repasse « en cours », l'équipe la voit en attente de réponse
