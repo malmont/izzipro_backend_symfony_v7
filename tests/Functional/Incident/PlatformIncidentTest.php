@@ -220,13 +220,13 @@ class PlatformIncidentTest extends WebTestCase
         $this->assertStringContainsString('Adresse de la plateforme absente', $command->getDisplay());
         $_ENV['POS_ALERT_PLATFORM_EMAIL'] = $_SERVER['POS_ALERT_PLATFORM_EMAIL'] = 'plateforme@example.invalid';
         $command->execute([]);
-        $this->assertStringContainsString('Courriel envoyé : 1 nouveaux, 0 revenus.', $command->getDisplay(), $command->getDisplay());
-        $this->assertStringContainsString('Purge : 1 occurrences, 1 incidents.', $command->getDisplay());
+        $this->assertStringContainsString('Courriel envoyé : 1 nouveaux, 0 revenus, 0 signalements en attente.', $command->getDisplay(), $command->getDisplay());
+        $this->assertStringContainsString('Purge : 1 occurrences, 1 incidents, 0 captures.', $command->getDisplay());
         $this->assertNull($this->row($old));
         $this->assertNotNull($this->row($id));
         $this->master->exec('DELETE FROM platform_incident');
         $command->execute([]);
-        $this->assertStringContainsString('Aucun incident nouveau ni revenu : aucun courriel.', $command->getDisplay());
+        $this->assertStringContainsString('Aucun incident nouveau ni revenu, aucun signalement en attente : aucun courriel.', $command->getDisplay());
     }
 
     /** @return array<string, mixed>|null */

@@ -13,7 +13,8 @@ use App\Support\Services\SupportTicketService;
 class SupportUseCase
 {
     public function __construct(private readonly SupportTicketService $tickets, private readonly SupportSettingsService $settings,
-        private readonly SupportDirectoryService $directory, private readonly SupportOrderSummary $orders, private readonly SupportAgentService $agentsAdmin)
+        private readonly SupportDirectoryService $directory, private readonly SupportOrderSummary $orders, private readonly SupportAgentService $agentsAdmin,
+        private readonly ?\App\Incident\Services\PlatformBugReportService $platform = null) // lot INC-3 : transmission à l'équipe technique
     {
     }
 
@@ -37,7 +38,16 @@ class SupportUseCase
 
     public function list(array $query, User $agent): array { return $this->tickets->list($query, (int) $agent->getId()); }
     public function create(array $body, User $agent): array { return $this->tickets->create($body, $agent); }
-    public function detail(int $id): array { return $this->tickets->detail($id); }
+    /** Lot INC-3 : `platform` = l'état de la transmission à l'équipe technique ({ status: transmitted | fixed | wont_fix, answer }), ou null */
+    public function detail(int $id): array { return $this->tickets->detail($id) + ['platform' => $this->platform?->ticketPlatform($id)]; }
+
+    /** Lot INC-3 : transmettre le ticket à l'équipe technique, par un résumé de l'agent (le ticket doit exister sur ce site : 404 sinon) */
+    public function escalate(int $id, array $body, User $agent): array
+    {
+        $this->tickets->detail($id);
+
+        return $this->platform?->escalate($id, $body, $agent) ?? throw new \LogicException('Signalements indisponibles.');
+    }
     public function patch(int $id, array $body, User $agent): array { return $this->tickets->patch($id, $body, $agent); }
     public function message(int $id, array $body, array $files, User $agent, string $host): array { return $this->tickets->addMessage($id, $body, $files, $agent, $host); }
     public function attachment(int $id, int $attachmentId): array { return $this->tickets->attachment($id, $attachmentId); }

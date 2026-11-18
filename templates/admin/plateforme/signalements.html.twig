@@ -1,0 +1,79 @@
+{# Signalements de la plateforme (PlatformBugReportsAdminController, lot INC-3, 18/11/2026), super administrateur seul. Habillage EasyAdmin depuis le menu ; ea() dit s'il y a un contexte. #}
+{% extends ea() is not null ? '@EasyAdmin/page/content.html.twig' : 'base_admin.html.twig' %}
+
+{% block title %}Plateforme : signalements{% endblock %}
+{% block content_title %}Plateforme : signalements{% endblock %}
+
+{% block main %}{{ block('reports_panel') }}{% endblock %}
+{% block body %}{% if ea() is null %}
+    <div class="container-fluid py-3">
+        <h1 class="h3 mb-3">Plateforme : signalements</h1>
+        {{ block('reports_panel') }}
+    </div>
+{% else %}{{ parent() }}{% endif %}{% endblock %}
+
+{% block reports_panel %}
+    {% for label, messages in app.flashes %}
+        {% for message in messages %}<div class="alert alert-{{ label }}">{{ message }}</div>{% endfor %}
+    {% endfor %}
+    <p class="mb-3"><a href="{{ backUrl }}">← Incidents</a></p>
+    <p class="small text-muted">Une capture peut montrer des données de clients : elle n'est servie qu'ici, jamais au site ni au signaleur, et s'efface après la durée réglée.</p>
+
+    <form method="post" action="{{ path('admin_plateforme_bug_reports_retention') }}" class="row g-2 align-items-end mb-3">
+        <input type="hidden" name="_token" value="{{ csrf_token(csrf_id) }}">
+        <div class="col-auto">
+            <label class="form-label small mb-0">Conservation des captures (jours, provisoire)</label>
+            <input name="screenshotDays" value="{{ screenshotDays }}" class="form-control form-control-sm" inputmode="numeric" maxlength="4">
+        </div>
+        <div class="col-auto"><button class="btn btn-sm btn-outline-primary">Enregistrer</button></div>
+    </form>
+
+    <form method="get" class="row g-2 align-items-end mb-3">
+        <div class="col-auto">
+            <label class="form-label small mb-0">État</label>
+            <select name="status" class="form-select form-select-sm">
+                <option value="">tous</option>
+                {% for s in statuses %}<option value="{{ s }}" {{ filters.status == s ? 'selected' }}>{{ s }}</option>{% endfor %}
+            </select>
+        </div>
+        <div class="col-auto"><label class="form-label small mb-0">Site</label><input name="tenant" value="{{ filters.tenant }}" class="form-control form-control-sm" maxlength="50"></div>
+        <div class="col-auto"><label class="form-label small mb-0">Application</label><input name="app" value="{{ filters.app }}" class="form-control form-control-sm" maxlength="16"></div>
+        <div class="col-auto"><button class="btn btn-sm btn-primary">Filtrer</button></div>
+    </form>
+
+    <p class="small text-muted">{{ result.total }} signalement(s).</p>
+    <div class="table-responsive">
+        <table class="table table-sm align-middle">
+            <thead><tr><th>Reçu</th><th>Site</th><th>Application</th><th>Signalement</th><th>État</th><th></th></tr></thead>
+            <tbody>
+            {% for r in result.reports %}
+                <tr class="{{ r.status == 'received' ? 'table-warning' }}">
+                    <td class="small">{{ r.createdAt|slice(0, 16)|replace({'T': ' '}) }}</td>
+                    <td>{{ r.tenantCode }}</td>
+                    <td>{{ r.app }}{% if r.appVersion %} <span class="small text-muted">{{ r.appVersion }}</span>{% endif %}<div class="small text-muted">{{ r.reporterKind }}{% if r.supportTicketId %} · ticket n° {{ r.supportTicketId }}{% endif %}</div></td>
+                    <td><div>{{ r.description }}</div><div class="small text-muted">{{ r.screen }}</div>
+                        {% if r.screenshot %}<div class="small"><a href="{{ path('admin_plateforme_bug_report_capture', {id: r.id}) }}" target="_blank" rel="noopener noreferrer">capture</a></div>{% elseif r.screenshotDeletedAt %}<div class="small text-muted">capture effacée</div>{% endif %}
+                        {% if r.context %}<details class="small"><summary>contexte</summary><pre class="mb-0">{{ r.context|json_encode(constant('JSON_PRETTY_PRINT') b-or constant('JSON_UNESCAPED_UNICODE') b-or constant('JSON_UNESCAPED_SLASHES')) }}</pre></details>{% endif %}
+                        {% if r.answer %}<div class="small">Réponse : {{ r.answer }}</div>{% endif %}
+                        {% if r.note %}<div class="small text-muted">Note interne : {{ r.note }}</div>{% endif %}</td>
+                    <td>{{ r.status }}{% if r.incidentId %}<div class="small text-muted">incident n° {{ r.incidentId }}</div>{% endif %}</td>
+                    <td>
+                        <form method="post" action="{{ path('admin_plateforme_bug_report', {id: r.id}) }}" class="d-flex flex-column gap-1">
+                            <input type="hidden" name="_token" value="{{ csrf_token(csrf_id) }}">
+                            <select name="status" class="form-select form-select-sm">
+                                {% for s in statuses %}<option value="{{ s }}" {{ r.status == s ? 'selected' }}>{{ {received: 'reçu', in_progress: 'en cours', fixed: 'corrigé', wont_fix: 'ne sera pas corrigé'}[s] }}</option>{% endfor %}
+                            </select>
+                            <textarea name="answer" placeholder="réponse au signaleur (envoyée par courriel)" class="form-control form-control-sm" maxlength="4000" rows="2">{{ r.answer }}</textarea>
+                            <input name="note" value="{{ r.note }}" placeholder="note interne" class="form-control form-control-sm" maxlength="4000">
+                            <input name="incidentId" value="{{ r.incidentId }}" placeholder="incident n°" class="form-control form-control-sm" inputmode="numeric">
+                            <button class="btn btn-sm btn-outline-primary">Enregistrer</button>
+                        </form>
+                    </td>
+                </tr>
+            {% else %}
+                <tr><td colspan="6" class="text-muted">Aucun signalement.</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+{% endblock %}

@@ -74,6 +74,7 @@ class StorefrontGateSubscriber implements EventSubscriberInterface
         '#^/api/landingpage-config(/|$)#',
         '#^/api/pertes/boitier/#',
         '#^/api/incidents/report$#', // lot INC-1a : une application signale une erreur, même pendant la construction
+        '#^/api/incidents/bug-reports$#', // lot INC-3 : le personnel signale un problème, même pendant la construction
         // outils du développement
         '#^/_(profiler|wdt|error)(/|$)#',
     ];

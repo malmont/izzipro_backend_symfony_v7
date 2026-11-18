@@ -1,7 +1,7 @@
 # Incidents et signalements : relevé des erreurs de toutes les applications et bogues signalés par les clients
 
 Cadrage du 10/11/2026, décidé par le propriétaire ; ajouts du 18/11/2026 (§ « Ajouts du propriétaire »). Nom du lot : **INCIDENTS** (INC-1 à
-INC-5). **INC-1a codé le 18/11/2026** (§ « Lot INC-1a », sous Opus, à faire vérifier par Fable) ; INC-1b (entrée d'une source tierce)
+INC-5). **INC-1a codé le 18/11/2026, en ligne (étape 105)** ; **INC-2 (A + B) codé** ; **INC-3 codé le 18/11/2026** (§ « Lot INC-1a », sous Opus, à faire vérifier par Fable) ; INC-1b (entrée d'une source tierce)
 reporté par le propriétaire (pas d'outil tiers pour l'instant) ; INC-2 à INC-5 à venir.
 Deux circuits, deux publics, deux outils déjà en place : pas de nouvelle plateforme.
 
@@ -194,6 +194,47 @@ Boussole, Mémoires Vivantes web), qui codent mais ne poussent qu'après la mise
   `context.repeats` ; au plus 30 rapports par session de l'application.
 - Aucune donnée personnelle (nom, courriel, téléphone, adresse, numéros, texte saisi, corps, en-têtes, jetons, nom de l'appareil, capture,
   identifiant du compte) ; le masquage du serveur est un filet, pas une permission.
+
+## Lot INC-3 : signalements du personnel et escalade depuis l'Assistance (codé le 18/11/2026, contrat validé par le chef)
+
+Base maître, `ops/sql/platform_bug_report_master.sql` (SQL seul, idempotent, après celui d'INC-1a) : `platform_bug_report` (site,
+application, version, écran, description masquée, contexte, capture, genre et compte du signaleur, état `received` / `in_progress` /
+`fixed` / `wont_fix`, incident rattaché, réponse publique, note interne, ticket d'Assistance d'origine, dates ; un seul signalement ouvert
+par ticket). Code : `src/Incident/` (`PlatformBugReportService`, `BugReportScreenshotStorage`, `BugReportMailer`).
+
+- **Qui signale** : le PERSONNEL du site seul (règle `^/api/incidents/bug-reports$` : `ROLE_ADMIN`, `ROLE_POS_MANAGER`, `ROLE_USER_POS`) ;
+  genre tiré des rôles (`site_admin`, `manager`, `cashier`), jamais du corps. Un client reçoit 403 : il passe par l'Assistance du commerçant.
+- **`POST /api/incidents/bug-reports`** (multipart) : `description` (10 à 2 000 caractères, masquée), `app` (valeurs d'INC-1a et INC-2),
+  `appVersion?`, `screen?`, `context?` (JSON, liste blanche d'INC-1a), `screenshot?` (PNG, JPEG ou WebP, 5 Mo, 8 000 pixels de côté) →
+  201 `{ report }` ; 422 `{ fields }` (`REQUIRED`, `INVALID_LENGTH`, `INVALID_VALUE`, `TOO_LARGE`, `FORMAT`) ; 429 `BUG_REPORT_LIMIT`
+  `{ scope: account | site }` (10 par compte, 30 par site et par jour, UTC).
+- **`GET /api/incidents/bug-reports`** : « Mes signalements », ceux du compte connecté sur ce site (hors escalades), 50 derniers :
+  `{ id, app, appVersion, screen, description, status, answer, createdAt, answeredAt }`. Jamais la note interne, jamais la capture ni sa
+  présence.
+- **Capture** : elle peut montrer des données de clients (nom, panier, 4 derniers chiffres d'une carte) qu'aucun masque ne retire d'une
+  image. Elle est relue puis **réencodée** (GD : métadonnées retirées), rangée dans `var/storage/private_media/platform-bug-reports/`, et
+  servie au **seul super administrateur** (`GET /api/platform/bug-reports/{id}/capture` et l'écran, `Cache-Control: private, no-store`),
+  jamais au site, ni dans « Mes signalements », ni au signaleur après l'envoi. Effacée après la durée réglée (`platform_settings`, clé
+  `bug_report_screenshot_days`, **180 jours provisoires**, de 1 à 3 650, réglable dans l'écran ; à fixer par le propriétaire avec le juriste,
+  question D4 de `docs/audit-donnees.md`). Le contrat INC-4 demandera aux applications d'afficher, avant l'envoi : « Vérifiez que la capture
+  ne montre aucune donnée de client ».
+- **Escalade** : `POST /api/support/tickets/{id}/escalade` `{ summary }` (20 à 2 000 caractères, écrit par l'agent, masqué), par un agent
+  de l'Assistance du site → 201 `{ platform { status: transmitted, answer: null } }` ; signalement `app: support`, genre `support_agent`, lié
+  au ticket (site et identifiant), sans copie du fil ni des pièces jointes ni du client ; 409 `ALREADY_ESCALATED` tant qu'un signalement du
+  ticket est ouvert ; 404 `TICKET_NOT_FOUND`. `GET /api/support/tickets/{id}` gagne **`platform`** : `null` (jamais transmis) ou
+  `{ status: transmitted | fixed | wont_fix, answer }`, lu dans la base maître (aucune colonne dans les sites) : le commerçant ne voit que
+  l'état et la réponse publique.
+- **Plateforme** (super administrateur seul) : `GET /api/platform/bug-reports?status=&tenant=&app=` ; `GET /{id}` (note interne, contexte,
+  ticket d'origine, `screenshot` booléen) ; `GET /{id}/capture` ; `PATCH /{id}` `{ status?, answer?, note?, incidentId? }` → le signalement et
+  `mailed`. Écran `/admin/plateforme/signalements` (ouvert depuis la page des incidents), avec la durée de conservation des captures.
+- **Courriel au signaleur** (`platform_bug_report_answer`, famille indispensable) quand la réponse change ou qu'un état final est posé
+  (corrigé, ne sera pas corrigé) : l'état et la réponse publique seule. Pour une escalade, c'est l'agent qui le reçoit. Adresse et langue
+  lues sur la base du site par une connexion à part.
+- **Courriel du jour** (INC-1a) : il porte aussi les signalements reçus sans réponse depuis 48 heures ; la purge efface les captures trop
+  vieilles.
+- Essais : `tests/Functional/Incident/PlatformBugReportTest.php` (personnel seul, capture réencodée et servie au super administrateur seul,
+  cloisonnement par compte et par site, refus, limites, réponse et courriel, note interne jamais lue, escalade unique et état sur le
+  ticket, courriel du jour et purge des captures).
 
 ## Point de reprise (18/11/2026, arrêt du soir demandé par le propriétaire)
 

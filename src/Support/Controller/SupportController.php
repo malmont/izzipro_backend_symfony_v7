@@ -48,6 +48,25 @@ class SupportController extends AbstractController
         return $this->guard(fn () => $this->json($this->useCase->patch($id, $this->body($request), $this->agent())));
     }
 
+    /**
+     * Lot INC-3 (18/11/2026) : « Transmettre à l'équipe technique » { summary } (20 à 2 000 caractères, écrit par l'agent, masqué) → 201
+     * { platform { status: transmitted, answer: null } } ; le fil et les pièces jointes ne sont jamais copiés ; 404 TICKET_NOT_FOUND,
+     * 409 ALREADY_ESCALATED (un seul signalement ouvert par ticket), 422 { fields.summary }.
+     */
+    #[Route('/tickets/{id}/escalade', name: 'support_ticket_escalate', methods: ['POST'], requirements: ['id' => '\d+'])]
+    public function escalate(int $id, Request $request): JsonResponse
+    {
+        return $this->guard(function () use ($id, $request) {
+            try {
+                return $this->json($this->useCase->escalate($id, $this->body($request), $this->agent()), 201);
+            } catch (\App\Gestion\Services\GestionValidationException $e) {
+                return $this->json(['error' => 'VALIDATION_FAILED', 'code' => 'VALIDATION_FAILED', 'message' => 'Résumé invalide.', 'fields' => $e->fields], 422);
+            } catch (\App\Gestion\Services\GestionConflictException $e) {
+                return $this->json($e->toArray(), $e->status);
+            }
+        });
+    }
+
     /** JSON { body, internal?, fromCustomer? } ou multipart (body, internal, fromCustomer, attachments[]) */
     #[Route('/tickets/{id}/messages', name: 'support_ticket_message', methods: ['POST'], requirements: ['id' => '\d+'])]
     public function message(int $id, Request $request): JsonResponse
