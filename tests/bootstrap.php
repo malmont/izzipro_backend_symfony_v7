@@ -126,6 +126,8 @@ $master->exec(file_get_contents(__DIR__ . '/../ops/sql/platform_incident_master.
 $master->exec(file_get_contents(__DIR__ . '/../ops/sql/platform_bug_report_master.sql'));
 // Lien prouvé « Mettre à jour mon forfait » (lot PROVISION-1, 18/11/2026) (ops/sql/platform_plan_link_master.sql)
 $master->exec(file_get_contents(__DIR__ . '/../ops/sql/platform_plan_link_master.sql'));
+// Paiements des offres (lot PROVISION-3, 18/11/2026) : journal des événements Stripe, périodes payées, file de reprise (ops/sql/platform_offer_payments_master.sql)
+$master->exec(file_get_contents(__DIR__ . '/../ops/sql/platform_offer_payments_master.sql'));
 // Codes courts fixes des sites de test (31/10/2026) : MVT001 et MVT002 (alphabet Crockford)
 $insertTenant = $master->prepare('INSERT INTO tenants (code, name, dbname, custom_domain, short_code) VALUES (?, ?, ?, ?, ?)');
 $insertTenant->execute([MV_TEST_TENANT_CODE, 'Tenant de test', MV_TEST_TENANT_DB, MV_TEST_TENANT_HOST, 'MVT001']);
@@ -145,6 +147,12 @@ foreach ([MV_TEST_TENANT_DB, MV_TEST_TENANT2_DB] as $db) {
     // Lot CONSTRUCTION : la boutique des sites de test est tenue pour « déjà ouverte » ; sinon tout essai qui active le module Boutique
     // (droit accordé, indicateur coché) la ferait naître en construction et fermerait la boutique du site partagé pour les essais suivants
     $tenantDb->exec("UPDATE entreprise SET storefront_state = 'open', storefront_opened_at = NOW()");
+    // PROVISOIRE, lot PROVISION-3 (18/11/2026) : la migration Version20270201300000 posée sur les COPIES de test, jusqu'à sa pose sur le
+    // modèle des bases de test à la bascule (instruction idempotente : sans effet une fois le modèle migré ; ce bloc s'enlève alors)
+    require_once dirname(__DIR__) . '/migrations/Version20270201300000.php';
+    foreach (\DoctrineMigrations\Version20270201300000::STATEMENTS as $sql) {
+        $tenantDb->exec($sql);
+    }
     $tenantDb = null;
 }
 

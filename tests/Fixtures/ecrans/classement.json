@@ -521,6 +521,7 @@
         "POST /admin/plateforme/materiel/{code}",
         "POST /admin/plateforme/mode",
         "POST /admin/plateforme/offre/{code}",
+        "POST /admin/plateforme/offres/reprise/{id}",
         "POST /admin/plateforme/politique/{feature}",
         "POST /admin/plateforme/signalements/conservation",
         "POST /admin/plateforme/signalements/{id}",

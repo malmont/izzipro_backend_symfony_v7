@@ -9,6 +9,7 @@ use App\Services\SubscriptionService\SubscriptionOrderFactory;
 use App\Services\SubscriptionService\SubscriptionService;
 use App\Services\SubscriptionService\SubscriptionException;
 use App\Services\SubscriptionService\SubscriptionStripeGateway;
+use App\Services\SubscriptionService\SubscriptionLock;
 use App\Services\TenantConnectionManager;
 use App\Services\TenantEntityManagerProvider;
 use Psr\Log\LoggerInterface;
@@ -18,9 +19,19 @@ use Psr\Log\LoggerInterface;
  * effacé ; invoice.payment_failed → voir paymentFailed ; customer.subscription.updated / deleted / paused / resumed →
  * état recopié, courriel de résiliation. Le site vient des métadonnées posées à la souscription (tenant_code) ; un évènement sans site ou sans
  * abonnement connu est ignoré.
+ *
+ * Lot PROVISION-3 (18/11/2026, `docs/console-pilotage.md`, « Paiements des offres ») :
+ * - `handle` tient le JOURNAL des événements (base maître `stripe_event_log`, sans contenu) : un événement déjà traité répond sans rien
+ *   refaire ; un échec est noté puis remonté (Stripe livre de nouveau) ;
+ * - ORDRE : un événement plus ancien que le dernier appliqué à l'abonnement (`stripe_event_at`) est ignoré (`out_of_order`) ; une facture
+ *   payée ne fait jamais reculer la fin de période et ne ressuscite jamais un abonnement résilié ;
+ * - « PÉRIODE PAYÉE » : `SubscriptionPeriodPaidEvent` est émis une seule fois par facture payée (registre `subscription_period_paid`).
  */
 class HandleSubscriptionWebhookUseCase
 {
+    /** Lot PROVISION-3 : un événement d'un abonnement inconnu, plus récent que ce délai, est renvoyé à Stripe (409) au lieu d'être ignoré */
+    public const UNKNOWN_RETRY_SECONDS = 600;
+
     public const TYPES = ['invoice.paid', 'invoice.payment_succeeded', 'invoice.payment_failed', 'customer.subscription.updated', 'customer.subscription.deleted', 'customer.subscription.paused', 'customer.subscription.resumed'];
 
     public function __construct(
@@ -30,15 +41,64 @@ class HandleSubscriptionWebhookUseCase
         private readonly SubscriptionOrderFactory $orders,
         private readonly SubscriptionMailer $mailer,
         private readonly OrderMailerService $orderMailer,
-        private readonly LoggerInterface $logger
+        private readonly LoggerInterface $logger,
+        private readonly ?\App\Services\Platform\OfferPayments\OfferPaymentsRepository $payments = null, // lot PROVISION-3
+        private readonly ?\Symfony\Contracts\EventDispatcher\EventDispatcherInterface $dispatcher = null, // lot PROVISION-3 : « période payée »
     ) {
+    }
+
+    /**
+     * Lot PROVISION-3 : l'événement passe par le journal. Sans identifiant (essais anciens) : traité directement.
+     *
+     * @param array<string, mixed> $object data.object de l'évènement
+     * @return array{status: string, detail?: string}
+     */
+    public function handle(string $type, array $object, string $host, ?string $eventId, ?int $created, ?string $account): array
+    {
+        if ($eventId === null || $this->payments === null) {
+            return $this->execute($type, $object, $host, $created);
+        }
+        $objectId = str_starts_with($type, 'invoice.') ? self::invoiceSubscriptionId($object) : (string) ($object['id'] ?? '');
+        try {
+            $claimed = $this->payments->claim($eventId, $type, $account, self::metadata($object, 'tenant_code'), $objectId, $created);
+        } catch (\PDOException $e) {
+            // journal injoignable (table absente, base maître en panne) : l'événement est traité sans journal plutôt que refusé
+            $this->logger->critical('[Subscription] journal des événements Stripe injoignable : traité sans journal', ['exception' => $e::class]);
+
+            return $this->execute($type, $object, $host, $created);
+        }
+        if ($claimed === null) {
+            // déjà traité ou ignoré : 200 sans rien refaire ; encore en cours ailleurs : 409, pour que Stripe livre de nouveau plus tard
+            return $this->payments->status($eventId) === 'received'
+                ? ['status' => 'in_progress', 'detail' => 'événement en cours de traitement']
+                : ['status' => 'duplicate', 'detail' => 'événement déjà reçu'];
+        }
+        try {
+            $result = $this->execute($type, $object, $host, $created);
+        } catch (\App\Services\SubscriptionService\SubscriptionLockTimeout $e) {
+            // l'abonnement est tenu par un autre traitement : l'événement sera repris à la prochaine livraison
+            $this->payments->fail($eventId, $e);
+
+            return ['status' => 'in_progress', 'detail' => 'abonnement en cours de traitement'];
+        } catch (\Throwable $e) {
+            $this->payments->fail($eventId, $e);
+            throw $e;
+        }
+        if ($result['status'] === 'in_progress') {
+            $this->payments->fail($eventId, null);
+
+            return $result;
+        }
+        $this->payments->finish($eventId, $result['status'] === 'processed' ? 'processed' : 'ignored', $result['detail'] ?? null);
+
+        return $result;
     }
 
     /**
      * @param array<string, mixed> $object data.object de l'évènement
      * @return array{status: string, detail?: string}
      */
-    public function execute(string $type, array $object, string $host): array
+    public function execute(string $type, array $object, string $host, ?int $eventCreated = null): array
     {
         $tenantCode = self::metadata($object, 'tenant_code');
         if ($tenantCode === null) {
@@ -51,12 +111,35 @@ class HandleSubscriptionWebhookUseCase
         $this->emProvider->switchTenant($tenant['dbname'], $tenantCode);
 
         $stripeId = str_starts_with($type, 'invoice.') ? self::invoiceSubscriptionId($object) : (string) ($object['id'] ?? '');
-        $subscription = $stripeId !== '' ? $this->service->subscriptions()->findOneByStripeId($stripeId) : null;
+        if ($stripeId === '') {
+            return ['status' => 'ignored', 'detail' => 'abonnement inconnu'];
+        }
+        // lot PROVISION-3 : un seul traitement à la fois par abonnement (Stripe livre en parallèle), l'abonnement relu sous le verrou
+        return SubscriptionLock::run($this->emProvider->getEntityManager()->getConnection(), SubscriptionLock::key($tenantCode, $stripeId),
+            fn () => $this->executeLocked($type, $object, $host, $eventCreated, $tenantCode, $stripeId));
+    }
+
+    /** @return array{status: string, detail?: string} */
+    private function executeLocked(string $type, array $object, string $host, ?int $eventCreated, string $tenantCode, string $stripeId): array
+    {
+        $subscription = $this->service->subscriptions()->findOneByStripeId($stripeId);
         if ($subscription === null) {
+            // événement récent d'un abonnement pas encore enregistré (course à la création) : 409, Stripe livre de nouveau
+            if ($eventCreated !== null && time() - $eventCreated < self::UNKNOWN_RETRY_SECONDS) {
+                return ['status' => 'in_progress', 'detail' => 'abonnement pas encore enregistré'];
+            }
+
             return ['status' => 'ignored', 'detail' => 'abonnement inconnu'];
         }
         $locale = 'fr';
         $em = $this->emProvider->getEntityManager();
+        $em->refresh($subscription);
+        // lot PROVISION-3 : un événement plus ancien que le dernier instantané appliqué (événement d'abonnement, relecture chez Stripe,
+        // geste local) ne change rien à l'état ; seuls ces instantanés font avancer `stripe_event_at`, jamais une facture. La résiliation
+        // (`deleted`), état final chez Stripe, s'applique toujours
+        $eventAt = $eventCreated !== null ? (new \DateTimeImmutable())->setTimestamp($eventCreated) : null;
+        $outOfOrder = $eventAt !== null && $subscription->getStripeEventAt() !== null && $eventAt < $subscription->getStripeEventAt()
+            && $type !== 'customer.subscription.deleted';
 
         switch ($type) {
             case 'invoice.paid':
@@ -64,31 +147,82 @@ class HandleSubscriptionWebhookUseCase
                 if (($object['paid'] ?? true) === false || (int) ($object['amount_paid'] ?? 0) === 0 && (int) ($object['total'] ?? 0) > 0) {
                     return ['status' => 'ignored', 'detail' => 'facture non payée'];
                 }
+                // la commande de l'échéance est créée même en retard (l'argent est encaissé) ; l'état, lui, n'est pas touché
                 $order = $this->orders->createFromInvoice($subscription, $object);
                 $this->keepPaymentMethod($subscription, $object);
-                $subscription->setPaymentIssue(null);
-                $subscription->setStatus($subscription->getStatus() === Subscription::STATUS_TRIALING && (int) ($object['total'] ?? 0) === 0 ? Subscription::STATUS_TRIALING : Subscription::STATUS_ACTIVE);
                 $periodEnd = $object['lines']['data'][0]['period']['end'] ?? null;
-                if (is_numeric($periodEnd)) {
+                if (!$outOfOrder && $subscription->getStatus() !== Subscription::STATUS_CANCELED) {
+                    $subscription->setPaymentIssue(null);
+                    $subscription->setStatus($subscription->getStatus() === Subscription::STATUS_TRIALING && (int) ($object['total'] ?? 0) === 0 ? Subscription::STATUS_TRIALING : Subscription::STATUS_ACTIVE);
+                }
+                // lot PROVISION-3 : la fin de période ne recule jamais (une facture payée en retard n'en raccourcit pas une plus récente)
+                if (is_numeric($periodEnd) && ($subscription->getCurrentPeriodEnd() === null || (int) $periodEnd > $subscription->getCurrentPeriodEnd()->getTimestamp())) {
                     $subscription->setCurrentPeriodEnd((new \DateTimeImmutable())->setTimestamp((int) $periodEnd));
                 }
                 $em->flush();
+                $this->periodPaid($subscription, $object, $tenantCode);
                 if ($order !== null) {
                     $this->orderMailer->sendOrderConfirmation($order, $locale, rtrim($host, '/') . '/');
                 }
 
-                return ['status' => 'processed', 'detail' => $order ? 'commande ' . $order->getId() : 'sans commande : ' . ($this->orders->lastSkipReason ?? '?')];
+                return ['status' => 'processed', 'detail' => ($outOfOrder ? 'out_of_order, ' : '') . ($order ? 'commande ' . $order->getId() : 'sans commande : ' . ($this->orders->lastSkipReason ?? '?'))];
             case 'invoice.payment_failed':
+                // une facture déjà payée n'est jamais « refusée » après coup, quel que soit l'ordre d'arrivée
+                if (is_string($object['id'] ?? null) && $this->payments?->periodPaidExists($tenantCode, $object['id'])) {
+                    return ['status' => 'ignored', 'detail' => 'facture déjà payée'];
+                }
+                // en retard sur un état plus récent : traité seulement si l'abonnement est encore impayé (l'impayé, le courriel et la
+                // résiliation au dernier essai ne se perdent pas) ; sinon ignoré
+                if ($outOfOrder && $subscription->getStatus() !== Subscription::STATUS_PAST_DUE) {
+                    return ['status' => 'ignored', 'detail' => 'out_of_order'];
+                }
+                // l'échec d'un essai plus ancien que celui déjà noté n'écrase pas l'impayé ni ne renvoie le courriel
+                if ((int) ($object['attempt_count'] ?? 1) < (int) ($subscription->getPaymentIssue()['attemptCount'] ?? 0)) {
+                    return ['status' => 'ignored', 'detail' => 'essai déjà dépassé'];
+                }
+
                 return $this->paymentFailed($subscription, $object, $locale, $host);
             default:
+                if ($outOfOrder) {
+                    return ['status' => 'ignored', 'detail' => 'out_of_order'];
+                }
                 $before = $subscription->getStatus();
                 $this->service->applyStripeState($subscription, SubscriptionStripeGateway::normalize($object));
+                if ($eventAt !== null) {
+                    $subscription->noteStripeEventAt($eventAt);
+                }
                 $em->flush();
                 if ($subscription->getStatus() === Subscription::STATUS_CANCELED && $before !== Subscription::STATUS_CANCELED) {
                     $this->mailer->notify($subscription, 'canceled', $locale, $host);
                 }
 
                 return ['status' => 'processed', 'detail' => $subscription->getStatus()];
+        }
+    }
+
+    /**
+     * Lot PROVISION-3 : « période payée », une seule fois par facture (invoice.paid et invoice.payment_succeeded de la même facture n'en font
+     * qu'une). Les écouteurs (lot ABO-1 : droits nés de la période) ne bloquent jamais le webhook.
+     */
+    private function periodPaid(Subscription $subscription, array $invoice, string $tenantCode): void
+    {
+        $invoiceId = $invoice['id'] ?? null;
+        if ($this->payments === null || !is_string($invoiceId) || $invoiceId === '') {
+            return;
+        }
+        $period = $invoice['lines']['data'][0]['period'] ?? [];
+        $start = is_numeric($period['start'] ?? null) ? (int) $period['start'] : null;
+        $end = is_numeric($period['end'] ?? null) ? (int) $period['end'] : null;
+        $amount = (int) ($invoice['amount_paid'] ?? 0);
+        $reason = is_string($invoice['billing_reason'] ?? null) ? $invoice['billing_reason'] : null;
+        if (!$this->payments->recordPeriodPaid($tenantCode, $invoiceId, (int) $subscription->getId(), $start, $end, $amount, $reason)) {
+            return;
+        }
+        try {
+            $this->dispatcher?->dispatch(new \App\Event\SubscriptionPeriodPaidEvent((int) $subscription->getId(), $tenantCode, $invoiceId, $start, $end, $amount, $reason));
+            $this->payments->markPeriodDispatched($tenantCode, $invoiceId);
+        } catch (\Throwable $e) {
+            $this->logger->error('[Subscription] « période payée » non traitée', ['subscription' => $subscription->getId(), 'exception' => $e::class]);
         }
     }
 

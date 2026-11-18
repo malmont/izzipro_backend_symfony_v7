@@ -97,7 +97,15 @@ class StripeWebhookController extends AbstractController
                 return $this->json(['error' => 'Signature requise'], Response::HTTP_BAD_REQUEST);
             }
 
-            return $this->json($this->subscriptionWebhookUseCase->execute($eventType, $eventData, $request->getSchemeAndHttpHost()));
+            // lot PROVISION-3 : identifiant, date et compte de l'événement pour le journal (un événement déjà traité n'est pas refait) et l'ordre
+            $eventId = is_object($event) ? ($event->id ?? null) : ($event['id'] ?? null);
+            $created = is_object($event) ? ($event->created ?? null) : ($event['created'] ?? null);
+            $account = is_object($event) ? ($event->account ?? null) : ($event['account'] ?? null);
+
+            $result = $this->subscriptionWebhookUseCase->handle($eventType, $eventData, $request->getSchemeAndHttpHost(),
+                is_string($eventId) && $eventId !== '' ? $eventId : null, is_numeric($created) ? (int) $created : null, is_string($account) ? $account : null);
+
+            return $this->json($result, ($result['status'] ?? '') === 'in_progress' ? Response::HTTP_CONFLICT : Response::HTTP_OK);
         }
 
         // Paiement d'un panier autorisé (capture manuelle : amount_capturable_updated ; capture automatique : succeeded) :
