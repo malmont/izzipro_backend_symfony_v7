@@ -447,6 +447,14 @@ la session le reprend alors sous un NOUVEL identifiant, avec l'heure d'origine d
 écrite au journal des deux sites. Sinon : session vidée, retour à la connexion du site d'attache. Le retour sert une fois (lu et retiré).
 Essais : `AdminEntryTest::testReturningHomeKeepsTheSessionOnlyForTheSameUnchangedAccount` (retour normal, compte désactivé, mot de passe
 changé, GET refusé, deux onglets).
+
+**Correctif de sécurité (relecture neuve de RETOUR, 18/11/2026, défaut EN LIGNE depuis l'étape 100)** : quand une entrée d'EasyAdmin se fermait
+en vidant la session (« Quitter », entrée refusée ou fermée, session qui quitte le site visé), le jeton restait dans `TokenStorage` et le
+pare-feu le réécrivait dans la session neuve ; le compte de la plateforme, qui porte le même mot de passe sur chaque site, pouvait ainsi
+rester connecté au site d'attache même désactivé, avec un seul code. Corrigé : le jeton est retiré AVANT tout vidage de session
+(`AdminEntryController::leave`, `AdminEntrySubscriber`, 4 endroits) ; essai : un retour refusé ramène à la connexion, jamais à la page du code.
+Autres corrections de la même relecture : aucune adresse au journal (« Plateforme, prénom »), session neuve au retour, lien de l'agence relu
+sans cache, retour refusé si une trace manque.
 Essai : `AdminEntryTest::testTheBannerNamesTheSiteAndTheOperatorOnAListAndADetailPage` (liste, fiche, page nommée).
 
 ## 10. Lot AG-3d : « Tous mes clients » et « Taxes vérifiées par le commerçant » (18/11/2026, contrat validé par le chef)
