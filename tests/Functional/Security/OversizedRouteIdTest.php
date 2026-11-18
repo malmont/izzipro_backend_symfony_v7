@@ -102,7 +102,7 @@ class OversizedRouteIdTest extends WebTestCase
         $cached = static::getContainer()->get('cache.system')->getItem(OversizedRouteIdListener::CACHE_KEY);
         $this->assertTrue($cached->isHit());
         $this->assertSame(
-            ['admin_mon_site_assistant_confirm|id', 'admin_product_ai_bulk_status|jobId', 'admin_site_configurer_apply|jobId', 'admin_site_configurer_composition|jobId', 'api_products_ai_bulk_status|jobId', 'api_site_assistant_confirm|id', 'gestion_accueil_vignettes_ecarter|id'],
+            ['admin_mon_site_assistant_confirm|id', 'admin_product_ai_bulk_status|jobId', 'admin_site_configurer_apply|jobId', 'admin_site_configurer_composition|jobId', 'api_agency_assistant_confirm|id', 'api_products_ai_bulk_status|jobId', 'api_site_assistant_confirm|id', 'gestion_accueil_vignettes_ecarter|id'],
             (function (array $keys) { sort($keys); return $keys; })(array_keys($cached->get())),
             'un nouveau paramètre id à exigence non numérique doit être voulu : ajuster cette liste'
         );
