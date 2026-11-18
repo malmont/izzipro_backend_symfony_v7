@@ -79,7 +79,7 @@ class GroupEntryTest extends WebTestCase
             ['POST', '/api/order/cancel/5', 'refund'], ['POST', '/api/support/agents', 'accounts'],
             ['POST', '/api/pos/gift-cards/ABC/cash-out', 'refund'],
             // relecture neuve, passe 2 : l'assistant IA du site, les clés des applications, le domaine personnalisé
-            ['POST', '/api/site/assistant', 'assistant'], ['POST', '/api/site/assistant/actions/1/confirm', 'assistant'], ['GET', '/api/app-keys', 'security'],
+            ['POST', '/api/site/assistant', 'assistant'], ['POST', '/api/site/assistant/actions/abcdef0123456789/confirm', 'assistant'], ['GET', '/api/app-keys', 'security'],
             ['POST', '/api/site/domain', 'security'],
             // décisions du chef : IA fermée (unités de la boutique), import des clients finaux fermé
             ['POST', '/api/gestion/console/messages', 'ai'], ['POST', '/api/gestion/conversations/1/messages', 'ai'], ['POST', '/api/products/ai/sheet', 'ai'],
@@ -199,6 +199,11 @@ class GroupEntryTest extends WebTestCase
         $this->assertSame(1, $quit->count(), 'le bandeau de l\'entrée porte « Quitter »');
         $this->client->request('POST', 'https://' . MV_TEST_TENANT2_HOST . '/admin/entree/quitter', ['_token' => (string) $quit->attr('value')], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT2_HOST]);
         $this->assertSame('left', $this->master->query('SELECT ended_reason FROM site_entries ORDER BY id DESC LIMIT 1')->fetchColumn());
+        // lot RETOUR : le directeur revient au siège, toujours connecté (même domaine, comme en production)
+        $this->assertSame('/admin?tenant=' . MV_TEST_TENANT_CODE, $this->client->getResponse()->headers->get('Location'));
+        $this->client->request('GET', 'https://' . MV_TEST_TENANT2_HOST . '/admin?tenant=' . MV_TEST_TENANT_CODE);
+        $this->assertSame(200, $this->client->getResponse()->getStatusCode());
+        $this->assertStringContainsString('Les boutiques du groupe', (string) $this->client->getResponse()->getContent(), 'de retour au siège, avec son sélecteur');
     }
 
     /** @return list<class-string> les écrans CRUD d'un site */
