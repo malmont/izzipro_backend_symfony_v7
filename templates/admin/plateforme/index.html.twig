@@ -253,6 +253,51 @@
         </tbody>
     </table>
 
+    <h2 class="h5 mt-4" id="expeditions-pertes">Boîtiers à expédier</h2>
+    <p class="text-muted small">Préparer : brancher le boîtier une fois à l'entrepôt (il dépose sa demande), le débrancher. Puis réserver pour UN site : son numéro de série et le code de son étiquette (lu au QR). Au premier branchement dans la boutique, l'administrateur du site reçoit « Votre boîtier est branché » et confirme dans les 72 heures. Vérifiez le site dans l'aperçu avant de confirmer.</p>
+    {% if lossShipmentPreview %}
+        <div class="alert alert-warning">
+            <strong>Aperçu, rien n'est écrit.</strong> Boîtier <code>{{ lossShipmentPreview.serial }}</code> pour le site
+            <strong>{{ lossShipmentPreview.site.name }}</strong> (<code>{{ lossShipmentPreview.site.code }}</code>{% if lossShipmentPreview.site.host %}, {{ lossShipmentPreview.site.host }}{% endif %}),
+            module des pertes : oui{% if lossShipmentPreview.orderRef %}, commande {{ lossShipmentPreview.orderRef }}{% endif %} ; boîtier préparé (sa demande est déposée). L'avis partira à son premier branchement dans la boutique, pas avant.
+            <form method="post" action="{{ path('admin_plateforme_loss_shipment') }}" class="mt-2">
+                <input type="hidden" name="_token" value="{{ csrf_token(csrf_id) }}">
+                <input type="hidden" name="step" value="confirmer">
+                {% for k, v in lossShipmentPreview.input %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endfor %}
+                <label class="form-label small">Relisez le code de l'étiquette de CE boîtier (QR) pour confirmer</label>
+                <input type="text" name="code" class="form-control form-control-sm d-inline-block" style="width:12em" required autocomplete="off">
+                <button class="btn btn-sm btn-primary">Confirmer la réservation</button>
+            </form>
+        </div>
+    {% endif %}
+    <form method="post" action="{{ path('admin_plateforme_loss_shipment') }}" class="row g-2 align-items-end mb-3">
+        <input type="hidden" name="_token" value="{{ csrf_token(csrf_id) }}">
+        <input type="hidden" name="step" value="apercu">
+        <div class="col-auto"><label class="form-label small">Numéro de série</label><input type="text" name="serial" class="form-control form-control-sm" required></div>
+        <div class="col-auto"><label class="form-label small">Code de l'étiquette</label><input type="text" name="code" class="form-control form-control-sm" placeholder="KX7-42P-9QM" required autocomplete="off"></div>
+        <div class="col-auto"><label class="form-label small">Site (code)</label><input type="text" name="tenantCode" class="form-control form-control-sm" required></div>
+        <div class="col-auto"><label class="form-label small">Commande</label><input type="text" name="orderRef" class="form-control form-control-sm" maxlength="80"></div>
+        <div class="col-auto"><button class="btn btn-sm btn-outline-primary">Aperçu</button></div>
+    </form>
+    <table class="table table-sm datagrid plateforme-expeditions">
+        <thead><tr><th>N°</th><th>Série</th><th>Site</th><th>Commande</th><th>État</th><th>Branché</th><th>Confirmé</th><th></th></tr></thead>
+        <tbody>
+        {% for e in lossShipments %}
+            <tr>
+                <td>{{ e.id }}</td><td><code>{{ e.serial }}</code></td><td><code>{{ e.tenantCode }}</code></td><td>{{ e.orderRef }}</td>
+                <td>{{ {reserved: 'réservé', plugged: 'branché, à confirmer', confirmed: 'confirmé', cancelled: 'annulé'}[e.status] ?? e.status }}</td>
+                <td class="small">{{ e.pluggedAt ?? '—' }}</td><td class="small">{{ e.confirmedAt ?? '—' }}</td>
+                <td>{% if e.status in ['reserved', 'plugged'] %}
+                    <form method="post" action="{{ path('admin_plateforme_loss_shipment_cancel', {id: e.id}) }}" onsubmit="return confirm('Annuler cette expédition ? Son code sera libéré.');">
+                        <input type="hidden" name="_token" value="{{ csrf_token(csrf_id) }}"><button class="btn btn-sm btn-outline-danger">Annuler</button>
+                    </form>{% endif %}</td>
+            </tr>
+        {% else %}
+            <tr><td colspan="8" class="text-muted">Aucune expédition.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+
     <h2 class="h5 mt-4">Journal{% if selected %} de {{ selected }}{% endif %}</h2>
     <table class="table table-sm datagrid plateforme-journal">
         <thead><tr><th>Le</th><th>Site</th><th>Fonctionnalité</th><th>Événement</th><th>Détail</th></tr></thead>

@@ -64,6 +64,7 @@ notifications:
         loss_digest: 'Loss prevention: daily summary by email'
         weekly_digest: 'Weekly update by email'
         loss_exit: 'Loss prevention: item at the exit without a sale'
+        loss_box_plugged: 'Loss prevention: your box is plugged in'
     # NOTIF-1: follow-up e-mail levels ("Notifications" screen)
     levels:
         site: 'Same as the site'
@@ -96,6 +97,12 @@ notifications:
     cash_critical:
         title: Low cash
         body: 'Your expected balance drops to %amount% on %date%.'
+    loss_box_plugged_cancelled:
+        title: 'Box shipment cancelled'
+        body: 'The platform cancelled the shipment of box %serial%. Do not confirm it.'
+    loss_box_plugged:
+        title: 'Your box is plugged in'
+        body: 'Box %serial% is plugged in at your shop. Confirm "This is my box" within 72 hours. If you did not plug anything in, do not confirm and contact us.'
     loss_exit:
         title: 'Item at the exit, to check'
         body: '%zone%, %time%: a tracked item passes without a linked sale. To check, without holding or accusing anyone.'

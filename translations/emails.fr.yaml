@@ -233,6 +233,26 @@ loss_digest:
     evening_counter_shown: 'Alertes montrées en caisse'
     evening_counter_proceeded: 'Dont « continuer quand même »'
 
+# Lot L6-b (17/11/2026) : un boîtier vendu par la plateforme est branché dans la boutique (indispensable). %serial% : son numéro de série ;
+# %site% : le nom du site. Jamais le code de l'étiquette.
+loss_box_cancelled:
+    subject: '%site% : l''expédition de votre boîtier est annulée'
+    title: 'Expédition de boîtier annulée'
+    greeting: 'Bonjour,'
+    message: 'La plateforme a annulé l''expédition du boîtier %serial%, branché dans votre boutique. Ne le confirmez pas : il n''est plus à relier à votre site.'
+    button: 'Ouvrir l''écran Boîtiers'
+    validity: 'Une question sur ce boîtier ? Répondez à ce courriel ou contactez-nous.'
+    ignore: 'Rien n''a été changé dans votre site.'
+
+loss_box_plugged:
+    subject: '%site% : votre boîtier est branché'
+    title: 'Votre boîtier est branché'
+    greeting: 'Bonjour,'
+    message: 'Le boîtier %serial%, que vous avez acheté, vient d''être branché dans votre boutique. Vérifiez que ce numéro est celui écrit sur votre boîtier, puis ouvrez l''écran « Boîtiers » et confirmez « C''est bien mon boîtier » dans les 72 heures : il se reliera à votre site.'
+    button: 'Ouvrir l''écran Boîtiers'
+    validity: 'Passé 72 heures sans confirmation, le boîtier attend un nouveau branchement.'
+    ignore: 'Si vous n''avez pas branché de boîtier, ne confirmez pas et contactez-nous.'
+
 # Assistance, lot SUPPORT-WEB : invitation d'un agent par l'administrateur du site (un lien à usage unique, valable %hours% heures)
 support_agent_invitation:
     subject: '%site% : votre accès à l''assistance'

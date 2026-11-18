@@ -2210,6 +2210,7 @@ choisi de basculer sans attendre, Fable relira ensuite). La liste fait foi pour 
 | L5-e (**à risque**, sécurité) | backend `app_v2` | le commit du lot L5-e, sans migration (§ 18.13) | `LossBoxToken` (durées), `LossBoxGuardSubscriber` (preuve de la machine sur toute route au jeton), `LossBoxChannelService::proveMachine` et `sameMachine` (la bonne machine passe toujours, les fausses comptent) ; relu par un relecteur neuf |
 | B9 | boîtier, dépôt local | le commit B9 | `izzibox/canal.py` (en-tête `X-Loss-Box-Machine` avec chaque jeton), `izzibox/boitier.py` (`_canal_du_site`), faux serveur (jeton d'une heure, preuve exigée) |
 | L6-a | backend `app_v2` | le commit du lot L6-a (§ 19.4) | `ops/sql/loss_hardware_master.sql` (base maître : matériel vendu, deux offres inactives), `LossHardwareProductRepository` (validation), `LossHardwareSaleController`, `LossHardwareCatalog::forSale` |
+| L6-b (**à risque**) | backend `app_v2` | SQL maître seul, puis le lot (§ 19.5) | `ops/sql/loss_shipment_master.sql`, `LossShipmentService` (tout), les expéditions de `LossPairingRepository`, la garde et le branchement dans `LossPairingService` (`deposit`, `pair`), `LossBoxService::createPairedPrepared`, `LossBoxPluggedNotifier`, le type indispensable `loss_box_plugged` de `GestionNotificationService` |
 
 Vérifié sous Opus : `LossPreventionZoneTest` et le dossier du module verts ; 21 mutations sur L4-a (20 tuées, une équivalente :
 le rejeu d'une arrivée est déjà bloqué par la clé du fait et par la requête de présence) ; 12 mutations sur B5, toutes tuées.
@@ -3058,3 +3059,62 @@ un SQL de la **base maître**, `ops/sql/loss_hardware_master.sql` (idempotent, r
 - **Ce que la photo verra changer** : `GET /api/gestion/pertes/materiel` et `/exercices/materiel` (clés `products`, vide tant que rien
   n'est en vente, et `levels[].forSale`) ; `GET /api/platform/offers` (deux offres inactives de plus) ; deux routes nouvelles du super
   administrateur. Le catalogue public `GET /api/offers` ne change pas (offres inactives).
+
+### 19.5 Lot L6-b codé : boîtier expédié, reconnu au premier branchement (17/11/2026 ; contrat validé par le chef de projet, 5 conditions)
+
+**Lot à risque** (un boîtier sur le mauvais site) : relecteur neuf en deux passes et mutations. **Codé sous Opus, à faire relire par
+Fable** (§ 17.12). Pas de migration de base de site : un SQL de la **base maître**, `ops/sql/loss_shipment_master.sql` (idempotent, relu
+par `tests/bootstrap.php`), posé par le chaperon. Code : `Services/LossShipmentService`, `Services/LossBoxPluggedNotifier`,
+`Master/LossPairingRepository` (expéditions, dans la même transaction que les demandes de jumelage), `Controller/LossShipmentPlatformController`,
+deux routes de `Controller/LossBoxController`, section « Boîtiers à expédier » de la page « Plateforme ».
+
+- **Rien de réversible n'est gardé** (condition 1 du chef de projet) : l'expédition garde l'EMPREINTE du code (la même que le jumelage).
+  Au branchement, la demande de jumelage du boîtier porte le code en clair : le serveur prépare alors les deux empreintes qui relieront
+  le futur boîtier du site, liées à CE site et à l'aléa du jumelage (`key_hash`, `ref`, `link`), exactement ce que fait la saisie du code ;
+  elles s'effacent au retour à `reserved`, à la confirmation et à l'annulation. La confirmation crée le boîtier avec elles
+  (`LossBoxService::createPairedPrepared`, le seul chemin qui écrit un boîtier jumelé ; `createPaired` y passe aussi).
+- **La plateforme réserve en deux temps** (condition 2) : `POST /api/platform/pertes/expeditions { serial, code, tenantCode, orderRef? }`
+  rend l'aperçu sans rien écrire (`preview { serial, orderRef, site { code, name, host, lossPrevention }, pairing: none | waiting }`) ;
+  avec `confirm: true`, la réservation (201 `{ shipment }`). Refus 422 `fields` : `serial` / `code` / `orderRef` `INVALID_VALUE`, `tenantCode`
+  `UNKNOWN_SITE` ou `MODULE_INACTIVE` (plateforme en service, site sans le droit du module), `code` `ALREADY_PAIRED` ; 409
+  `SHIPMENT_EXISTS` (série ou code d'une expédition vivante ; série insensible à la casse). Le code se saisit à la forme de l'étiquette
+  ou se lit au QR (même normalisation que le jumelage). **Préparation obligatoire** (relecture, B3) : le boîtier a été branché une fois à
+  l'entrepôt et a déposé sa demande avec ce code (sa machine est fixée : personne ne prendra le code en chemin) ; sinon 422 `code`
+  `NOT_PREPARED`. Procédure : préparer (brancher, attendre la demande), débrancher, réserver, expédier ; une demande déposée il y a plus
+  de 30 jours est expirée : rebrancher le boîtier à l'entrepôt avant de le réserver. Dans la page « Plateforme », le code se relit à la
+  confirmation et doit être celui de l'aperçu (son empreinte seule est gardée dans la session). **La série** (décision du chef de projet,
+  B2) : la machine la dit en déposant sa demande (`serial`, facultatif, gardé la première fois) ; la série saisie à la réservation doit
+  être celle-là (422 `serial` `SERIAL_MISMATCH`, ou `SERIAL_UNKNOWN` si la machine ne l'a pas dite) : deux boîtiers échangés à la saisie
+  ne se réservent pas. `GET` → `{ shipments [{ id, serial, tenantCode, orderRef, status, boxId, createdAt, createdBy, pluggedAt,
+  confirmBefore, confirmedAt, cancelledAt, cancelledBy }] }` (jamais le code ni une empreinte) ; `POST /{id}/annuler` (réservée ou
+  branchée ; 409 `SHIPMENT_NOT_CANCELLABLE` sinon) : le code est libéré, un boîtier déjà jumelé n'est pas touché. **La réservation ne
+  branche rien** (relecture, B1) : le boîtier est encore à l'entrepôt.
+- **Le premier branchement** : le premier contact de la machine APRÈS la réservation (un dépôt de sa demande, ou sa question `état`, dans
+  une courte transaction de la base maître : une simple lecture tant que rien n'est à brancher) branche l'expédition et, après la
+  transaction, un message (file `email`) prévient chaque administrateur du site (jamais le compte de la plateforme) : notification
+  `loss_box_plugged` (INDISPENSABLE : toujours allumée, sans interrupteur, hors des niveaux et du plafond du jour ; `NOT_SWITCHABLE` si on
+  tente de la couper) et courriel `loss_box_plugged` (`NotificationCatalog`, indispensable), par l'expéditeur de la PLATEFORME, avec le
+  numéro de série (« vérifiez que ce numéro est celui écrit sur votre boîtier »), le lien vers l'écran « Boîtiers » et « si vous n'avez
+  pas branché de boîtier, ne confirmez pas et contactez-nous ». Pas d'avis à un site qui a perdu le droit du module ; le site est relu
+  dans la base maître sans cache.
+- **Le site acheteur confirme dans les 72 h** (condition 3) : `GET /api/gestion/pertes/boitiers/a-confirmer` → `{ boxes [{ id, serial,
+  pluggedAt, pluggedAgo, confirmBefore }], notice }` ; `POST /api/gestion/pertes/boitiers/a-confirmer/{id} { name?, place? }` → 201
+  `{ box }` (« C'est bien mon boîtier ») : le boîtier est créé dans le site de la SESSION et la demande jumelée ; le boîtier, qui redemande
+  avec son code, le reçoit comme après une saisie du code. 404 `SHIPMENT_NOT_FOUND` (inconnue, d'un autre site, déjà confirmée, passée les
+  72 h : le même refus ; le compte de la plateforme non plus ne confirme pas à la place du commerçant) ; passé 72 h, l'expédition revient à
+  `reserved` et le prochain contact de la machine relance l'avis.
+- **Échange de deux boîtiers à la saisie (relecture, B2)** : refusé par la série dite par la machine (ci-dessus) ; le site vérifie aussi
+  que la série affichée est celle écrite sur son boîtier. Une étiquette dont un seul QR porte la série et le code reste un confort pour
+  plus tard.
+- **Annulation d'un boîtier déjà branché** : un message (file `email`) écrit `BOX_SHIPMENT_CANCELLED` au journal du site acheteur et
+  prévient ses administrateurs (notification `loss_box_plugged` au texte « annulée », courriel indispensable `loss_box_cancelled`).
+- **Saisie d'un code refusée** (inconnu, ou réservé à un autre site) : tracée APRÈS la réponse (`LossPairingTraceSubscriber`, à
+  `kernel.terminate`) : `BOX_PAIRING_REFUSED` au journal du site qui a saisi (la même ligne dans les deux cas), et `refused`
+  (`code_other_site`) au journal des expéditions de la plateforme pour un code réservé ailleurs. La réponse garde la même durée.
+- **Un code réservé ne se jumelle jamais à un autre site** : la saisie du code par un autre site reçoit le refus d'un code inconnu, au mot
+  près (la garde est lue pour tout code, avant la demande). Par le site acheteur, la saisie reste le secours, et confirme l'expédition.
+- **Limiteurs et journaux** (condition 4) : la confirmation compte comme un jumelage (`pairAdmin`) ; la liste a son plafond
+  (`shipmentRead`, 120 par site et adresse sur 5 minutes). Journal des expéditions (base maître, `loss_box_shipment_event`) : réservée,
+  branchée, revenue (`unplugged`), confirmée, refusée (dont `other_site`, avec le site qui a tenté), annulée, avec l'auteur ; jamais le code.
+  Journal du module : `BOX_SHIPMENT_CONFIRMED`, `BOX_SHIPMENT_REFUSED` (jamais l'identifiant d'une expédition d'un autre site).
+- Tests : `LossPreventionPairingTest::testASoldBoxIsReservedPluggedAndConfirmedByItsOwnSiteOnly`.

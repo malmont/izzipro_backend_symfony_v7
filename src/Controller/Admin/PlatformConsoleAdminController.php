@@ -40,6 +40,7 @@ class PlatformConsoleAdminController extends AbstractController
         private readonly ?\App\Services\Platform\PlatformAiCreditsService $aiCredits = null, // crédits IA par site (07/11/2026)
         private readonly ?\Symfony\Component\Messenger\MessageBusInterface $bus = null, // lot MOD-1 : « Retirer et résilier »
         private readonly ?\App\LossPrevention\Master\LossHardwareProductRepository $hardware = null, // lot L6-a : matériel de la prévention des pertes
+        private readonly ?\App\LossPrevention\UseCase\LossShipmentUseCase $lossShipments = null, // lot L6-b : boîtiers à expédier
     ) {
     }
 
@@ -117,6 +118,9 @@ class PlatformConsoleAdminController extends AbstractController
             'policies' => $this->console->policies(),
             'offers' => $this->offers->all(false),
             'lossHardware' => $this->hardware?->all(false) ?? [],
+            'lossShipments' => $this->lossShipmentsList(),
+            // lot L6-b : l'aperçu d'une expédition, montré une fois après « Aperçu », avec le formulaire de confirmation
+            'lossShipmentPreview' => $request->getSession()->getFlashBag()->get('loss_shipment_preview')[0] ?? null,
             'requests' => $this->requests->listPending(),
             'events' => $this->repository->events($tenant !== '' ? $tenant : null, 50),
             'selected' => $tenant,
@@ -225,6 +229,72 @@ class PlatformConsoleAdminController extends AbstractController
             }
             $this->addFlash('success', sprintf('Matériel %s enregistré.', $code));
         });
+    }
+
+    /**
+     * Lot L6-b (17/11/2026, `docs/prevention-pertes.md` § 19.5) : réserver un boîtier vendu pour un site, en deux temps. « Aperçu » montre le
+     * site visé (nom, domaine, module) sans rien écrire ; « Confirmer » réserve. Les mêmes règles que `POST /api/platform/pertes/expeditions`.
+     */
+    #[Route('/admin/plateforme/expedition', name: 'admin_plateforme_loss_shipment', methods: ['POST'])]
+    public function lossShipment(Request $request): Response
+    {
+        return $this->action($request, function () use ($request) {
+            $body = ['serial' => trim((string) $request->request->get('serial', '')), 'code' => trim((string) $request->request->get('code', '')),
+                'tenantCode' => trim((string) $request->request->get('tenantCode', '')), 'orderRef' => trim((string) $request->request->get('orderRef', ''))];
+            $confirm = $request->request->get('step') === 'confirmer';
+            // relecture 2 : le code relu à la confirmation doit être celui de l'aperçu (son empreinte, gardée dans la session : jamais le code)
+            $session = $request->getSession();
+            if ($confirm) {
+                $expected = $session->get('loss_shipment_preview_code');
+                $session->remove('loss_shipment_preview_code');
+                $read = $this->shipmentsUseCase()->codeFingerprint($body['code']);
+                if (!is_string($expected) || $read === null || !hash_equals($expected, $read)) {
+                    throw new \InvalidArgumentException('Le code relu n\'est pas celui de l\'aperçu : rien n\'est réservé. Refaites l\'aperçu avec le QR de ce boîtier.');
+                }
+            }
+            try {
+                $result = $this->shipmentsUseCase()->reserveOrPreview($body + ($confirm ? ['confirm' => true] : []), (string) $this->getUser()?->getUserIdentifier());
+            } catch (\App\Gestion\Services\GestionValidationException $e) {
+                throw new \InvalidArgumentException('Expédition refusée : ' . implode(', ', array_map(fn ($k, $v) => "$k ($v)", array_keys($e->fields), $e->fields)) . '.', 0, $e);
+            } catch (\App\Gestion\Services\GestionConflictException $e) {
+                throw new \InvalidArgumentException($e->getMessage(), 0, $e);
+            }
+            if ($confirm) {
+                $this->addFlash('success', sprintf('Boîtier %s réservé pour le site %s.', $result['shipment']['serial'], $result['shipment']['tenantCode']));
+            } else {
+                // le code n'est jamais gardé dans la session (relecture, M2) : il se relit à la confirmation
+                $request->getSession()->getFlashBag()->add('loss_shipment_preview', ['input' => array_diff_key($body, ['code' => true])] + $result['preview']);
+                $session->set('loss_shipment_preview_code', $this->shipmentsUseCase()->codeFingerprint($body['code']));
+            }
+        });
+    }
+
+    #[Route('/admin/plateforme/expedition/{id}/annuler', name: 'admin_plateforme_loss_shipment_cancel', methods: ['POST'], requirements: ['id' => '\d+'])]
+    public function lossShipmentCancel(int $id, Request $request): Response
+    {
+        return $this->action($request, function () use ($id) {
+            try {
+                $this->shipmentsUseCase()->cancel($id, (string) $this->getUser()?->getUserIdentifier());
+            } catch (\App\Gestion\Services\GestionConflictException $e) {
+                throw new \InvalidArgumentException($e->getMessage(), 0, $e);
+            }
+            $this->addFlash('success', sprintf('Expédition n° %d annulée : son code est libéré.', $id));
+        });
+    }
+
+    private function shipmentsUseCase(): \App\LossPrevention\UseCase\LossShipmentUseCase
+    {
+        return $this->lossShipments ?? throw new \InvalidArgumentException('Expéditions des boîtiers indisponibles.');
+    }
+
+    /** @return list<array<string, mixed>> */
+    private function lossShipmentsList(): array
+    {
+        try {
+            return $this->lossShipments?->all()['shipments'] ?? [];
+        } catch (\PDOException) {
+            return []; // la table n'est pas encore posée sur la base maître
+        }
     }
 
     #[Route('/admin/plateforme/demande/{id}/{decision}', name: 'admin_plateforme_request', methods: ['POST'], requirements: ['id' => '\d+', 'decision' => 'grant|refuse'])]

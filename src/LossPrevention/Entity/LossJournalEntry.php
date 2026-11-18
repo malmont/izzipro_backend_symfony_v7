@@ -40,6 +40,14 @@ class LossJournalEntry
     public const OPINION_WRITTEN = 'OPINION_WRITTEN';
     /** Lot L5-d : une alerte de sortie ouverte (zone, hors des heures, exercice) ; jamais une personne */
     public const ALERT_SENT = 'ALERT_SENT';
+    /** Lot L6-b : « C'est bien mon boîtier », le boîtier vendu et branché est confirmé (l'expédition, le boîtier créé ; l'auteur) */
+    public const BOX_SHIPMENT_CONFIRMED = 'BOX_SHIPMENT_CONFIRMED';
+    /** Lot L6-b : une confirmation refusée (expédition inconnue ou d'un autre site, déjà confirmée, passée les 72 h ; l'auteur) */
+    public const BOX_SHIPMENT_REFUSED = 'BOX_SHIPMENT_REFUSED';
+    /** Lot L6-b : la plateforme a annulé l'expédition d'un boîtier déjà branché (écrit par la file des courriels, sans auteur du site) */
+    public const BOX_SHIPMENT_CANCELLED = 'BOX_SHIPMENT_CANCELLED';
+    /** Lot L6-b : une saisie de code refusée (inconnu, ou réservé à un autre site : la même ligne), tracée APRÈS la réponse */
+    public const BOX_PAIRING_REFUSED = 'BOX_PAIRING_REFUSED';
     /** Exercice lancé (lot EX-1) : son numéro (qui ne redescend jamais) et son scénario ; sans constat rattaché, donc jamais supprimé */
     public const EXERCISE_STARTED = 'EXERCISE_STARTED';
     /** Exercices effacés par le gérant (lot EX-1) : leur nombre ; sans constat rattaché */

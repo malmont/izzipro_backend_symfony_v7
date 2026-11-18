@@ -229,6 +229,26 @@ loss_digest:
     evening_counter_shown: 'Alerts shown at the till'
     evening_counter_proceeded: 'Of which "continue anyway"'
 
+# Lot L6-b (17/11/2026): a box sold by the platform is plugged in at the shop (indispensable). %serial%: its serial number; %site%:
+# the site's name. Never the label code.
+loss_box_cancelled:
+    subject: '%site%: the shipment of your box is cancelled'
+    title: 'Box shipment cancelled'
+    greeting: 'Hello,'
+    message: 'The platform cancelled the shipment of box %serial%, plugged in at your shop. Do not confirm it: it is no longer to be linked to your site.'
+    button: 'Open the Boxes screen'
+    validity: 'A question about this box? Reply to this e-mail or contact us.'
+    ignore: 'Nothing was changed in your site.'
+
+loss_box_plugged:
+    subject: '%site%: your box is plugged in'
+    title: 'Your box is plugged in'
+    greeting: 'Hello,'
+    message: 'Box %serial%, which you bought, has just been plugged in at your shop. Check that this number is the one written on your box, then open the "Boxes" screen and confirm "This is my box" within 72 hours: it will link to your site.'
+    button: 'Open the Boxes screen'
+    validity: 'After 72 hours without confirmation, the box waits for a new plug-in.'
+    ignore: 'If you did not plug in a box, do not confirm and contact us.'
+
 # Support, SUPPORT-WEB: an agent invited by the site administrator (a single-use link, valid for %hours% hours)
 support_agent_invitation:
     subject: '%site%: your access to customer support'

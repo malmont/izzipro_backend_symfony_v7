@@ -45,10 +45,10 @@ use Symfony\Component\RateLimiter\Storage\CacheStorage;
 class LossBoxLimits
 {
     public const LIMITS = ['open' => 20, 'openGlobal' => 60, 'refused' => 60, 'machine' => 10, 'calls' => 600, 'facts' => 20000, 'till' => 6000,
-        'pairOpen' => 20, 'pairNew' => 10, 'pairFailed' => 30, 'pairPolls' => 120, 'pairDelivery' => 10, 'pairAdmin' => 10, 'pairAdminSite' => 30, 'pairWarning' => 1];
+        'pairOpen' => 20, 'pairNew' => 10, 'pairFailed' => 30, 'pairPolls' => 120, 'pairDelivery' => 10, 'pairAdmin' => 10, 'pairAdminSite' => 30, 'pairWarning' => 1, 'shipmentRead' => 120];
     private const INTERVALS = ['open' => '15 minutes', 'openGlobal' => '15 minutes', 'refused' => '15 minutes', 'machine' => '15 minutes', 'calls' => '5 minutes', 'facts' => '1 hour', 'till' => '5 minutes',
         'pairOpen' => '15 minutes', 'pairNew' => '1 hour', 'pairFailed' => '15 minutes', 'pairPolls' => '5 minutes', 'pairDelivery' => '15 minutes', 'pairAdmin' => '15 minutes',
-        'pairAdminSite' => '15 minutes', 'pairWarning' => '1 hour'];
+        'pairAdminSite' => '15 minutes', 'pairWarning' => '1 hour', 'shipmentRead' => '5 minutes'];
 
     /** @var array<string, RateLimiterFactory> */
     private array $factories = [];
@@ -163,6 +163,12 @@ class LossBoxLimits
         $limit = $this->factories[$name]->create($key)->consume(0);
 
         return $limit->getRemainingTokens() > 0 ? null : max(1, $limit->getRetryAfter()->getTimestamp() - time());
+    }
+
+    /** Lot L6-b : la liste des boîtiers branchés à confirmer, lue par un site et une adresse (la confirmation, elle, compte comme un jumelage) */
+    public function shipmentRead(string $site, string $ip): ?int
+    {
+        return $this->consume('shipmentRead', $site . '|' . $ip, 1);
     }
 
     private function consume(string $name, string $key, int $tokens): ?int
