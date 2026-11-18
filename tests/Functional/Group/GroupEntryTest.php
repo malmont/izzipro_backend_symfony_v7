@@ -135,6 +135,14 @@ class GroupEntryTest extends WebTestCase
         static::getContainer()->get('cache.app')->delete('site_entry_' . (int) $again['entry']);
         $this->assertSame(401, $this->request('GET', '/api/contacts', (string) $again['token'])->getStatusCode(), 'plus administrateur du siège');
         $this->assertSame('role', $this->master->query('SELECT ended_reason FROM site_entries WHERE id = ' . (int) $again['entry'])->fetchColumn());
+
+        // la boutique sortie du groupe par un autre chemin que « quitter » : le lien relu ferme l'entrée (seconde garde, sans le cache)
+        $this->pdo(MV_TEST_TENANT_DB)->exec("UPDATE \"user\" SET roles = '[\"ROLE_ADMIN\"]' WHERE email = 'g1b-directeur-{$this->tag}@example.invalid'");
+        $third = $this->enter($director, MV_TEST_TENANT2_CODE);
+        $this->master->exec("UPDATE shop_group_sites SET left_at = NOW() WHERE tenant_code = '" . MV_TEST_TENANT2_CODE . "'");
+        static::getContainer()->get('cache.app')->delete('site_entry_' . (int) $third['entry']);
+        $this->assertSame(401, $this->request('GET', '/api/contacts', (string) $third['token'])->getStatusCode(), 'boutique hors du groupe');
+        $this->assertSame('left', $this->master->query('SELECT ended_reason FROM site_entries WHERE id = ' . (int) $third['entry'])->fetchColumn());
     }
 
     public function testTheDirectorEntersFromEasyAdminSeesEveryScreenAndNotTheRefund(): void
