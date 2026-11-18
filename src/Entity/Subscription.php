@@ -103,6 +103,14 @@ class Subscription
     #[ORM\Column(length: 50, nullable: true)]
     private ?string $fulfillmentTarget = null;
 
+    /** Lot PROVISION-3 : date chez Stripe du dernier événement appliqué (ou de la dernière relecture chez Stripe) ; un événement plus ancien est ignoré */
+    #[ORM\Column(name: 'stripe_event_at', type: Types::DATETIME_IMMUTABLE, nullable: true)]
+    private ?\DateTimeImmutable $stripeEventAt = null;
+
+    public function getStripeEventAt(): ?\DateTimeImmutable { return $this->stripeEventAt; }
+    /** Garde la plus tardive : la date ne recule jamais */
+    public function noteStripeEventAt(\DateTimeImmutable $at): static { if ($this->stripeEventAt === null || $at > $this->stripeEventAt) { $this->stripeEventAt = $at; } return $this; }
+
     public function getFulfillmentTarget(): ?string { return $this->fulfillmentTarget; }
     public function setFulfillmentTarget(?string $target): static { $t = $target !== null ? trim($target) : ''; $this->fulfillmentTarget = $t !== '' ? mb_substr($t, 0, 50) : null; return $this; }
 

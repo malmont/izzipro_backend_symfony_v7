@@ -1,0 +1,10 @@
+[Unit]
+Description=Arkanoa : réconciliation nocturne des paiements des offres
+
+[Timer]
+OnCalendar=*-*-* 05:40:00 UTC
+Persistent=true
+RandomizedDelaySec=120
+
+[Install]
+WantedBy=timers.target
