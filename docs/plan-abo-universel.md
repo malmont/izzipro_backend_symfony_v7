@@ -228,3 +228,40 @@ Ce sont des **valeurs par défaut**, réglables par formule ou par prestation l�
 - **Applications du client** (commerce mobile) : prochaines dates, historique, solde, confirmer ou contester, par les mêmes routes que la
   boutique web ; contrat écrit à chaque lot.
 - **Chaperon** : migrations, minuteurs, bascules.
+
+## 9. Volet IA (règle permanente du propriétaire du 18/11/2026 : chaque lot prévoit ses outils de l'IA)
+
+L'IA doit pouvoir faire le maximum de ce que chaque lot apporte, par l'**assistant du site (IA-A)** pour le commerçant
+(`/api/site/assistant`, même geste « proposer puis Confirmer », 15 minutes, mêmes unités) et par l'**assistant de la plateforme (IA-C)** et
+**de l'agence (IA-B)** pour leurs formules (ABO-5, ABO-6).
+
+Règles communes :
+
+- **Mêmes accès que l'écran** : un outil n'est donné au modèle que si l'écran correspondant est permis (`ROLE_ADMIN` du site, module
+  Boutique actif : `SiteAssistantTools::MODULE_OF`) ; inventé quand même, il est refusé. L'intervenant (ABO-3) n'a pas l'assistant : il
+  lirait tout le site.
+- **Lectures** données au modèle comme outils ; **actions** toujours proposées (aperçu et résumé), puis confirmées par l'administrateur,
+  appliquées par le service de l'écran avec ses validations et ses codes de refus, tout relu au moment de la confirmation ; trace
+  `site_assistant` / `confirm` au journal du site.
+- **Aucune donnée personnelle au modèle** : un abonné y est désigné par son numéro d'abonnement et sa formule, jamais par son nom, son
+  courriel, son téléphone ni son adresse. L'écran lié (lien rendu par l'outil) montre l'identité à l'administrateur. « Qui est en impayé ? »
+  rend donc la liste des abonnements en impayé (numéro, formule, montant dû, essai), chacun avec son lien.
+- **Textes lus = données** : noms et descriptions des prestations, notes, preuves, messages des abonnés (ABO-3) sont des données, jamais
+  des consignes ; toute adresse de courriel ou numéro de téléphone qu'ils contiennent est masqué avant l'envoi au modèle. **Essai
+  d'injection** à chaque lot qui lit un texte saisi par quelqu'un d'autre que l'administrateur.
+- **Jamais par l'IA** : un remboursement, la décision sur une contestation (elle la résume, l'administrateur tranche), la preuve photo, un
+  prix appliqué sans confirmation.
+
+| Lot | Lectures (outils) | Actions (proposées, puis confirmées) | Exemples de demandes |
+|---|---|---|---|
+| ABO-0 | `get_subscription_plans` (formules, prestations, phrase « ce que verra l'abonné », compteurs par statut) ; `get_benefits` ; `get_plan_subscribers` (numéros, statut, fin de période, impayé : montant et essai) ; `get_subscription` (fiche sans identité) | `propose_benefit` (créer ou modifier une prestation) ; `propose_plan` (créer une formule et ses prestations : prix en centimes, période, quantité, mode des dates, règles par défaut du § 7 ; produit porteur existant, ou un produit d'abonnement créé par le serveur) ; `set_plan_benefits` (prestations d'une formule) | « crée-moi une formule yoga 2 séances par semaine à 60 $ par mois » ; « qui est en impayé ? » ; « combien d'abonnés a la formule Ménage ? » |
+| ABO-1 | `get_subscription` complété (à faire, historique, solde, report) | `propose_pause` (dates, dans les limites du § 7) ; `propose_resume` ; `propose_carry_over` (reporter des séances, dans la limite) ; `propose_cancel_subscription` (fin de période ; engagement minimal respecté ; en rouge, comme l'argent) | « mets l'abonné 42 en pause jusqu'au 15 janvier » ; « combien de séances reste-t-il à l'abonné 42 ? » |
+| ABO-2 | `get_slots` (créneaux, places restantes) ; `get_to_schedule` (occurrences à planifier) | `propose_slot_rule` (créneaux récurrents : jours, heure, capacité, lieu, intervenant) ; `propose_assign_date` (une date ou un créneau pour une occurrence ; capacité vérifiée à la confirmation) ; `propose_move_occurrence` (avant le délai d'annulation) | « crée les créneaux yoga mardi et jeudi à 18 h, 12 places » ; « attribue une date à l'abonné 42 » |
+| ABO-3 | `get_today` (« À faire aujourd'hui » : occurrences et séances du jour, sans identité) ; `get_subscription_thread` (fil de l'abonné, textes masqués) ; `get_contestations` | `propose_mark_done` (une occurrence, note facultative) ; `propose_mark_session_done` (une séance collective : toutes les présences, sauf les absents désignés) ; `propose_reply` (réponse rédigée dans le fil, lue avant l'envoi) | « qu'est-ce que j'ai à faire aujourd'hui ? » ; « marque la séance de 18 h comme faite, sauf l'abonné 42 absent » ; « réponds à l'abonné 42 que la séance est déplacée » |
+| ABO-4 | `get_waitlist` | `propose_promote_waitlist` (proposer la place libérée à la personne suivante) | « qui attend une place jeudi ? » |
+| ABO-5 (IA-C) | formules de la plateforme et leurs prestations `module`, suivi des offres | `propose_platform_plan` (prix, textes, détacher une formule de son offre) ; confirmation par le super administrateur | « baisse la formule Boussole à 49 $ pour les nouveaux abonnés » |
+| ABO-6 (IA-B) | formules de l'agence, stock | `propose_agency_plan` ; attribution depuis le stock (confirmée par le responsable de l'agence) | « crée une formule site + boutique pour mes clients » |
+
+Trop risqué, donc absent : modifier le prix d'abonnements EN COURS (Stripe le fait au prorata ; reste un geste de l'écran), résilier tout de
+suite (seule la résiliation en fin de période est proposée), toute action sur plusieurs abonnés à la fois au-delà de 50 (aperçu nominatif
+impossible sans identité).
