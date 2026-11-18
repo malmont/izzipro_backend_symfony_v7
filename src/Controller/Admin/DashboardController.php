@@ -670,6 +670,18 @@ class DashboardController extends AbstractDashboardController
         }
     }
 
+    /** Incidents nouveaux + signalements sans réponse (base maître) ; jamais une panne du menu : 0 si la lecture échoue */
+    private function platformIncidentsWaiting(): int
+    {
+        try {
+            return (int) $this->tenantConnectionManager->getPdoMaster()->query(
+                "SELECT (SELECT COUNT(*) FROM platform_incident WHERE status = 'new') + (SELECT COUNT(*) FROM platform_bug_report WHERE status IN ('received', 'in_progress') AND answered_at IS NULL)"
+            )->fetchColumn();
+        } catch (\Throwable) {
+            return 0;
+        }
+    }
+
     /** Entrées du menu à plat : une section (`MenuItem::section`) ouvre un groupe, les liens qui suivent en font partie */
     private function menuEntries(): iterable
     {
@@ -703,6 +715,10 @@ class DashboardController extends AbstractDashboardController
         // Sites de la plateforme (lot TYPE-1, 16/11/2026) : pastilles calculées, création d'un site avec son type, demandes à étapes
         yield MenuItem::linkToRoute('Plateforme : sites', 'fas fa-sitemap', 'admin_plateforme_sites')
             ->setPermission('ROLE_SUPER_ADMIN');
+        // Incidents de la plateforme (demande du propriétaire, 18/11/2026) : incidents nouveaux et signalements sans réponse, au compteur
+        $incidents = MenuItem::linkToRoute('Plateforme : incidents', 'fas fa-bug', 'admin_plateforme_incidents')->setPermission('ROLE_SUPER_ADMIN');
+        $waiting = $this->isGranted('ROLE_SUPER_ADMIN') ? $this->platformIncidentsWaiting() : 0;
+        yield $waiting > 0 ? $incidents->setBadge($waiting, 'danger') : $incidents;
         
         yield MenuItem::section('Boutique : accueil et pages');
         yield MenuItem::linkToCrud('Diaporama de l\'accueil', 'fas fa-images', HomeSlider::class);

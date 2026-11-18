@@ -281,6 +281,27 @@ class AdminEntryTest extends WebTestCase
         $this->assertSame('left', $this->master->query('SELECT ended_reason FROM site_entries ORDER BY id DESC LIMIT 1')->fetchColumn());
     }
 
+    /** Demande du propriétaire (18/11/2026) : « Plateforme : incidents » au menu, super administrateur seul, avec le compteur de ce qui attend */
+    public function testThePlatformMenuShowsTheIncidentsWithWhatIsWaiting(): void
+    {
+        $tag = 'menu-' . $this->tag;
+        try {
+            $this->master->exec("INSERT INTO platform_incident (fingerprint, app, level, message, first_seen_at, last_seen_at) VALUES ('$tag-1', 'backend', 'error', 'essai', NOW(), NOW()), ('$tag-2', 'backend', 'error', 'essai', NOW(), NOW())");
+            $expected = (int) $this->master->query("SELECT (SELECT COUNT(*) FROM platform_incident WHERE status = 'new') + (SELECT COUNT(*) FROM platform_bug_report WHERE status IN ('received', 'in_progress') AND answered_at IS NULL)")->fetchColumn();
+            $platform = $this->user(MV_TEST_TENANT_DB, MV_TEST_TENANT_CODE, 'plateforme', ['ROLE_ADMIN', 'ROLE_SUPER_ADMIN'], 'Paul', true);
+            $this->login($platform, MV_TEST_TENANT_HOST, MV_TEST_TENANT_DB, MV_TEST_TENANT_CODE);
+            $menu = (new \Symfony\Component\DomCrawler\Crawler($this->page('GET', '/admin', MV_TEST_TENANT_HOST)))->filterXPath("//a[contains(., 'Plateforme : incidents')]");
+            $this->assertSame(1, $menu->count(), 'l\'entrée du menu');
+            $this->assertStringContainsString('Plateforme : incidents', $menu->text());
+            $this->assertStringContainsString((string) $expected, $menu->text(), 'le compteur : incidents nouveaux et signalements sans réponse');
+            $admin = $this->user(MV_TEST_TENANT_DB, MV_TEST_TENANT_CODE, 'admin', ['ROLE_ADMIN'], 'Ana', true);
+            $this->login($admin, MV_TEST_TENANT_HOST, MV_TEST_TENANT_DB, MV_TEST_TENANT_CODE);
+            $this->assertStringNotContainsString('Plateforme : incidents', $this->page('GET', '/admin', MV_TEST_TENANT_HOST), 'jamais pour un administrateur de site');
+        } finally {
+            $this->master->exec("DELETE FROM platform_incident WHERE fingerprint LIKE '$tag-%'");
+        }
+    }
+
     /** Lot BANDEAU (18/11/2026) : pendant une entrée, chaque page d'EasyAdmin (liste, fiche, page nommée) dit où l'on est et en tant que qui */
     public function testTheBannerNamesTheSiteAndTheOperatorOnAListAndADetailPage(): void
     {
@@ -307,6 +328,9 @@ class AdminEntryTest extends WebTestCase
             $this->assertSame([(string) $described['name'], 'Plateforme, Paul'], [trim($banner->filter('[data-entry-site]')->text()), trim($banner->filter('[data-entry-as]')->text())], "$kind : le site et qui");
             $this->assertStringContainsString((string) $described['host'], $banner->text(), "$kind : l'adresse du site");
             $this->assertSame(1, $banner->filter('form[action="/admin/entree/quitter"]')->count(), "$kind : le bouton pour quitter");
+            // retouche du propriétaire : un vrai bouton « Revenir à <site d'attache> », et l'échéance à l'heure du site d'attache, l'UTC en second
+            $this->assertStringContainsString('Revenir à', $banner->filter('[data-entry-quit]')->text(), "$kind : le bouton");
+            $this->assertMatchesRegularExpression('/jusqu\'à \d{2} h \d{2}, heure de .+ \(\d{2}:\d{2} UTC\)/u', $banner->filter('[data-entry-until]')->text(), "$kind : l'échéance");
             $this->assertStringNotContainsString('@', $banner->text(), "$kind : jamais une adresse de courriel");
         }
     }

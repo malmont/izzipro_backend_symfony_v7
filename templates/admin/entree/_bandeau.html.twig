@@ -1,15 +1,16 @@
 {# Lot BANDEAU (18/11/2026) : sur toutes les pages d'EasyAdmin pendant une entrée dans un autre site #}
 {% set banner = admin_entry_banner() %}
 {% if banner %}
-<div class="alert alert-warning d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3" data-entry-banner>
+<div class="alert d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3" data-entry-banner style="background:#fff7e0;border:1px solid #b45309;color:#1f2937">
     <span>
         Vous êtes dans <strong data-entry-site>{{ banner.siteName }}</strong>{% if banner.host %} ({{ banner.host }}){% endif %}
         en tant que <strong data-entry-as>{{ banner.as }}</strong>.
-        <small class="text-muted">Entrée tracée depuis {{ banner.homeName }}{% if banner.expiresAt %}, jusqu'à {{ banner.expiresAt|date('H:i', 'UTC') }} (UTC){% endif %}.</small>
+        <span style="color:#374151" data-entry-until>Entrée tracée depuis {{ banner.homeName }}{% if banner.expiresAt %}, jusqu'à {% if banner.expiresHomeTime %}{{ banner.expiresHomeTime }}, heure de {{ banner.homeName }} ({{ banner.expiresAt|date('H:i', 'UTC') }} UTC){% else %}{{ banner.expiresAt|date('H:i', 'UTC') }} (UTC){% endif %}{% endif %}.</span>
     </span>
     <form method="post" action="{{ path('admin_entree_quitter') }}" class="m-0">
         <input type="hidden" name="_token" value="{{ csrf_token('admin_entree_quitter') }}">
-        <button type="submit" class="btn btn-sm btn-outline-danger" data-entry-quit>Revenir à {{ banner.homeName }}</button>
+        {# retouche du propriétaire : un vrai bouton, texte blanc sur fond foncé (contraste supérieur à 4,5:1) #}
+        <button type="submit" class="btn btn-sm" data-entry-quit style="background:#1e3a8a;color:#ffffff;border:1px solid #1e3a8a;font-weight:600">Revenir à {{ banner.homeName }}</button>
     </form>
 </div>
 {% endif %}

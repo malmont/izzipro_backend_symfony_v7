@@ -33,10 +33,16 @@ class StoreClock
 
     public static function resolve(?Entreprise $e): array
     {
-        if ($e?->getPosTimezone()) {
-            return ['timezone' => $e->getPosTimezone(), 'source' => 'setting'];
+        return self::resolveFrom($e?->getPosTimezone(), $e?->getAddressEntreprise()?->getCountry(), $e?->getAddressEntreprise()?->getState());
+    }
+
+    /** La même règle à partir des seules valeurs (fuseau réglé, pays, province), lues ailleurs que par la fiche Doctrine du site courant */
+    public static function resolveFrom(?string $timezone, ?string $countryRaw, ?string $state): array
+    {
+        if ($timezone !== null && $timezone !== '' && in_array($timezone, \DateTimeZone::listIdentifiers(), true)) {
+            return ['timezone' => $timezone, 'source' => 'setting'];
         }
-        $address = TaxEngine::normalizeAddress(['country' => $e?->getAddressEntreprise()?->getCountry(), 'province' => $e?->getAddressEntreprise()?->getState()]);
+        $address = TaxEngine::normalizeAddress(['country' => $countryRaw, 'province' => $state]);
         $country = $address['country'] ?? null;
         $province = $address['province'] ?? null;
         if ($country === 'CA' && $province !== null && isset(self::BY_PROVINCE_CA[$province])) {
