@@ -555,6 +555,8 @@
         "GET /api/agency/sites/availability",
         "GET /api/agency/sites/{code}/modules",
         "GET /api/agency/sites/{code}/storefront",
+        "POST /api/agency/assistant",
+        "POST /api/agency/assistant/actions/{id}/confirm",
         "POST /api/agency/sites",
         "POST /api/agency/sites/{code}/invitation",
         "POST /api/agency/sites/{code}/storefront/open",

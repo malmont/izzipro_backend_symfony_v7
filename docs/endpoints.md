@@ -261,7 +261,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (653)
+## Boutique et commun (655)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -292,6 +292,8 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/api/adresses` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\AdressController\AdressApiController::getUserAdresses` |
 | POST | `/api/adresses` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\AdressController\AdressApiController::createAdress` |
 | GET | `/api/agency/assistance` | ROLE_AGENCY ou ROLE_AGENCY_MEMBER | `Controller\AgencyController\AgencyController::assistance` |
+| POST | `/api/agency/assistant/actions/{id}/confirm` | ROLE_AGENCY ou ROLE_AGENCY_MEMBER | `Controller\AgencyController\AgencyController::assistantConfirm` |
+| POST | `/api/agency/assistant` | ROLE_AGENCY ou ROLE_AGENCY_MEMBER | `Controller\AgencyController\AgencyController::assistantChat` |
 | GET | `/api/agency/clients` | ROLE_AGENCY ou ROLE_AGENCY_MEMBER | `Controller\AgencyController\AgencyController::clients` |
 | GET | `/api/agency/me` | ROLE_AGENCY ou ROLE_AGENCY_MEMBER | `Controller\AgencyController\AgencyController::me` |
 | GET | `/api/agency/site-requests/{id}` | ROLE_AGENCY ou ROLE_AGENCY_MEMBER | `Controller\AgencyController\AgencyController::siteRequest` |
