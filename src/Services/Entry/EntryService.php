@@ -330,10 +330,15 @@ class EntryService
     public function returningAccount(array $back): ?User
     {
         $home = $this->agencies->tenant($back['home']);
-        if ($home === null || $back['otpAt'] > time()) {
+        $row = $this->entries->find($back['entry']);
+        if ($home === null || $back['otpAt'] > time() || $row === null || $row['home_tenant_code'] !== $back['home'] || (int) $row['account_id'] !== $back['account']) {
             return null;
         }
         try {
+            // relecture de RETOUR : le lien (agence vivante, site encore géré, rôle) relu SANS le cache d'une minute
+            if ($this->broken($row)[0] !== null) {
+                return null;
+            }
             $this->emProvider->switchTenant((string) $home['dbname'], (string) $home['code']);
             $user = $this->emProvider->getEntityManager()->find(User::class, $back['account']);
             if (!$user instanceof User || mb_strtolower(trim((string) $user->getEmail())) !== mb_strtolower(trim($back['email']))
@@ -352,22 +357,26 @@ class EntryService
         }
     }
 
-    /** Lot RETOUR : une ligne au journal du site quitté ET à celui du site d'attache ; une trace manquante ne bloque pas le retour */
-    public function traceReturn(int $entryId, string $target, string $home, string $label): void
+    /** Lot RETOUR : une ligne au journal du site quitté ET à celui du site d'attache ; faux si l'une manque (le retour est alors refusé) */
+    public function traceReturn(int $entryId, string $target, string $home, string $label): bool
     {
         foreach ([$target, $home] as $code) {
             $site = $this->agencies->tenant($code);
             if ($site === null) {
-                continue;
+                return false;
             }
             try {
                 $this->databases->pdo((string) $site['dbname'])->prepare('INSERT INTO content_audit_log (created_at, user_identifier, tenant, resource, resource_id, action, fields, after_state) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
                     ->execute([(new \DateTimeImmutable('now', new \DateTimeZone('UTC')))->format('Y-m-d H:i:s'), mb_substr($label !== '' ? $label : 'Entrée', 0, 180), (string) $site['code'],
                         self::JOURNAL_RESOURCE, (string) $entryId, 'return', 'site', json_encode(['from' => $target, 'to' => $home], \JSON_UNESCAPED_UNICODE)]);
             } catch (\Throwable $e) {
-                $this->logger->error('Retour au site d\'attache : trace non écrite (' . $e::class . ').');
+                $this->logger->error('Retour au site d\'attache : trace non écrite (' . $e::class . ') : retour refusé.');
+
+                return false;
             }
         }
+
+        return true;
     }
 
     /** Ferme les entrées ouvertes d'un compte de ce site d'attache (déconnexion) : refusées dès la requête suivante */

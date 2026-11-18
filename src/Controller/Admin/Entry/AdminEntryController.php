@@ -126,19 +126,22 @@ class AdminEntryController extends AbstractController
         $this->entries->endEntry($entry['id'], 'left');
         $back = AdminEntrySession::takeReturn($session);
         $account = $back !== null && $back['home'] === $entry['home'] && $back['entry'] === $entry['id'] && $this->tokens !== null ? $this->entries->returningAccount($back) : null;
-        if ($account === null) {
+        // le libellé des journaux : « Agence X, prénom » ou « Plateforme, prénom », jamais une adresse (relecture de RETOUR)
+        $current = $this->getUser();
+        $operator = $current instanceof User ? \App\Security\Entry\ExternalOperator::platformLabel((string) $current->getFirstname()) : (string) $current?->getUserIdentifier();
+        if ($account === null || !$this->entries->traceReturn($entry['id'], $entry['target'], $entry['home'], $operator)) {
+            // relecture de RETOUR : le jeton part AVANT de vider la session (sinon le pare-feu le réécrit dans la session neuve)
+            $this->tokens?->setToken(null);
             $session->invalidate();
 
             return new RedirectResponse('/?tenant=' . rawurlencode($entry['home']));
         }
-        $operator = $this->getUser()?->getUserIdentifier();
-        $session->remove(AdminEntrySession::KEY);
-        $session->remove(\App\Security\PlatformAccessSubscriber::SESSION_KEY); // une nouvelle connexion au site d'attache : tracée de nouveau
-        $session->migrate(true); // nouvel identifiant de session
+        // une session NEUVE (nouvel identifiant, aucune clé de l'entrée : brouillons, messages, page visée…), puis le site, la marque du code
+        // à son heure d'origine et le compte d'attache
+        $session->invalidate();
         $session->set('_active_admin_tenant', $entry['home']);
         OtpSession::markValidatedAt($session, $account, $entry['home'], $back['otpAt']);
         $this->tokens->setToken(new \Symfony\Component\Security\Http\Authenticator\Token\PostAuthenticationToken($account, 'main', $account->getRoles()));
-        $this->entries->traceReturn($entry['id'], $entry['target'], $entry['home'], (string) $operator);
 
         return new RedirectResponse('/admin?tenant=' . rawurlencode($entry['home']));
     }

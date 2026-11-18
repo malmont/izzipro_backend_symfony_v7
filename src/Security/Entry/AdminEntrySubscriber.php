@@ -26,6 +26,8 @@ final class AdminEntrySubscriber implements EventSubscriberInterface
         private readonly Security $security,
         private readonly EntryService $entries,
         private readonly TenantConnectionProvider $tenants,
+        // relecture de RETOUR : le jeton part avant tout vidage de session (sinon le pare-feu le réécrit dans la session neuve)
+        private readonly ?\Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorageInterface $tokens = null,
     ) {
     }
 
@@ -47,7 +49,8 @@ final class AdminEntrySubscriber implements EventSubscriberInterface
         if ($entry === null) {
             if ($user instanceof ExternalOperator) {
                 // un opérateur sans entrée en session : jamais servi
-                $session->invalidate();
+                $this->tokens?->setToken(null);
+            $session->invalidate();
                 $event->setResponse(new RedirectResponse('/'));
             }
 
@@ -60,8 +63,10 @@ final class AdminEntrySubscriber implements EventSubscriberInterface
             // la session a quitté le site visé, ou n'est plus celle de l'entrée : l'entrée se ferme, la session continue sans elle
             $this->entries->endEntry($entry['id'], 'left');
             $session->remove(AdminEntrySession::KEY);
+            $session->remove(AdminEntrySession::RETURN_KEY);
             if ($user instanceof ExternalOperator) {
-                $session->invalidate();
+                $this->tokens?->setToken(null);
+            $session->invalidate();
                 $event->setResponse(new RedirectResponse('/?tenant=' . rawurlencode($entry['home'])));
             }
 
@@ -69,6 +74,7 @@ final class AdminEntrySubscriber implements EventSubscriberInterface
         }
         $reason = $this->entries->sessionEntry($entry, $current);
         if ($reason !== null) {
+            $this->tokens?->setToken(null);
             $session->invalidate();
             $event->setResponse(new RedirectResponse('/?tenant=' . rawurlencode($entry['home'])));
         }
@@ -81,6 +87,7 @@ final class AdminEntrySubscriber implements EventSubscriberInterface
         if ($entry !== null) {
             $this->entries->endEntry($entry['id'], 'logout');
             $request->getSession()->remove(AdminEntrySession::KEY);
+            $request->getSession()->remove(AdminEntrySession::RETURN_KEY);
         }
     }
 }

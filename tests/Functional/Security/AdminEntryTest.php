@@ -347,6 +347,8 @@ class AdminEntryTest extends WebTestCase
             if ($case !== 'normal') {
                 $this->assertSame('/?tenant=' . MV_TEST_TENANT_CODE, $this->client->getResponse()->headers->get('Location'), $case . ' : retour à la connexion');
                 $this->sameDomain('/admin?tenant=' . MV_TEST_TENANT_CODE, 302);
+                // relecture de RETOUR : la connexion, jamais la page du code (le compte n'est plus du tout dans la session)
+                $this->assertSame('/', parse_url((string) $this->client->getResponse()->headers->get('Location'), \PHP_URL_PATH), $case . ' : retour à la connexion, pas au code');
                 continue;
             }
             // retour normal : le compte d'attache, sans nouvelle connexion ni nouveau code, sous un nouvel identifiant de session
@@ -357,7 +359,7 @@ class AdminEntryTest extends WebTestCase
             $this->assertStringNotContainsString('data-entry-banner', $back);
             $this->assertSame($codesBefore, (int) $this->pdo(MV_TEST_TENANT_DB)->query('SELECT COUNT(*) FROM otp_code WHERE user_otp_id = ' . (int) $platform->getId())->fetchColumn(), 'aucun nouveau code envoyé');
             foreach ([MV_TEST_TENANT_DB, MV_TEST_TENANT2_DB] as $db) {
-                $this->assertSame(1, (int) $this->pdo($db)->query("SELECT COUNT(*) FROM content_audit_log WHERE resource = 'external_access' AND action = 'return'")->fetchColumn(), "$db : le retour au journal");
+                $this->assertSame(['Plateforme, Paul'], $this->pdo($db)->query("SELECT user_identifier FROM content_audit_log WHERE resource = 'external_access' AND action = 'return'")->fetchAll(\PDO::FETCH_COLUMN), "$db : le retour au journal, sans adresse");
             }
             // un second onglet (même session) renvoie l'ancien formulaire : rien ne se rouvre, la session reste au site d'attache
             $this->client->request('POST', 'https://' . MV_TEST_TENANT2_HOST . '/admin/entree/quitter', ['_token' => $token], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT2_HOST]);
