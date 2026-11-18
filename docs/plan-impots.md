@@ -152,7 +152,7 @@ S'il existe dans un autre dépôt (l'application de gestion), il faut me le mont
 - `GET /api/gestion/prets/{id}/echeancier` ;
 - `POST /api/gestion/prets/apercu` : l'échéancier sans rien écrire.
 
-### 3.2 Poste salarié (`gestion_payroll_position`, base du site)
+### 3.2 Poste salarié (`gestion_payroll_position`, base du site) : REMPLACÉ par les salaires saisis dans les frais fixes (§ 6)
 
 **Champs** (sans nom) :
 - libellé ;
@@ -295,6 +295,44 @@ S'il existe dans un autre dépôt (l'application de gestion), il faut me le mont
   - **Q9** : texte de prudence à faire valider par l'avocat.
 - **Q8** : **tout est compris dans le module de gestion** (prêts, aides, taux, salaires, impôts estimés). Son prix sera fixé plus tard ; pas
   d'offre supérieure.
+- **Un seul moteur de calcul, dirigé par les données (FIS-3 et FIS-4)** :
+  - trois pays seulement (France, Canada, États-Unis), sans modèle propre à chaque pays ;
+  - chaque charge est UNE ligne de `fiscal_rate` :
+    - pays, État ou province, comté (facultatif) ;
+    - nature (`payroll_employer`, `sales_tax`, `corporate_tax`) et code de la charge ;
+    - taux ;
+    - **type de base** : `total` (sur toute la base), `capped_annual` (jusqu'à un plafond annuel par salarié) ou `band` (entre deux
+      seuils) ;
+    - seuils et plafond ;
+    - validité et état (`draft`, `approx`, `validated`) ;
+  - **ajouter un État ou une province, c'est ajouter des lignes** depuis l'écran du super administrateur, **sans code** ;
+  - les règles qui ne sont pas un simple taux sur une base sont des **cas nommés**, codés à part, marqués `approx` au départ (par exemple la
+    réduction générale en France, ou le seuil de masse salariale de l'EHT de l'Ontario). Une ligne de la table peut appeler un cas nommé
+    par son code ;
+  - ordre des données :
+    1. la Floride ;
+    2. le Québec (RRQ, RQAP, AE, FSS, CNESST) et l'Ontario (RPC, AE, EHT) ;
+    3. la France, simplifiée : cotisations sur le total et plafonnées au PMSS, réduction générale approchée ;
+    4. les autres États et provinces au fil des clients.
+- **Salaires saisis dans les frais fixes (FIS-4)**, ce qui remplace l'objet « poste » séparé du § 3.2 :
+  1. **Saisie** : le salaire se saisit dans le formulaire existant des frais fixes (FF1), catégorie « salaire ». Une route de calcul SANS
+     écriture, **`POST /api/gestion/fiscal/salaries/apercu`**, est appelée pendant la saisie. Elle montre en direct :
+     - le brut ;
+     - chaque charge de l'employeur, avec son taux, sa base et son plafond annuel (pour la Floride : Social Security, Medicare, FUTA,
+       reemployment tax) ;
+     - le coût total pour l'employeur, par mois et par an ;
+     - la mention « Taux approximatif, à faire valider par un professionnel » tant qu'un taux est en `approx`.
+  2. **Fiche par salaire**, toujours sans nom (Q5), avec un intitulé de poste :
+     - le même détail ;
+     - le **cumul de l'année** ;
+     - la **date où un plafond est atteint** : FUTA et reemployment tax s'arrêtent après 7 000 $ de salaire par salarié.
+
+     Le mouvement prévu garde le brut ; un détail attaché au mouvement porte le genre de contrat, les dates et le nombre de paies.
+  3. **Un changement de taux** recalcule les estimations à venir ; les mois passés gardent la version des taux qu'ils ont utilisée.
+  4. **Le simulateur et la trésorerie** prennent le coût total de l'employeur, pas seulement le brut : un mouvement « salaire » avec son
+     détail compte pour son coût total, un mouvement « salaire » sans détail reste compté pour son montant, comme aujourd'hui.
+
+  Fronts concernés plus tard : la gestion web et MAUI.
 - **Calendrier** : le code attend la fin d'AIDE-APP et celle du multi-boutiques chez le chaperon. Le contrat de FIS-1 (prêts) sera
   proposé au chef à ce moment.
 
