@@ -145,6 +145,14 @@ l'administrateur du site. Tests : `tests/Functional/Support/SupportWebApiTest.ph
 - **Piège rencontré** : une arobase dans un bloc de documentation d'un contrôleur (un exemple d'adresse masquée) est lue comme une
   annotation et rend 500 sur toutes les routes ; écrire l'exemple dans un commentaire `//`.
 
+## Transmettre un ticket à l'équipe technique (lot INC-3, 18/11/2026)
+
+Un ticket qui est en fait un bogue de la plateforme se transmet d'un geste, par un agent du site : `POST /api/support/tickets/{id}/escalade`
+`{ summary }` (20 à 2 000 caractères, écrit par l'agent, masqué) → 201 `{ platform { status: transmitted, answer: null } }`. Aucune copie du fil,
+des pièces jointes ni du client ; un seul signalement ouvert par ticket (409 `ALREADY_ESCALATED`). La lecture d'un ticket porte `platform` :
+`null`, ou `{ status: transmitted | fixed | wont_fix, answer }` (la réponse publique de la plateforme ; jamais sa note interne). L'agent reçoit un
+courriel quand la plateforme répond. Détail : `docs/incidents-et-signalements.md`, § « Lot INC-3 ».
+
 ## Décisions restantes (lot 2 et suivants)
 
 Prix et essai de l'offre « support » ; adresse de réception des courriels (domaine, MX, fournisseur : Mailgun, SES ou IMAP) ; le chat (lot 4)

@@ -256,7 +256,7 @@ class PlatformIncidentService
     }
 
     /** Liste blanche, valeurs simples masquées ; 2 Ko au plus (la pile d'appels part la première) */
-    private static function context(array $context): ?string
+    public static function context(array $context): ?string
     {
         $kept = [];
         foreach (self::CONTEXT_KEYS as $key) {
@@ -277,7 +277,7 @@ class PlatformIncidentService
     }
 
     /** Une adresse sans sa requête ni son ancre (les paramètres peuvent porter un courriel, un jeton) */
-    private static function path(string $value): string
+    public static function path(string $value): string
     {
         return (string) preg_replace('/[?#].*$/s', '', trim($value));
     }

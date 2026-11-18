@@ -261,7 +261,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (665)
+## Boutique et commun (672)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -621,6 +621,8 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | POST | `/api/import-invitation/accept` | PUBLIC_ACCESS | `Import\Controller\ImportInvitationController::accept` |
 | POST | `/api/import-invitation/decline` | PUBLIC_ACCESS | `Import\Controller\ImportInvitationController::decline` |
 | POST | `/api/import-invitation/verify` | PUBLIC_ACCESS | `Import\Controller\ImportInvitationController::verify` |
+| GET | `/api/incidents/bug-reports` | ROLE_ADMIN ou ROLE_POS_MANAGER ou ROLE_USER_POS | `Incident\Controller\BugReportController::mine` |
+| POST | `/api/incidents/bug-reports` | ROLE_ADMIN ou ROLE_POS_MANAGER ou ROLE_USER_POS | `Incident\Controller\BugReportController::create` |
 | POST | `/api/incidents/report` | PUBLIC_ACCESS | `Incident\Controller\IncidentReportController::report` |
 | POST | `/api/me/contexts/enter` | IS_AUTHENTICATED_FULLY | `Controller\Account\MeContextsController::enter` |
 | GET | `/api/me/contexts` | IS_AUTHENTICATED_FULLY | `App\Controller\Account\MeContextsController` |
@@ -674,6 +676,10 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/api/platform/agencies` | ROLE_SUPER_ADMIN + `#[IsGranted(ROLE_SUPER_ADMIN)]` | `Controller\PlatformController\PlatformAgenciesController::list` |
 | POST | `/api/platform/agencies` | ROLE_SUPER_ADMIN + `#[IsGranted(ROLE_SUPER_ADMIN)]` | `Controller\PlatformController\PlatformAgenciesController::create` |
 | POST | `/api/platform/billing-events` | ROLE_SUPER_ADMIN + `#[IsGranted(ROLE_SUPER_ADMIN)]` | `Controller\PlatformController\PlatformBillingEventsController::receive` |
+| GET | `/api/platform/bug-reports/{id}/capture` | ROLE_SUPER_ADMIN + `#[IsGranted(ROLE_SUPER_ADMIN)]` | `Incident\Controller\PlatformBugReportController::capture` |
+| GET | `/api/platform/bug-reports/{id}` | ROLE_SUPER_ADMIN + `#[IsGranted(ROLE_SUPER_ADMIN)]` | `Incident\Controller\PlatformBugReportController::get` |
+| PATCH | `/api/platform/bug-reports/{id}` | ROLE_SUPER_ADMIN + `#[IsGranted(ROLE_SUPER_ADMIN)]` | `Incident\Controller\PlatformBugReportController::update` |
+| GET | `/api/platform/bug-reports` | ROLE_SUPER_ADMIN + `#[IsGranted(ROLE_SUPER_ADMIN)]` | `Incident\Controller\PlatformBugReportController::list` |
 | PATCH | `/api/platform/entitlements/{id}` | ROLE_SUPER_ADMIN + `#[IsGranted(ROLE_SUPER_ADMIN)]` | `Controller\PlatformController\PlatformEntitlementsController::act` |
 | GET | `/api/platform/entitlements` | ROLE_SUPER_ADMIN + `#[IsGranted(ROLE_SUPER_ADMIN)]` | `Controller\PlatformController\PlatformEntitlementsController::list` |
 | POST | `/api/platform/entitlements` | ROLE_SUPER_ADMIN + `#[IsGranted(ROLE_SUPER_ADMIN)]` | `Controller\PlatformController\PlatformEntitlementsController::grant` |
@@ -884,6 +890,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/api/support/settings` | ROLE_SUPPORT ou ROLE_ADMIN | `Support\Controller\SupportController::settings` |
 | PUT | `/api/support/settings` | ROLE_SUPPORT ou ROLE_ADMIN | `Support\Controller\SupportController::saveSettings` |
 | GET | `/api/support/tickets/{id}/attachments/{attachmentId}` | ROLE_SUPPORT ou ROLE_ADMIN | `Support\Controller\SupportController::attachment` |
+| POST | `/api/support/tickets/{id}/escalade` | ROLE_SUPPORT ou ROLE_ADMIN | `Support\Controller\SupportController::escalate` |
 | POST | `/api/support/tickets/{id}/messages` | ROLE_SUPPORT ou ROLE_ADMIN | `Support\Controller\SupportController::message` |
 | GET | `/api/support/tickets/{id}` | ROLE_SUPPORT ou ROLE_ADMIN | `Support\Controller\SupportController::detail` |
 | PATCH | `/api/support/tickets/{id}` | ROLE_SUPPORT ou ROLE_ADMIN | `Support\Controller\SupportController::patch` |
@@ -971,7 +978,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/shared-media` | aucune règle | `Controller\SharedMediaApiController\SharedMediaApiController::list` |
 | GET, HEAD | `/uploads/{path}` | aucune règle | `Controller\Storage\BucketSimulatorController::serve` |
 
-## Administration (EasyAdmin) (123)
+## Administration (EasyAdmin) (127)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -1057,6 +1064,10 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | POST | `/admin/plateforme/mode` | ROLE_SUPER_ADMIN | `Controller\Admin\PlatformConsoleAdminController::switchMode` |
 | POST | `/admin/plateforme/offre/{code}` | ROLE_SUPER_ADMIN | `Controller\Admin\PlatformConsoleAdminController::offer` |
 | POST | `/admin/plateforme/politique/{feature}` | ROLE_SUPER_ADMIN | `Controller\Admin\PlatformConsoleAdminController::policy` |
+| POST | `/admin/plateforme/signalements/conservation` | ROLE_SUPER_ADMIN | `Controller\Admin\PlatformBugReportsAdminController::retention` |
+| GET | `/admin/plateforme/signalements/{id}/capture` | ROLE_SUPER_ADMIN | `Controller\Admin\PlatformBugReportsAdminController::capture` |
+| POST | `/admin/plateforme/signalements/{id}` | ROLE_SUPER_ADMIN | `Controller\Admin\PlatformBugReportsAdminController::update` |
+| GET | `/admin/plateforme/signalements` | ROLE_SUPER_ADMIN | `Controller\Admin\PlatformBugReportsAdminController::index` |
 | POST | `/admin/plateforme/sites/creer` | ROLE_SUPER_ADMIN | `Controller\Admin\PlatformSitesAdminController::create` |
 | POST | `/admin/plateforme/sites/demandes/{id}/{geste}` | ROLE_SUPER_ADMIN | `Controller\Admin\PlatformSitesAdminController::gesture` |
 | GET | `/admin/plateforme/sites` | ROLE_SUPER_ADMIN | `Controller\Admin\PlatformSitesAdminController::index` |

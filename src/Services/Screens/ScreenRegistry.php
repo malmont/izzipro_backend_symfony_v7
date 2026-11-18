@@ -150,7 +150,7 @@ final class ScreenRegistry
      */
     public const OFF_SCREEN = [
         '@public' => 'Site public : lectures et envois d\'un visiteur ou d\'un client (catalogue, pages, panier, paiement, formulaires)',
-        '@compte' => 'Connexion et compte de la personne connectée (profil, adresses, ses commandes, ses abonnements, ses avis, ses contextes)',
+        '@compte' => 'Connexion et compte de la personne connectée (profil, adresses, ses commandes, ses abonnements, ses avis, ses contextes, ses signalements)',
         '@apps' => 'Démarrage des applications : recherche du site, activation, profil et thème',
         '@caisse' => 'Application de caisse',
         '@memoires' => 'Mémoires Vivantes et Living Memory : livres, chapitres, invitations',
@@ -181,6 +181,7 @@ final class ScreenRegistry
         ['#^/api/(tenant|app|app-profile|apps|mobile)(/|$)#', '@apps'],
         ['#^/api/(health|webhooks|landingpage-config)(/|$)#', '@technique'],
         ['#^/api/incidents/report$#', '@technique'], // lot INC-1a : le gestionnaire d'erreurs d'une application
+        ['#^/api/incidents/bug-reports$#', '@compte'], // lot INC-3 : « Signaler un problème » et « Mes signalements » du personnel
         // (API Platform : sa documentation, ses erreurs, ses contextes JSON-LD, son point d'entrée)
         ['#^/api/(\.well-known|errors|validation_errors|docs|contexts)([./]|$)#', '@technique'],
         ['#^/api/(\{index\}|index)(\.[^/]+)?$#', '@technique'],

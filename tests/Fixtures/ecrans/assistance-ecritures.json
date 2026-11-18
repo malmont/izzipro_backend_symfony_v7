@@ -3,6 +3,7 @@
         "refused": [
             "PATCH /api/support/tickets/{id}",
             "POST /api/support/tickets",
+            "POST /api/support/tickets/{id}/escalade",
             "POST /api/support/tickets/{id}/messages"
         ]
     },

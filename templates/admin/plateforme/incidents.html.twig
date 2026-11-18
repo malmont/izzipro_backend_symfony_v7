@@ -16,7 +16,7 @@
     {% for label, messages in app.flashes %}
         {% for message in messages %}<div class="alert alert-{{ label }}">{{ message }}</div>{% endfor %}
     {% endfor %}
-    <p class="mb-3"><a href="{{ backUrl }}">← Plateforme</a></p>
+    <p class="mb-3"><a href="{{ backUrl }}">← Plateforme</a> · <a href="{{ path('admin_plateforme_bug_reports') }}">Signalements</a></p>
 
     <form method="get" class="row g-2 align-items-end mb-3">
         {% for key, choices in {status: statuses, app: apps, level: levels} %}

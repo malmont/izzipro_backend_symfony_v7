@@ -334,3 +334,16 @@ assistance_request:
     button: 'Ouvrir « Tous mes clients »'
     validity: 'Sans entrée dans les 24 heures, la demande expire. Le commerçant peut fermer l''assistance à tout moment, et voit chaque écran consulté.'
     ignore: 'Pendant l''assistance, les clés, Stripe, le courriel expéditeur, les comptes et les exports restent fermés, et aucun paiement, remboursement ni encaissement ne peut être fait.'
+
+bug_report_answer:
+    subject: 'Votre signalement n° %id% : %status%'
+    title: 'Votre signalement'
+    greeting: 'Bonjour,'
+    message: 'L''équipe technique a traité votre signalement n° %id%. État : %status%.'
+    answer: 'Sa réponse :'
+    where: 'Vous retrouvez vos signalements dans « Mes signalements » de votre application.'
+    status:
+        received: 'reçu'
+        in_progress: 'en cours'
+        fixed: 'corrigé'
+        wont_fix: 'ne sera pas corrigé'
