@@ -37,6 +37,8 @@ class AdminEntryController extends AbstractController
         // lot AG-3d : pour l'agence, le sélecteur est « Tous mes clients »
         private readonly ?\App\Services\Agency\AgencyClientsService $clients = null,
         private readonly ?\App\Services\Agency\AgencyRepository $agencies = null,
+        // lot RETOUR : la session reprend le compte d'attache
+        private readonly ?\Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorageInterface $tokens = null,
     ) {
     }
 
@@ -84,6 +86,9 @@ class AdminEntryController extends AbstractController
         } catch (EntryException $e) {
             return $this->refusal((string) ($e->reason ?? $e->errorCode));
         }
+        // lot RETOUR : de quoi revenir au site d'attache sans nouvelle connexion, gardé dans la session seulement
+        AdminEntrySession::keepReturn($request->getSession(), ['home' => $home, 'account' => (int) $user->getId(), 'email' => (string) $user->getEmail(), 'otpAt' => time() - $age,
+            'password' => hash('sha256', (string) $user->getPassword()), 'entry' => (int) $opened['entry']]);
         $pass = $this->passes->issue(['entry' => $opened['entry'], 'mode' => $opened['mode'], 'home' => $home, 'target' => $opened['site'], 'otpAt' => time() - $age]
             + ($opened['account'] !== null ? ['account' => $opened['account'], 'email' => (string) $opened['email']] : []), $request->getSession()->getId());
 
@@ -104,7 +109,12 @@ class AdminEntryController extends AbstractController
         return $this->refusal('pass_malformed');
     }
 
-    /** « Quitter » l'entrée : fermée au journal, session vidée, retour à la connexion du site d'attache */
+    /**
+     * « Revenir à <site d'attache> » (lot RETOUR, 18/11/2026, règles du chef) : l'entrée se ferme ; le compte d'attache est RELU sur son site
+     * (même numéro, même adresse, mot de passe inchangé depuis l'ouverture de l'entrée, encore autorisé à entrer, contrôles du compte) et la
+     * session le reprend sans nouvelle connexion, sous un nouvel identifiant, avec l'heure d'origine de son code (jamais rajeunie). Une ligne
+     * aux deux journaux. Sinon : session vidée, retour à la connexion du site d'attache. POST et jeton CSRF seulement.
+     */
     #[Route('/admin/entree/quitter', name: 'admin_entree_quitter', methods: ['POST'])]
     public function leave(Request $request): Response
     {
@@ -114,9 +124,23 @@ class AdminEntryController extends AbstractController
             return $this->redirect('/admin');
         }
         $this->entries->endEntry($entry['id'], 'left');
-        $session->invalidate();
+        $back = AdminEntrySession::takeReturn($session);
+        $account = $back !== null && $back['home'] === $entry['home'] && $back['entry'] === $entry['id'] && $this->tokens !== null ? $this->entries->returningAccount($back) : null;
+        if ($account === null) {
+            $session->invalidate();
 
-        return new RedirectResponse('/?tenant=' . rawurlencode($entry['home']));
+            return new RedirectResponse('/?tenant=' . rawurlencode($entry['home']));
+        }
+        $operator = $this->getUser()?->getUserIdentifier();
+        $session->remove(AdminEntrySession::KEY);
+        $session->remove(\App\Security\PlatformAccessSubscriber::SESSION_KEY); // une nouvelle connexion au site d'attache : tracée de nouveau
+        $session->migrate(true); // nouvel identifiant de session
+        $session->set('_active_admin_tenant', $entry['home']);
+        OtpSession::markValidatedAt($session, $account, $entry['home'], $back['otpAt']);
+        $this->tokens->setToken(new \Symfony\Component\Security\Http\Authenticator\Token\PostAuthenticationToken($account, 'main', $account->getRoles()));
+        $this->entries->traceReturn($entry['id'], $entry['target'], $entry['home'], (string) $operator);
+
+        return new RedirectResponse('/admin?tenant=' . rawurlencode($entry['home']));
     }
 
     /** Le compte qui peut ouvrir une entrée : un compte du site (jamais un opérateur), agence ou plateforme, hors d'une entrée en cours */

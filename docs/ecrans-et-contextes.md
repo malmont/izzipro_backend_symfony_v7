@@ -436,7 +436,17 @@ Pendant une entrée, TOUTES les pages d'EasyAdmin (mise en page surchargée `tem
 `admin/entree/_bandeau.html.twig` : « Vous êtes dans <nom du site> (<adresse>) en tant que <Plateforme, prénom | Agence X, prénom | Groupe X,
 prénom> », le site d'attache, l'échéance, et « Quitter » (fermeture de l'entrée, retour à la connexion du site d'attache). Données :
 `App\Twig\AdminEntryBannerExtension` (`admin_entry_banner()`), lues de l'entrée de la session et de la base maître ; jamais une adresse de
-courriel. L'ancien bandeau, posé sur le seul accueil, est retiré. « Revenir au site d'attache sans nouvelle connexion » : lot RETOUR, à part.
+courriel. L'ancien bandeau, posé sur le seul accueil, est retiré.
+
+**Lot RETOUR (18/11/2026, lot à risque, règles du chef)** : le bouton du bandeau devient « Revenir à <site d'attache> ». À l'ouverture de
+l'entrée (`/admin/contextes/entrer`), la SESSION seule garde le retour (`AdminEntrySession::RETURN_KEY` : compte d'attache, son adresse, l'heure
+d'origine de son code, l'empreinte de son mot de passe, le numéro de l'entrée ; jamais dans un paramètre ni un cookie lisible). « Revenir »
+(POST `/admin/entree/quitter`, jeton CSRF) ferme l'entrée puis `EntryService::returningAccount` relit le compte SUR SON SITE : même numéro,
+même adresse, mot de passe inchangé, contrôles du compte (`UserChecker`), encore autorisé à entrer (rôle d'agence ou compte de la plateforme) ;
+la session le reprend alors sous un NOUVEL identifiant, avec l'heure d'origine de son code (jamais rajeunie), et une ligne `return` est
+écrite au journal des deux sites. Sinon : session vidée, retour à la connexion du site d'attache. Le retour sert une fois (lu et retiré).
+Essais : `AdminEntryTest::testReturningHomeKeepsTheSessionOnlyForTheSameUnchangedAccount` (retour normal, compte désactivé, mot de passe
+changé, GET refusé, deux onglets).
 Essai : `AdminEntryTest::testTheBannerNamesTheSiteAndTheOperatorOnAListAndADetailPage` (liste, fiche, page nommée).
 
 ## 10. Lot AG-3d : « Tous mes clients » et « Taxes vérifiées par le commerçant » (18/11/2026, contrat validé par le chef)

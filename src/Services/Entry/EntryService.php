@@ -57,6 +57,7 @@ class EntryService
         private readonly EntryContext $context,
         private readonly TenantEntityManagerProvider $emProvider,
         private readonly LoggerInterface $logger,
+        private readonly ?\App\Security\UserChecker $userChecker = null,
     ) {
     }
 
@@ -317,6 +318,56 @@ class EntryService
 
             return ['reason' => $reason, 'origin' => $origin];
         });
+    }
+
+    /**
+     * Lot RETOUR (18/11/2026) : le compte d'attache que la session peut reprendre en revenant, ou null. Relu sur SON site : même numéro, même
+     * adresse, mot de passe inchangé depuis l'ouverture de l'entrée (empreinte), contrôles du compte (`UserChecker`), encore autorisé à entrer
+     * (rôle d'agence ou compte de la plateforme). Laisse le site courant sur le site d'attache quand il rend un compte.
+     *
+     * @param array{home: string, account: int, email: string, otpAt: int, password: string, entry: int} $back
+     */
+    public function returningAccount(array $back): ?User
+    {
+        $home = $this->agencies->tenant($back['home']);
+        if ($home === null || $back['otpAt'] > time()) {
+            return null;
+        }
+        try {
+            $this->emProvider->switchTenant((string) $home['dbname'], (string) $home['code']);
+            $user = $this->emProvider->getEntityManager()->find(User::class, $back['account']);
+            if (!$user instanceof User || mb_strtolower(trim((string) $user->getEmail())) !== mb_strtolower(trim($back['email']))
+                || !hash_equals($back['password'], hash('sha256', (string) $user->getPassword()))
+                || !(AgencyRoles::has($user->getRoles()) || PlatformAccessJournal::isPlatformAccount($user->getRoles()))) {
+                return null;
+            }
+            $this->userChecker?->checkPreAuth($user);
+            $this->userChecker?->checkPostAuth($user);
+
+            return $user;
+        } catch (\Throwable $e) {
+            $this->logger->warning('Retour au site d\'attache refusé (' . $e::class . ').');
+
+            return null;
+        }
+    }
+
+    /** Lot RETOUR : une ligne au journal du site quitté ET à celui du site d'attache ; une trace manquante ne bloque pas le retour */
+    public function traceReturn(int $entryId, string $target, string $home, string $label): void
+    {
+        foreach ([$target, $home] as $code) {
+            $site = $this->agencies->tenant($code);
+            if ($site === null) {
+                continue;
+            }
+            try {
+                $this->databases->pdo((string) $site['dbname'])->prepare('INSERT INTO content_audit_log (created_at, user_identifier, tenant, resource, resource_id, action, fields, after_state) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+                    ->execute([(new \DateTimeImmutable('now', new \DateTimeZone('UTC')))->format('Y-m-d H:i:s'), mb_substr($label !== '' ? $label : 'Entrée', 0, 180), (string) $site['code'],
+                        self::JOURNAL_RESOURCE, (string) $entryId, 'return', 'site', json_encode(['from' => $target, 'to' => $home], \JSON_UNESCAPED_UNICODE)]);
+            } catch (\Throwable $e) {
+                $this->logger->error('Retour au site d\'attache : trace non écrite (' . $e::class . ').');
+            }
+        }
     }
 
     /** Ferme les entrées ouvertes d'un compte de ce site d'attache (déconnexion) : refusées dès la requête suivante */

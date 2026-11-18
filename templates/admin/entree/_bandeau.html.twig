@@ -9,7 +9,7 @@
     </span>
     <form method="post" action="{{ path('admin_entree_quitter') }}" class="m-0">
         <input type="hidden" name="_token" value="{{ csrf_token('admin_entree_quitter') }}">
-        <button type="submit" class="btn btn-sm btn-outline-danger" data-entry-quit>Quitter {{ banner.siteName }} (retour à la connexion de {{ banner.homeName }})</button>
+        <button type="submit" class="btn btn-sm btn-outline-danger" data-entry-quit>Revenir à {{ banner.homeName }}</button>
     </form>
 </div>
 {% endif %}
