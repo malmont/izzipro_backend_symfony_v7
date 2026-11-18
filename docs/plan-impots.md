@@ -1,7 +1,7 @@
 # Plan du lot IMPOTS : impôts, salaires, prêts et aides dans la gestion
 
 > 18/11/2026, session « prevention des pertes backend », à la demande de « new easymakemoney ». Cadre validé par le propriétaire le
-> 17/11/2026. Lecture et rédaction seulement, à partir de `dev` en eb549ca9 : **aucun code**. À faire valider par le chef, puis par le
+> 17/11/2026 ; **décisions du propriétaire du 18/11/2026 au § 6** (Floride d'abord, tout dans le module de gestion). Lecture et rédaction seulement, à partir de `dev` en eb549ca9 : **aucun code**. À faire valider par le chef, puis par le
 > propriétaire.
 >
 > **Ce sont des ESTIMATIONS, pas un conseil fiscal.** Chaque chiffre produit par ce lot porte la mention « estimation » et renvoie à un
@@ -250,7 +250,46 @@ S'il existe dans un autre dépôt (l'application de gestion), il faut me le mont
 - **Plusieurs devises** : un prêt ou une aide dans une autre devise que le site garde sa devise ; la conversion est celle de la gestion
   (taux saisi), sans cours automatique.
 
-## 6. Questions au propriétaire (avec ma recommandation)
+## 6. Décisions du propriétaire (18/11/2026, relayées par le chef)
+
+- **Q1, dossier de fin d'exercice** : c'est un cahier des charges du dépôt de l'application MAUI (`docs/web/dossier-fin-exercice.md`), pas
+  encore codé (lot CLO). Il montre :
+  - une ligne « Emprunts » : par emprunt, le prêteur, le capital emprunté, le capital restant au début et à la fin de l'exercice et les
+    intérêts de l'exercice ; un remboursement de capital n'est pas une charge, les intérêts le sont ;
+  - une ligne « Taxes » : des totaux par taxe, perçues sur les ventes, payées sur les achats et les frais, et le solde (TPS, TVQ, TVH par
+    province ; sales tax par État) ;
+  - l'export pour le comptable reprend emprunts et taxes.
+
+  **CLO produira le dossier à partir de FIS-1 à FIS-5.** FIS-1 doit donc pouvoir rendre, pour un exercice, le capital restant au début et
+  à la fin et les intérêts de l'exercice, par prêt.
+- **Q2, premier terrain : la boutique du propriétaire en FLORIDE.** La table des taux commence par la Floride, puis le Québec et la France.
+  Elle gère donc le pays, l'**État** et le **comté**, et des **plafonds par salarié** (une base annuelle plafonnée, par exemple les
+  7 000 $ de salaire des cotisations chômage). Pour la Floride :
+  - la **sales tax** de l'État, plus la **surtaxe discrétionnaire du comté** ;
+  - les **charges employeur fédérales** (Social Security, Medicare, FUTA) et le **reemployment tax** de Floride ;
+  - l'**impôt des sociétés** : fédéral, et Floride pour une C-corp.
+
+  Conséquences sur le plan :
+  - `fiscal_rate` gagne `county` (code du comté, vide = tout l'État) et `wage_base_cents` (plafond annuel de la base par salarié, vide =
+    sans plafond) ;
+  - le coût employeur d'un poste (§ 3.2) applique chaque taux à la part du brut annuel encore sous le plafond ; le plafond est donc
+    calculé sur l'année civile du poste ;
+  - la sales tax collectée à reverser (§ 3.3) se calcule par comté quand la vente porte l'adresse du comté.
+- **Q3 à Q7 et Q9** : les recommandations sont retenues :
+  - **Q3** : intérêts et salaires au prorata au résultat ;
+  - **Q4** : la forme juridique est demandée. Aux États-Unis : **LLC, S-corp ou C-corp**. L'impôt qui pèse sur la personne n'est pas
+    estimé (LLC imposée comme une entreprise individuelle ou une société de personnes, S-corp) : seule la C-corp a son impôt des
+    sociétés estimé ;
+  - **Q5** : postes sans nom ;
+  - **Q6** : l'aide à l'investissement est un encaissement seul ;
+  - **Q7** : la table est saisie par le super administrateur et validée par un comptable ;
+  - **Q9** : texte de prudence à faire valider par l'avocat.
+- **Q8** : **tout est compris dans le module de gestion** (prêts, aides, taux, salaires, impôts estimés). Son prix sera fixé plus tard ; pas
+  d'offre supérieure.
+- **Calendrier** : le code attend la fin d'AIDE-APP et celle du multi-boutiques chez le chaperon. Le contrat de FIS-1 (prêts) sera
+  proposé au chef à ce moment.
+
+## 7. Questions au propriétaire (avec ma recommandation)
 
 - **Q1. Le « dossier de fin d'exercice » qui citerait emprunts et taxes : lequel ?** Je ne le trouve ni dans ce dépôt ni dans son
   historique. Recommandation : s'il n'existe pas encore, le lot CLO (clôture de l'exercice) le produira à partir de FIS-1 à FIS-5.
