@@ -43,7 +43,9 @@ final class SubscriptionService
         private readonly SubscriptionStripeGatewayInterface $stripe,
         private readonly BoutiqueSettingsService $settings,
         private readonly TaxEngine $taxes,
-        private readonly ?\App\Services\TenantConnectionManager $tenants = null // site cible d'une formule branchée (lot 3 bis, 04/11/2026)
+        private readonly ?\App\Services\TenantConnectionManager $tenants = null, // site cible d'une formule branchée (lot 3 bis, 04/11/2026)
+        private readonly ?\App\Services\Platform\PlanLink\PlatformPlanLinkService $planLinks = null, // lot PROVISION-1 : lien prouvé du site servi
+        private readonly ?\App\Services\Platform\PlatformModeService $platform = null, // lot PROVISION-1 : seule la boutique de la plateforme emploie un lien
     ) {
     }
 
@@ -54,7 +56,7 @@ final class SubscriptionService
     }
 
     /** @throws SubscriptionException 403 module désactivé, 404 formule, 422 produit non abonnable ou adresse d'un autre client */
-    public function subscribe(User $user, int $planId, int $quantity, ?int $addressId, ?int $carrierId, ?string $fulfillmentTarget = null): array
+    public function subscribe(User $user, int $planId, int $quantity, ?int $addressId, ?int $carrierId, ?string $fulfillmentTarget = null, ?string $fulfillmentLink = null): array
     {
         if ($this->settings->commerceSetting('subscriptionsEnabled') === false) {
             throw new SubscriptionException(403, 'Les abonnements sont désactivés sur ce site.', [], [], 'SUBSCRIPTIONS_DISABLED');
@@ -94,20 +96,43 @@ final class SubscriptionService
         $connection = $em->getConnection();
         $connection->executeQuery('SELECT pg_advisory_lock(hashtext(?))', [$lock]);
         try {
-            return $this->subscribeLocked($user, $plan, $quantity, $address, $carrier, $shippingAmount, $this->fulfillmentTarget($plan, $fulfillmentTarget));
+            $result = $this->subscribeLocked($user, $plan, $quantity, $address, $carrier, $shippingAmount, $this->fulfillmentTarget($plan, $fulfillmentTarget, $fulfillmentLink, $user));
+            if ($plan->hasFulfillment() && $fulfillmentLink !== null && trim($fulfillmentLink) !== '') {
+                $this->planLinks?->attach(trim($fulfillmentLink), (string) $this->tenantProvider->getTenantCode(), (int) $result['subscription']->getId()); // preuve
+            }
+
+            return $result;
         } finally {
             $connection->executeQuery('SELECT pg_advisory_unlock(hashtext(?))', [$lock]);
         }
     }
 
     /**
-     * Formule branchée sur une offre de la plateforme (lot 3 bis, 04/11/2026) : le site cible est obligatoire et doit exister ;
-     * formule ordinaire : ignoré. 422 FULFILLMENT_TARGET_REQUIRED | FULFILLMENT_TARGET_UNKNOWN.
+     * Formule branchée sur une offre de la plateforme (lot 3 bis, 04/11/2026) : le site servi est obligatoire ; formule ordinaire : ignoré.
+     * Lot PROVISION-1 (18/11/2026) : le site vient du LIEN SIGNÉ de « Mettre à jour mon forfait » (`fulfillmentLink`), vérifié et réservé à cet
+     * achat (`PlatformPlanLinkService`) ; un code tapé (`fulfillmentTarget`) n'est plus accepté que d'un super administrateur (vente faite à la
+     * main). 422 FULFILLMENT_LINK_REQUIRED | FULFILLMENT_LINK_INVALID | FULFILLMENT_LINK_EXPIRED | FULFILLMENT_LINK_USED |
+     * FULFILLMENT_LINK_NOT_ADMIN | FULFILLMENT_TARGET_REQUIRED | FULFILLMENT_TARGET_UNKNOWN.
      */
-    private function fulfillmentTarget(SubscriptionPlan $plan, ?string $target): ?string
+    private function fulfillmentTarget(SubscriptionPlan $plan, ?string $target, ?string $link, User $buyer): ?string
     {
         if (!$plan->hasFulfillment()) {
             return null;
+        }
+        $link = trim((string) $link);
+        if ($link !== '' && $this->planLinks !== null) {
+            // un lien ne s'emploie que sur la boutique de la plateforme : une autre boutique ne peut pas le « brûler » (relecture)
+            if ($this->platform?->shopTenant() !== $this->tenantProvider->getTenantCode()) {
+                throw new SubscriptionException(422, 'Ce lien ne s\'emploie que dans la boutique de la plateforme.', [SubscriptionException::error('fulfillmentLink', 'FULFILLMENT_LINK_INVALID', 'boutique de la plateforme attendue')], [], 'FULFILLMENT_LINK_INVALID');
+            }
+            try {
+                return $this->planLinks->consume($link, sprintf('%s:%d:%d', (string) $this->tenantProvider->getTenantCode(), (int) $buyer->getId(), (int) $plan->getId()));
+            } catch (\App\Services\Platform\PlanLink\PlanLinkException $e) {
+                throw new SubscriptionException(422, $e->getMessage(), [SubscriptionException::error('fulfillmentLink', $e->errorCode, $e->getMessage())], [], $e->errorCode, $e);
+            }
+        }
+        if (!in_array('ROLE_SUPER_ADMIN', $buyer->getRoles(), true)) {
+            throw new SubscriptionException(422, 'Ouvrez « Mettre à jour mon forfait » depuis votre site pour acheter ce forfait.', [SubscriptionException::error('fulfillmentLink', 'FULFILLMENT_LINK_REQUIRED', 'lien de « Mettre à jour mon forfait » attendu')], [], 'FULFILLMENT_LINK_REQUIRED');
         }
         $target = trim((string) $target);
         if ($target === '') {
@@ -134,7 +159,7 @@ final class SubscriptionService
             // Essai dont la carte n'a jamais été enregistrée (25/10/2026, demande du frontend) : même formule et quantité,
             // repris avec son SetupIntent au lieu d'un 409, sur n'importe quel appareil
             if ($open->getStatus() === Subscription::STATUS_TRIALING && $open->hasPaymentMethod() !== true && $open->getStripeSubscriptionId()
-                && $open->getPlan()?->getId() === $plan->getId() && $open->getQuantity() === $quantity) {
+                && $open->getPlan()?->getId() === $plan->getId() && $open->getQuantity() === $quantity && $open->getFulfillmentTarget() === $fulfillmentTarget) {
                 $state = $this->stripe->retrieve($open->getStripeSubscriptionId());
                 $this->applyStripeState($open, $state);
                 $em->flush();
@@ -148,7 +173,8 @@ final class SubscriptionService
                     ['reason' => 'already_subscribed', 'subscriptionId' => $open->getId(), 'status' => $open->getStatus()], 'ALREADY_SUBSCRIBED');
             }
             $state = $open->getStripeSubscriptionId() ? $this->stripe->retrieve($open->getStripeSubscriptionId()) : null;
-            if ($state !== null && $state['status'] === 'incomplete' && $open->getPlan()?->getId() === $plan->getId() && $open->getQuantity() === $quantity && $state['clientSecret']) {
+            // lot PROVISION-1 (relecture) : un abonnement repris garde son site servi ; visé sur un AUTRE site, il est annulé et remplacé
+            if ($state !== null && $state['status'] === 'incomplete' && $open->getPlan()?->getId() === $plan->getId() && $open->getQuantity() === $quantity && $open->getFulfillmentTarget() === $fulfillmentTarget && $state['clientSecret']) {
                 $this->applyStripeState($open, $state);
                 $em->flush();
 
@@ -175,7 +201,9 @@ final class SubscriptionService
         $em->persist($subscription);
         $em->flush();
 
-        $state = $this->stripe->create($customerId, $priceId, $quantity, $plan->getTrialDays(), [
+        // lot PROVISION-1 : une formule branchée n'a jamais de jours d'essai Stripe (un droit sans carte, répétable avec un autre compte) ;
+        // l'essai reste celui de la plateforme (« Demander », une fois par site)
+        $state = $this->stripe->create($customerId, $priceId, $quantity, $plan->hasFulfillment() ? 0 : $plan->getTrialDays(), [
             'tenant_code' => (string) $this->tenantProvider->getTenantCode(), 'subscription_id' => (string) $subscription->getId(), 'user_id' => (string) $user->getId(),
         ], $taxRateIds, $automaticTax, $shippingPriceId);
         $subscription->setStripeSubscriptionId($state['id']);

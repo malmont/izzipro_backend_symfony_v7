@@ -31,7 +31,7 @@ final class SubscriptionPlanOutputDto
     public static function fromEntity(SubscriptionPlan $plan, string $locale): self
     {
         return new self((int) $plan->getId(), (int) $plan->getProduct()?->getId(), $plan->getName($locale), $plan->getInterval(), $plan->getIntervalCount(),
-            $plan->getPrice(), $plan->getCurrency(), $plan->getTrialDays(), $plan->getMinimumTerms(), $plan->isActive(),
+            $plan->getPrice(), $plan->getCurrency(), $plan->hasFulfillment() ? 0 : $plan->getTrialDays(), $plan->getMinimumTerms(), $plan->isActive(),
             $plan->getFeatureList($locale), $plan->getDescription($locale), $plan->isHighlighted(), $plan->getBadge($locale),
             $plan->getProduct()?->getTranslation($locale)?->getName() ?? $plan->getProduct()?->getName(), $plan->getFulfillmentType());
     }

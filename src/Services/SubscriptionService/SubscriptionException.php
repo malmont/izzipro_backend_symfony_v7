@@ -15,10 +15,13 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
  */
 final class SubscriptionException extends HttpException
 {
-    /** @param list<array{path: string, message: string, code?: string, params?: array<string, mixed>}> $errors */
-    public function __construct(int $status, string $message, public readonly array $errors = [], public readonly array $details = [], private readonly ?string $errorCode = null)
+    /**
+     * @param list<array{path: string, message: string, code?: string, params?: array<string, mixed>}> $errors
+     * @param ?\Throwable $previous lot PROVISION-1 : la cause gardée quand le refus reprend le message d'une autre exception (garde-fou ClientErrorGuardTest)
+     */
+    public function __construct(int $status, string $message, public readonly array $errors = [], public readonly array $details = [], private readonly ?string $errorCode = null, ?\Throwable $previous = null)
     {
-        parent::__construct($status, $message);
+        parent::__construct($status, $message, $previous);
     }
 
     public function code(): string

@@ -178,12 +178,13 @@ class OfferFulfillmentTest extends WebTestCase
 
         $plan->setFulfillmentType(SubscriptionPlan::FULFILLMENT_PLATFORM_OFFER)->setFulfillmentRef('boussole');
         $em->flush();
+        // lot PROVISION-1 : un client doit passer par le lien de « Mettre à jour mon forfait » (PlanLinkTest) ; le code tapé ne vaut plus que
+        // d'un super administrateur, pour qui le site doit exister
         $r = $this->api('POST', '/api/subscriptions', ['planId' => $this->planId], 'client');
         $this->assertSame(422, $r->getStatusCode(), $r->getContent());
-        $this->assertSame('FULFILLMENT_TARGET_REQUIRED', json_decode((string) $r->getContent(), true)['code'] ?? json_decode((string) $r->getContent(), true)['error']);
-        $r = $this->api('POST', '/api/subscriptions', ['planId' => $this->planId, 'fulfillmentTarget' => 'site-inconnu'], 'client');
-        $this->assertSame(422, $r->getStatusCode(), $r->getContent());
-        $this->assertStringContainsString('FULFILLMENT_TARGET_UNKNOWN', (string) $r->getContent());
+        $this->assertSame('FULFILLMENT_LINK_REQUIRED', json_decode((string) $r->getContent(), true)['code'] ?? json_decode((string) $r->getContent(), true)['error']);
+        $r = $this->api('POST', '/api/subscriptions', ['planId' => $this->planId, 'fulfillmentTarget' => MV_TEST_TENANT2_CODE], 'client');
+        $this->assertStringContainsString('FULFILLMENT_LINK_REQUIRED', (string) $r->getContent(), 'un client ne vise plus un site par son code');
     }
 
     public function testExternalBillingEventsAreReservedToTheSuperAdminAndValidated(): void
