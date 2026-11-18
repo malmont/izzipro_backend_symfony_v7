@@ -103,7 +103,8 @@ S'il existe dans un autre dépôt (l'application de gestion), il faut me le mont
   - `country`, `region` (ISO 3166-2, vide = tout le pays), `kind`, `code`, `label`, `rate_ppm` (taux en millionièmes) ou `brackets`
     (tranches en JSON) ;
   - `base` (bénéfice, brut, chiffre d'affaires, valeur locative…), `valid_from`, `valid_to` ;
-  - `source` (le texte ou la page officielle), `status` (`draft` ou `validated`), `validated_by` (le comptable), `version`.
+  - `source` (le texte ou la page officielle), `status` (`draft`, `approx` ou `validated`, § 6 Q7), `validated_by` (le professionnel),
+    `version`.
 - **Natures**, à fixer avec le comptable :
   - impôt sur les bénéfices ;
   - charges patronales (globales ou détaillées) ;
@@ -282,7 +283,15 @@ S'il existe dans un autre dépôt (l'application de gestion), il faut me le mont
     sociétés estimé ;
   - **Q5** : postes sans nom ;
   - **Q6** : l'aide à l'investissement est un encaissement seul ;
-  - **Q7** : la table est saisie par le super administrateur et validée par un comptable ;
+  - **Q7** (précision du propriétaire) : **on n'attend pas le comptable pour démarrer**. Un taux a trois états :
+    - `draft` : en cours de saisie, **jamais servi** ;
+    - `approx` : valeur APPROXIMATIVE saisie par le super administrateur, servie aux sites. Tout montant calculé avec au moins un taux
+      `approx` porte la mention visible « Taux approximatif, à faire valider par un professionnel » (un champ `approximate: true` dans
+      chaque réponse, et la mention rédigée par le serveur) ;
+    - `validated` : validé par un professionnel (son nom et la date).
+
+    Les taux de la Floride viennent en premier, à l'état `approx`. Les salaires et les impôts seront validés plus tard par un
+    professionnel ; d'ici là, même état et même mention. Chaque estimation garde la version des taux qu'elle a utilisée ;
   - **Q9** : texte de prudence à faire valider par l'avocat.
 - **Q8** : **tout est compris dans le module de gestion** (prêts, aides, taux, salaires, impôts estimés). Son prix sera fixé plus tard ; pas
   d'offre supérieure.
