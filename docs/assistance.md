@@ -153,6 +153,45 @@ des pièces jointes ni du client ; un seul signalement ouvert par ticket (409 `A
 `null`, ou `{ status: transmitted | fixed | wont_fix, answer }` (la réponse publique de la plateforme ; jamais sa note interne). L'agent reçoit un
 courriel quand la plateforme répond. Détail : `docs/incidents-et-signalements.md`, § « Lot INC-3 ».
 
+## « Aide et support » des applications du client (lot AIDE-APP, 18/11/2026, contrat validé par le chef)
+
+Le client connecté de **Living Memory** ou du **commerce mobile** (pas la caisse) écrit à la boutique depuis l'écran « Aide et support » :
+sa demande tombe dans la boîte de l'Assistance du site, que le commerçant traite dans la gestion web. Routes du compte client
+(`^/api/account/support/`, `ROLE_USER_INTERNET`, code `src/Support/Controller/CustomerSupportController.php`,
+`src/Support/Services/SupportCustomerService.php`) :
+
+- `GET /api/account/support/availability` → `{ available, reason }` : jamais refusée ; `reason: "MODULE_INACTIVE"` quand le module n'est pas
+  ouvert sur le site. L'application cache ou grise l'écran, avec le texte : « L'aide en ligne n'est pas proposée par cette boutique pour le
+  moment. Vous pouvez la contacter par le formulaire de contact de son site. »
+- `POST /api/account/support/requests` (JSON, ou multipart avec `attachments[]`) :
+  - champs : `subject` (3 à 150 caractères), `message` (10 à 5 000), `category` (`order`, `delivery`, `payment`, `account`, `product`,
+    `app_problem`, `other`), `orderId?` (une commande du client seulement, sinon 422 `ORDER_NOT_FOUND`), `appVersion?` (ajoutée en fin de
+    message), `locale?` (`fr` ou `en`, sinon la langue du site) ;
+  - 201 `{ request { reference, subject, category, status, unread, createdAt, lastMessageAt } }` ;
+  - le ticket naît avec le canal `app`, l'**application d'origine lue dans le jeton** (champ `app` d'APPS-MEMBRES : `livingmemory` ou
+    `boutique`, jamais du corps), la catégorie, le nom et le courriel du compte ;
+  - refus : 422 `{ fields }` ; 409 `TOO_MANY_OPEN_REQUESTS` (3 demandes ouvertes au plus par compte) ; 429 `TOO_MANY_REQUESTS_TODAY`
+    `{ scope: account | site }` (5 par compte, 200 par site et par jour) ou `RATE_LIMITED` (10 envois par quart d'heure et par compte,
+    `Retry-After`) ; 413 `ATTACHMENT_TOO_LARGE` ; 403 `MODULE_INACTIVE` (garde des modules) ;
+- `GET /api/account/support/requests` → `{ requests [...] }` : les 50 dernières demandes du compte, avec un état simplifié :
+  - `new` et `open` → `in_progress` ;
+  - `waiting_customer` → `answered` ;
+  - `closed` → `closed` ;
+  - `unread` : vrai si l'équipe a répondu (message non interne) depuis la dernière lecture du fil par le client.
+- `GET /api/account/support/requests/{reference}` → `{ request, messages [{ id, from: customer | team, body, createdAt, attachments }] }` :
+  jamais une note interne ; la lecture remet `unread` à faux (colonne `customer_read_at`) ; 404 `REQUEST_NOT_FOUND`, aussi pour la demande
+  d'un autre client.
+- `POST /api/account/support/requests/{reference}/messages` `{ message }` (ou multipart) → le fil ; la demande repasse « en cours » avec un
+  nouveau délai ; 409 `REQUEST_CLOSED` pour une demande fermée.
+- `GET /api/account/support/requests/{reference}/attachments/{id}` : une pièce jointe du fil (jamais celle d'une note interne).
+
+Côté agent, la liste et la fiche portent `category`, `sourceApp` et `highlight` (vrai pour `app_problem` : le geste « Transmettre à
+l'équipe technique » y est le plus utile), et la liste se filtre par `category`. Les réponses de l'équipe partent aussi par courriel si
+l'envoi du site est réglé sur `send` (par défaut `log` : rien ne part) ; le fil dans l'application est donc la voie sûre. Aucune donnée
+personnelle au-delà du compte et de ce que le client écrit ou joint. Migration `Version20270201100000` (colonnes `source_app`,
+`category`, `customer_read_at` de `support_ticket`), script `scripts/migrate_all_v2_support_app.sh`. Essais :
+`tests/Functional/Support/SupportCustomerAppTest.php`.
+
 ## Décisions restantes (lot 2 et suivants)
 
 Prix et essai de l'offre « support » ; adresse de réception des courriels (domaine, MX, fournisseur : Mailgun, SES ou IMAP) ; le chat (lot 4)

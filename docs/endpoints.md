@@ -261,7 +261,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (672)
+## Boutique et commun (678)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -277,6 +277,12 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/api/Carrier` | PUBLIC_ACCESS | `Controller\CarrierControleur\CarrierControleur::getCarrier` |
 | DELETE | `/api/account/memberships/{app}` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\AppMembershipController\AppMembershipController::leave` |
 | GET | `/api/account/memberships` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\AppMembershipController\AppMembershipController::memberships` |
+| GET | `/api/account/support/availability` | ROLE_USER_INTERNET | `Support\Controller\CustomerSupportController::availability` |
+| GET | `/api/account/support/requests/{reference}/attachments/{attachmentId}` | ROLE_USER_INTERNET | `Support\Controller\CustomerSupportController::attachment` |
+| POST | `/api/account/support/requests/{reference}/messages` | ROLE_USER_INTERNET | `Support\Controller\CustomerSupportController::reply` |
+| GET | `/api/account/support/requests/{reference}` | ROLE_USER_INTERNET | `Support\Controller\CustomerSupportController::detail` |
+| GET | `/api/account/support/requests` | ROLE_USER_INTERNET | `Support\Controller\CustomerSupportController::mine` |
+| POST | `/api/account/support/requests` | ROLE_USER_INTERNET | `Support\Controller\CustomerSupportController::create` |
 | DELETE | `/api/account` | ROLE_USER_INTERNET | `Controller\Account\AccountApiController::delete` |
 | DELETE | `/api/admin-settings/presets/{id}` | ROLE_ADMIN + `#[IsGranted(ROLE_SUPER_ADMIN)]` | `Controller\AdminSettingsController\AdminSettingsController::deletePreset` |
 | GET | `/api/admin-settings/presets` | PUBLIC_ACCESS | `Controller\AdminSettingsController\AdminSettingsController::getPresets` |

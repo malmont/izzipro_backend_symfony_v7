@@ -269,6 +269,8 @@ security:
         - { path: ^/api/order/create-multi-payment, roles: [ROLE_USER_POS, ROLE_POS_MANAGER, ROLE_ADMIN] }
         # Suppression du compte par le client de la boutique (01/11/2026)
         - { path: ^/api/account$, methods: [DELETE], roles: ROLE_USER_INTERNET }
+        # 🔹 « Aide et support » des applications du client (lot AIDE-APP, 18/11/2026) : le compte client connecté seul ; il ne lit que SES demandes
+        - { path: ^/api/account/support/, roles: ROLE_USER_INTERNET }
         - { path: ^/api, roles: [ROLE_USER_INTERNET, ROLE_USER_POS, ROLE_POS_MANAGER, ROLE_ADMIN] }
 
         

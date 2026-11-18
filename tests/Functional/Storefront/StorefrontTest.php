@@ -477,7 +477,8 @@ class StorefrontTest extends WebTestCase
             'pertes_boitier_jumelage', 'pertes_boitier_jumelage_etat', 'pertes_boitier_reglages', 'pertes_boitier_signe_de_vie', 'pertes_boitier_sorties_permises', 'pertes_boitier_travaux', 'pos_pin_login', 'pos_users', 'secure_media_delivery', 'stripe_webhook',
         ], $classes['kept'], 'routes gardées ouvertes : à justifier dans StorefrontGateSubscriber::KEPT et dans la fiche du lot');
         // les routes de compte que les applications indépendantes partagent (et le reçu numérique de la caisse) : en toutes lettres aussi
-        $this->assertSame(['api_account_delete', 'api_account_membership_leave', 'api_account_memberships', 'api_app_join', 'api_profile_get', 'api_profile_update', 'api_resend_verification',
+        $this->assertSame(['account_support_availability', 'account_support_request', 'account_support_request_attachment', 'account_support_request_create',
+            'account_support_request_reply', 'account_support_requests', 'api_account_delete', 'api_account_membership_leave', 'api_account_memberships', 'api_app_join', 'api_profile_get', 'api_profile_update', 'api_resend_verification',
             'api_validate_token', 'app_verify_email', 'get_stripe_config', 'notifications_appareils_delete', 'notifications_appareils_register', 'pos_public_receipt', 'register'], $classes['apps']);
         // le site vitrine, servi quand la boutique seule est en construction : en toutes lettres aussi. Une route qui sert un article,
         // un prix ou une disponibilité n'a rien à faire ici (la relecture en avait trouvé trois)

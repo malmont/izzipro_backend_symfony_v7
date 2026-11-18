@@ -143,6 +143,12 @@ foreach ([MV_TEST_TENANT_DB, MV_TEST_TENANT2_DB] as $db) {
     // Lot CONSTRUCTION : la boutique des sites de test est tenue pour « déjà ouverte » ; sinon tout essai qui active le module Boutique
     // (droit accordé, indicateur coché) la ferait naître en construction et fermerait la boutique du site partagé pour les essais suivants
     $tenantDb->exec("UPDATE entreprise SET storefront_state = 'open', storefront_opened_at = NOW()");
+    // PROVISOIRE, lot AIDE-APP (18/11/2026) : la migration Version20270201100000 posée sur les COPIES de test, jusqu'à sa pose sur le
+    // modèle des bases de test à la bascule (instructions idempotentes : sans effet une fois le modèle migré ; ce bloc s'enlève alors)
+    require_once dirname(__DIR__) . '/migrations/Version20270201100000.php';
+    foreach (\DoctrineMigrations\Version20270201100000::STATEMENTS as $sql) {
+        $tenantDb->exec($sql);
+    }
     $tenantDb = null;
 }
 
