@@ -278,9 +278,9 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | DELETE | `/api/account/memberships/{app}` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\AppMembershipController\AppMembershipController::leave` |
 | GET | `/api/account/memberships` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\AppMembershipController\AppMembershipController::memberships` |
 | DELETE | `/api/account` | ROLE_USER_INTERNET | `Controller\Account\AccountApiController::delete` |
-| DELETE | `/api/admin-settings/presets/{id}` | ROLE_ADMIN | `Controller\AdminSettingsController\AdminSettingsController::deletePreset` |
+| DELETE | `/api/admin-settings/presets/{id}` | ROLE_ADMIN + `#[IsGranted(ROLE_SUPER_ADMIN)]` | `Controller\AdminSettingsController\AdminSettingsController::deletePreset` |
 | GET | `/api/admin-settings/presets` | PUBLIC_ACCESS | `Controller\AdminSettingsController\AdminSettingsController::getPresets` |
-| POST | `/api/admin-settings/presets` | ROLE_ADMIN | `Controller\AdminSettingsController\AdminSettingsController::savePreset` |
+| POST | `/api/admin-settings/presets` | ROLE_ADMIN + `#[IsGranted(ROLE_SUPER_ADMIN)]` | `Controller\AdminSettingsController\AdminSettingsController::savePreset` |
 | GET | `/api/admin-settings` | PUBLIC_ACCESS | `Controller\AdminSettingsController\AdminSettingsController::getAdminSettings` |
 | PUT | `/api/admin-settings` | ROLE_ADMIN | `Controller\AdminSettingsController\AdminSettingsController::updateAdminSettings` |
 | GET | `/api/adresses/` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\AdressController\AdressApiController::getUserAdresses` |
