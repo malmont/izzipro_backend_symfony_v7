@@ -93,6 +93,7 @@ framework:
             'App\Services\Agency\Message\BuildAgencySiteMessage': media # création d'un site par une agence (lot AG-2) : une fabrication à la fois, jamais relancée
             'App\Services\Platform\Sites\Message\BuildPlatformSiteMessage': media # création d'un site avec son type par la plateforme (lot TYPE-1) : même verrou de fabrication, jamais relancée
             'App\Services\Agency\Message\ResendAgencySiteInvitationMessage': media # invitation de l'administrateur d'un site créé par une agence, renvoyée (lot AG-2)
+            'App\Services\Group\Message\SendGroupInvitationMessage': email # invitation à rejoindre un groupe (lot G-1a) : traitée hors de la requête du siège, qui reçoit toujours la même réponse
             'App\Services\Platform\Essai\Message\RunEssaiMessage': media # remplissage d'un site d'essai par le bouton du web (lot ESSAI-DONNÉES) : jamais relancé
             'App\Message\SendTenantEmailMessage': email
             'App\MemoiresVivantes\Message\GenerateBookPdfMessage': pdf

@@ -261,7 +261,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (655)
+## Boutique et commun (662)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -615,6 +615,10 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | PATCH | `/api/gestion/voyages/{id}` | ROLE_ADMIN | `Gestion\Controller\GestionTripController::update` |
 | GET | `/api/gestion/voyages` | ROLE_ADMIN | `Gestion\Controller\GestionTripController::list` |
 | POST | `/api/gestion/voyages` | ROLE_ADMIN | `Gestion\Controller\GestionTripController::create` |
+| POST | `/api/group/invitations` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\SiteFeaturesController\GroupController::invite` |
+| POST | `/api/group/leave` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\SiteFeaturesController\GroupController::leave` |
+| GET | `/api/group` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\SiteFeaturesController\GroupController::show` |
+| POST | `/api/group` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\SiteFeaturesController\GroupController::create` |
 | GET | `/api/homeslider` | PUBLIC_ACCESS | `Controller\HomeSliderController\HomeSliderController::getHomeSlider` |
 | POST | `/api/import-invitation/accept` | PUBLIC_ACCESS | `Import\Controller\ImportInvitationController::accept` |
 | POST | `/api/import-invitation/decline` | PUBLIC_ACCESS | `Import\Controller\ImportInvitationController::decline` |
@@ -824,6 +828,9 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | POST | `/api/site/features/{key}/trial` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\SiteFeaturesController\SiteFeaturesController::trial` |
 | GET | `/api/site/features` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\SiteFeaturesController\SiteFeaturesController::show` |
 | PUT | `/api/site/features` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\SiteFeaturesController\SiteFeaturesController::update` |
+| POST | `/api/site/group-invitations/{id}/accept` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\SiteFeaturesController\SiteGroupInvitationController::accept` |
+| POST | `/api/site/group-invitations/{id}/refuse` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\SiteFeaturesController\SiteGroupInvitationController::refuse` |
+| GET | `/api/site/group-invitations` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\SiteFeaturesController\SiteGroupInvitationController::list` |
 | GET | `/api/site/help/{key}` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\HelpController\HelpController::page` |
 | GET | `/api/site/help` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\HelpController\HelpController::list` |
 | GET | `/api/site/imports/archive/orders` | ROLE_ADMIN | `Import\Controller\SiteImportController::archiveOrders` |

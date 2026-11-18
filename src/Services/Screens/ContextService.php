@@ -24,6 +24,8 @@ class ContextService
     public const MODE_SINGLE = 'single';
     public const MODE_AGENCY = 'agency';
     public const MODE_SUPER_ADMIN = 'super_admin';
+    /** Lot G-1b : un administrateur du SIÈGE d'un groupe : son site, puis les boutiques du groupe, où il entre comme directeur */
+    public const MODE_GROUP = 'group';
     /** Familles d'un site que voit le compte de ce site (ses rôles tranchent ensuite, écran par écran) */
     private const SITE_FAMILIES = [ScreenRegistry::CONSTRUCTION, ScreenRegistry::VENTE, ScreenRegistry::CLIENTS, ScreenRegistry::GESTION, ScreenRegistry::PERTES,
         ScreenRegistry::ASSISTANCE, ScreenRegistry::CONTENUS, ScreenRegistry::SECURITE];
@@ -40,7 +42,21 @@ class ContextService
         private readonly SiteSnapshotReader $snapshots,
         private readonly RoleHierarchyInterface $hierarchy,
         private readonly ?\App\Services\Platform\PlatformModeService $platformMode = null,
+        private readonly ?\App\Services\Group\GroupRepository $groups = null,
+        private readonly ?\App\Services\FeatureAccess\ModuleAccessService $modules = null,
     ) {
+    }
+
+    /**
+     * Lot G-1b : le site courant est-il le SIÈGE d'un groupe actif, au module actif (lecture légère pour le menu d'EasyAdmin et le sélecteur ;
+     * le rôle d'administrateur se juge à part) ?
+     */
+    public function isGroupHead(): bool
+    {
+        $current = (string) $this->tenants->getCurrentTenantCode();
+        $group = $current !== '' && $this->groups !== null ? $this->groups->ofSite($current) : null;
+
+        return $group !== null && $group['head_tenant_code'] === $current && $this->modules?->isEnabled(\App\Services\FeatureAccess\ModuleAccessService::MULTI_SHOP) === true;
     }
 
     /**
@@ -61,7 +77,7 @@ class ContextService
             // tous les sites, plus les écrans de la plateforme
             $sites = array_map(fn (array $site): array => $this->site($site, $current, self::SITE_FAMILIES, $hasRole), $this->platformSites->sites());
 
-            return ['mode' => self::MODE_SUPER_ADMIN, 'site' => $current, 'agency' => null, 'sites' => $sites,
+            return ['mode' => self::MODE_SUPER_ADMIN, 'site' => $current, 'agency' => null, 'group' => null, 'sites' => $sites,
                 'all' => ['key' => 'sites', 'screens' => ScreenRegistry::visible([ScreenRegistry::PLATEFORME], [], $hasRole)]];
         }
         $agency = AgencyRoles::has($roles) && $current !== '' ? $this->agencies->findByHome($current) : null;
@@ -81,15 +97,33 @@ class ContextService
                 $sites[] = $this->site($site, $current, $families, $asBuilder) + ['home' => false];
             }
 
-            return ['mode' => self::MODE_AGENCY, 'site' => $current, 'agency' => ['id' => (int) $agency['id'], 'code' => (string) $agency['code'], 'name' => (string) $agency['name'], 'status' => (string) $agency['status']],
+            return ['mode' => self::MODE_AGENCY, 'site' => $current, 'agency' => ['id' => (int) $agency['id'], 'code' => (string) $agency['code'], 'name' => (string) $agency['name'], 'status' => (string) $agency['status']], 'group' => null,
                 'sites' => $sites, 'all' => ['key' => 'clients', 'screens' => ScreenRegistry::visible([ScreenRegistry::AGENCE], [], $hasRole)]];
+        }
+        $group = $current !== '' && $this->groups !== null ? $this->groups->ofSite($current) : null;
+        if ($group !== null && $hasRole('ROLE_ADMIN') && $this->isGroupHead()) {
+            // lot G-1b : le siège, puis les boutiques du groupe ; le directeur y a les écrans d'un administrateur (la garde ferme Stripe, les
+            // remboursements et le compte)
+            $sites = [];
+            foreach ($this->platformSites->sites(null, [$current]) as $site) {
+                $sites[] = $this->site($site, $current, self::SITE_FAMILIES, $hasRole) + ['home' => true];
+            }
+            $shops = array_values(array_filter(array_map(static fn (array $row): string => (string) $row['tenant_code'], $this->groups->shops((int) $group['id'])), static fn (string $code): bool => $code !== $current));
+            foreach ($shops === [] ? [] : $this->platformSites->sites(null, $shops) as $site) {
+                $sites[] = $this->site($site, $current, self::SITE_FAMILIES, static fn (string $role): bool => $role === 'ROLE_ADMIN') + ['home' => false];
+            }
+
+            return ['mode' => self::MODE_GROUP, 'site' => $current, 'agency' => null, 'group' => ['id' => (int) $group['id'], 'name' => (string) $group['name'], 'role' => 'head'],
+                'sites' => $sites, 'all' => null];
         }
         $sites = [];
         foreach ($current === '' ? [] : $this->platformSites->sites(null, [$current]) as $site) {
             $sites[] = $this->site($site, $current, self::SITE_FAMILIES, $hasRole);
         }
+        // une boutique du groupe (pas le siège) le dit à son administrateur ; jamais à un compte sans rôle d'équipe
+        $member = $group !== null && $this->team && $group['head_tenant_code'] !== $current ? ['id' => (int) $group['id'], 'name' => (string) $group['name'], 'role' => 'shop'] : null;
 
-        return ['mode' => self::MODE_SINGLE, 'site' => $current, 'agency' => null, 'sites' => $sites, 'all' => null];
+        return ['mode' => self::MODE_SINGLE, 'site' => $current, 'agency' => null, 'group' => $member, 'sites' => $sites, 'all' => null];
     }
 
     /**

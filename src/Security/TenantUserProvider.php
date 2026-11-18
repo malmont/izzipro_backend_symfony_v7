@@ -70,6 +70,17 @@ class TenantUserProvider implements UserProviderInterface, \Lexik\Bundle\JWTAuth
                 'username' => 'entry:' . $user->getEntryId(), 'tenant_code' => $current], $current);
         }
 
+        if ($user instanceof Entry\GroupOperator) {
+            // lot G-1b : le directeur d'un groupe entré dans EasyAdmin, relu de même à chaque requête
+            if ($this->entries === null) {
+                throw new UserNotFoundException('Directeur du groupe : entrée illisible.');
+            }
+            $current = $this->tenants?->getTenantCode();
+
+            return $this->entries->userFor(['entry' => ['id' => $user->getEntryId(), 'mode' => \App\Services\Entry\EntryService::MODE_GROUP, 'home' => $user->getHome()],
+                'username' => 'entry:' . $user->getEntryId(), 'tenant_code' => $current], $current);
+        }
+
         return $this->loadUserByIdentifier($user->getUserIdentifier());
     }
 
@@ -78,6 +89,7 @@ class TenantUserProvider implements UserProviderInterface, \Lexik\Bundle\JWTAuth
         return $class === User::class 
             || is_subclass_of($class, User::class)
             || $class === Entry\ExternalOperator::class
+            || $class === Entry\GroupOperator::class
             || $class === EsgUser::class
             || is_subclass_of($class, EsgUser::class);
     }

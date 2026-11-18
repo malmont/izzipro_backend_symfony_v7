@@ -11,19 +11,19 @@ use App\Services\TenantConnectionManager;
  */
 class EntryRepository
 {
-    private const COLUMNS = 'id, mode, home_tenant_code, target_tenant_code, account_id, account_email, first_name, agency_id, agency_name, created_at, expires_at, ended_at, ended_reason';
+    private const COLUMNS = 'id, mode, home_tenant_code, target_tenant_code, account_id, account_email, first_name, agency_id, agency_name, group_id, created_at, expires_at, ended_at, ended_reason';
 
     public function __construct(private readonly TenantConnectionManager $tenants)
     {
     }
 
-    /** Ouvre une entrée ; rend son numéro */
-    public function open(string $mode, string $home, string $target, int $accountId, string $accountEmail, string $firstName, ?int $agencyId, ?string $agencyName, \DateTimeImmutable $expiresAt): int
+    /** Ouvre une entrée ; rend son numéro. Lot G-1b : en mode `group`, `$agencyName` porte le nom du groupe et `$groupId` son numéro */
+    public function open(string $mode, string $home, string $target, int $accountId, string $accountEmail, string $firstName, ?int $agencyId, ?string $agencyName, \DateTimeImmutable $expiresAt, ?int $groupId = null): int
     {
-        $stmt = $this->pdo()->prepare('INSERT INTO site_entries (mode, home_tenant_code, target_tenant_code, account_id, account_email, first_name, agency_id, agency_name, created_at, expires_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id');
+        $stmt = $this->pdo()->prepare('INSERT INTO site_entries (mode, home_tenant_code, target_tenant_code, account_id, account_email, first_name, agency_id, agency_name, group_id, created_at, expires_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id');
         $stmt->execute([$mode, $home, $target, $accountId, mb_substr($accountEmail, 0, 180), mb_substr($firstName, 0, 100), $agencyId, $agencyName !== null ? mb_substr($agencyName, 0, 160) : null,
-            self::utc(new \DateTimeImmutable()), self::utc($expiresAt)]);
+            $groupId, self::utc(new \DateTimeImmutable()), self::utc($expiresAt)]);
 
         return (int) $stmt->fetchColumn();
     }
@@ -61,6 +61,21 @@ class EntryRepository
     }
 
     /**
+     * Lot G-1b : ferme les entrées ouvertes du directeur d'un groupe dans une boutique (elle quitte le groupe), ou dans toutes (dissolution,
+     * `$target` null) ; rend leurs numéros.
+     *
+     * @return list<int>
+     */
+    public function endForGroup(int $groupId, ?string $target, string $reason): array
+    {
+        $stmt = $this->pdo()->prepare("UPDATE site_entries SET ended_at = ?, ended_reason = ? WHERE mode = 'group' AND group_id = ? AND ended_at IS NULL"
+            . ($target !== null ? ' AND target_tenant_code = ?' : '') . ' RETURNING id');
+        $stmt->execute([self::utc(new \DateTimeImmutable()), mb_substr($reason, 0, 30), $groupId, ...($target !== null ? [$target] : [])]);
+
+        return array_map('intval', $stmt->fetchAll(\PDO::FETCH_COLUMN) ?: []);
+    }
+
+    /**
      * Les dernières entrées dans ce site, de la plus récente à la plus ancienne.
      *
      * @return list<array<string, mixed>>
@@ -79,6 +94,7 @@ class EntryRepository
         $row['id'] = (int) $row['id'];
         $row['account_id'] = (int) $row['account_id'];
         $row['agency_id'] = $row['agency_id'] !== null ? (int) $row['agency_id'] : null;
+        $row['group_id'] = isset($row['group_id']) ? (int) $row['group_id'] : null;
 
         return $row;
     }

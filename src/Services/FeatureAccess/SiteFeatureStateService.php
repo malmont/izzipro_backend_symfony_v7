@@ -161,7 +161,7 @@ class SiteFeatureStateService
                 $value = (bool) ($e?->isPricesIncludeTax() ?? false);
                 $status = $value ? 'ready' : 'off';
                 break;
-            case 'module.landing': case 'module.boutique': case 'module.pos': case 'module.memoires': case 'module.boussole': case 'module.support': case 'module.loss_prevention':
+            case 'module.landing': case 'module.boutique': case 'module.pos': case 'module.memoires': case 'module.boussole': case 'module.support': case 'module.loss_prevention': case 'module.multi_shop':
                 $module = substr($key, 7);
                 $value = (bool) ($flags[$module] ?? true);
                 $status = $value ? 'ready' : 'off';

@@ -105,10 +105,38 @@ class PlatformAccessJournal
 
         return array_map(static function (array $row): array {
             $after = is_string($row['after_state']) ? json_decode($row['after_state'], true) : null;
-            $agency = is_array($after) && ($after['mode'] ?? null) === \App\Services\Entry\EntryService::MODE_AGENCY;
+            $mode = is_array($after) ? ($after['mode'] ?? null) : null;
+            [$channel, $label] = match ($mode) {
+                \App\Services\Entry\EntryService::MODE_AGENCY => ['entry_agency', 'Entrée d\'une agence (15 minutes, renouvelable)'],
+                \App\Services\Entry\EntryService::MODE_GROUP => ['entry_group', 'Entrée du directeur du groupe (15 minutes, renouvelable)'], // lot G-1b
+                default => ['entry_platform', 'Entrée de la plateforme (15 minutes, renouvelable)'],
+            };
 
             return ['at' => new \DateTimeImmutable((string) $row['created_at'], new \DateTimeZone('UTC')), 'account' => (string) $row['user_identifier'],
-                'channel' => $agency ? 'entry_agency' : 'entry_platform', 'channelLabel' => $agency ? 'Entrée d\'une agence (15 minutes, renouvelable)' : 'Entrée de la plateforme (15 minutes, renouvelable)'];
+                'channel' => $channel, 'channelLabel' => $label];
+        }, $rows);
+    }
+
+    /**
+     * Lot G-1b : chaque ÉCRITURE du directeur d'un groupe dans ce site (« Groupe X, prénom »), la plus récente d'abord : la méthode, le chemin, le
+     * statut. Écrite par la garde du mode à la réponse.
+     *
+     * @return list<array{at: \DateTimeImmutable, account: string, channel: string, channelLabel: string}>
+     */
+    public function groupWrites(int $limit = 100): array
+    {
+        $rows = $this->emProvider->getEntityManager()->getConnection()->fetchAllAssociative(
+            "SELECT created_at, user_identifier, after_state FROM content_audit_log WHERE resource = ? AND action = 'write' AND tenant = ?"
+            . " AND (CASE WHEN resource = 'external_access' AND action = 'write' THEN after_state::jsonb ->> 'mode' END) = ? ORDER BY id DESC LIMIT " . max(1, min(500, $limit)),
+            [\App\Services\Entry\EntryService::JOURNAL_RESOURCE, $this->tenant(), \App\Services\Entry\EntryService::MODE_GROUP]
+        );
+
+        return array_map(static function (array $row): array {
+            $after = is_string($row['after_state']) ? json_decode($row['after_state'], true) : null;
+            $after = is_array($after) ? $after : [];
+
+            return ['at' => new \DateTimeImmutable((string) $row['created_at'], new \DateTimeZone('UTC')), 'account' => (string) $row['user_identifier'],
+                'channel' => 'group_write', 'channelLabel' => sprintf('Modification par le directeur du groupe : %s %s', (string) ($after['method'] ?? ''), (string) ($after['path'] ?? ''))];
         }, $rows);
     }
 

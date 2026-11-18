@@ -6,6 +6,7 @@ use App\Entity\User;
 use App\Security\AgencyRoles;
 use App\Security\Entry\EntryContext;
 use App\Security\Entry\ExternalOperator;
+use App\Security\Entry\GroupOperator;
 use App\Services\Agency\AgencyRepository;
 use App\Services\Platform\PlatformAccessJournal;
 use App\Services\Platform\TenantDatabaseConnector;
@@ -43,6 +44,8 @@ class EntryService
     public const CHECK_TTL = 60;
     public const MODE_AGENCY = 'agency';
     public const MODE_SUPER_ADMIN = 'super_admin';
+    /** Lot G-1b : le DIRECTEUR d'un groupe (un administrateur du siège) dans une boutique du groupe */
+    public const MODE_GROUP = 'group';
     /** La trace d'une entrée au journal du site visé (`content_audit_log`), lue par la page « Accès extérieurs » */
     public const JOURNAL_RESOURCE = 'external_access';
     public const JOURNAL_ACTION = 'entry';
@@ -57,6 +60,7 @@ class EntryService
         private readonly EntryContext $context,
         private readonly TenantEntityManagerProvider $emProvider,
         private readonly LoggerInterface $logger,
+        private readonly ?\App\Services\Group\GroupRepository $groups = null,
     ) {
     }
 
@@ -139,6 +143,14 @@ class EntryService
             $label = ExternalOperator::platformLabel($firstName); // jamais une adresse au journal du site visé (17/11/2026)
             $mode = self::MODE_SUPER_ADMIN;
             $agencyName = null;
+        } elseif ($site !== null && ($group = $this->directedGroup($roles, $home, $site['code'])) !== null) {
+            // lot G-1b : le directeur du groupe entre dans une boutique du groupe (avant le rôle d'agence : deux liens séparés, et la
+            // boutique du groupe n'est pas gérée par l'agence de ce compte)
+            $id = $this->entries->open(self::MODE_GROUP, $home, $site['code'], (int) $account->getId(), (string) $account->getEmail(), $firstName, null, (string) $group['name'], $expires, (int) $group['id']);
+            $payload = ['username' => 'entry:' . $id];
+            $label = GroupOperator::label((string) $group['name'], $firstName);
+            $mode = self::MODE_GROUP;
+            $agencyName = (string) $group['name'];
         } elseif (AgencyRoles::has($roles)) {
             $agency = $this->agencies->findByHome($home);
             if ($agency === null || !in_array($agency['status'], self::LIVE_AGENCY, true)) {
@@ -175,7 +187,7 @@ class EntryService
     public function sessionEntry(array $entry, ?string $current): ?string
     {
         $payload = ['entry' => ['id' => $entry['id'] ?? 0, 'mode' => $entry['mode'] ?? null, 'home' => $entry['home'] ?? null], 'tenant_code' => $current];
-        $payload += ($entry['mode'] ?? null) === self::MODE_AGENCY ? ['username' => 'entry:' . ($entry['id'] ?? 0)] : ['id' => $entry['account'] ?? null, 'username' => $entry['email'] ?? null];
+        $payload += in_array($entry['mode'] ?? null, [self::MODE_AGENCY, self::MODE_GROUP], true) ? ['username' => 'entry:' . ($entry['id'] ?? 0)] : ['id' => $entry['account'] ?? null, 'username' => $entry['email'] ?? null];
         try {
             $state = $this->evaluate($payload, $current);
         } catch (\Throwable $e) {
@@ -212,6 +224,11 @@ class EntryService
             throw new UserNotFoundException('Entrée fermée ou jeton d\'entrée mal formé.');
         }
         $entry = ['id' => $state['id'], 'mode' => $state['mode'], 'home' => $state['home']];
+        if ($state['mode'] === self::MODE_GROUP) {
+            $this->context->set($entry);
+
+            return new GroupOperator($state['id'], (int) $state['groupId'], (string) $state['agencyName'], (string) $state['firstName'], $state['home']);
+        }
         if ($state['mode'] === self::MODE_AGENCY) {
             $this->context->set($entry);
 
@@ -251,7 +268,7 @@ class EntryService
      * gardé une minute au plus.
      *
      * @param array<string, mixed> $payload
-     * @return array{reason: ?string, id: int, mode: string, home: string, agencyId: ?int, agencyName: ?string, firstName: string, origin: ?string}
+     * @return array{reason: ?string, id: int, mode: string, home: string, agencyId: ?int, agencyName: ?string, firstName: string, origin: ?string, groupId?: ?int}
      */
     private function evaluate(array $payload, ?string $current): array
     {
@@ -260,9 +277,9 @@ class EntryService
         $mode = is_array($entry) ? ($entry['mode'] ?? null) : null;
         $home = is_array($entry) ? ($entry['home'] ?? null) : null;
         $refused = static fn (string $reason): array => ['reason' => $reason, 'id' => $id, 'mode' => (string) $mode, 'home' => (string) $home, 'agencyId' => null, 'agencyName' => null, 'firstName' => '', 'origin' => null];
-        if ($id <= 0 || !in_array($mode, [self::MODE_AGENCY, self::MODE_SUPER_ADMIN], true) || !is_string($home) || $current === null || $current === ''
+        if ($id <= 0 || !in_array($mode, [self::MODE_AGENCY, self::MODE_SUPER_ADMIN, self::MODE_GROUP], true) || !is_string($home) || $current === null || $current === ''
             || ($payload['tenant_code'] ?? null) !== $current
-            || ($mode === self::MODE_AGENCY && ($payload['username'] ?? null) !== 'entry:' . $id)
+            || (in_array($mode, [self::MODE_AGENCY, self::MODE_GROUP], true) && ($payload['username'] ?? null) !== 'entry:' . $id)
             || ($mode === self::MODE_SUPER_ADMIN && (!isset($payload['id']) || !is_numeric($payload['id'])))) {
             return $refused('malformed');
         }
@@ -287,7 +304,7 @@ class EntryService
         }
 
         return ['reason' => null, 'id' => $id, 'mode' => $mode, 'home' => $home, 'agencyId' => $row['agency_id'], 'agencyName' => $row['agency_name'],
-            'firstName' => (string) $row['first_name'], 'origin' => $link['origin']];
+            'firstName' => (string) $row['first_name'], 'origin' => $link['origin'], 'groupId' => $row['group_id'] ?? null];
     }
 
     /**
@@ -343,6 +360,22 @@ class EntryService
         if ($row['mode'] === self::MODE_SUPER_ADMIN) {
             return [PlatformAccessJournal::isPlatformAccount($account['roles']) ? null : 'role', null];
         }
+        if ($row['mode'] === self::MODE_GROUP) {
+            // lot G-1b : toujours administrateur du siège, groupe actif dont ce site est encore le siège, module actif au siège, boutique encore
+            // dans le groupe (quitter ferme aussi les entrées tout de suite : GroupService)
+            if (!in_array('ROLE_ADMIN', $account['roles'], true) || PlatformAccessJournal::isPlatformAccount($account['roles'])) {
+                return ['role', null];
+            }
+            $group = $row['group_id'] !== null ? $this->groups?->find((int) $row['group_id']) : null;
+            if ($group === null || $group['status'] !== 'active' || $group['head_tenant_code'] !== $row['home_tenant_code']) {
+                return ['group', null];
+            }
+            if (!$this->multiShopOn($home['dbname'])) {
+                return ['module', null];
+            }
+
+            return [$this->groups->isOpenShop((int) $group['id'], (string) $row['target_tenant_code']) ? null : 'left', null];
+        }
         if (!AgencyRoles::has($account['roles'])) {
             return ['role', null];
         }
@@ -353,6 +386,46 @@ class EntryService
         $managed = $this->agencies->site((int) $agency['id'], (string) $row['target_tenant_code']);
 
         return $managed === null ? ['detached', null] : [null, (string) $managed['origin']];
+    }
+
+    /**
+     * Lot G-1b : les groupes ne s'ouvrent qu'aux administrateurs du SIÈGE (jamais au compte de la plateforme, qui a son propre mode), groupe
+     * actif, module actif au siège, et vers une boutique ouverte du groupe autre que le siège. Rend le groupe, ou null.
+     *
+     * @param list<string> $roles
+     * @return array<string, mixed>|null
+     */
+    private function directedGroup(array $roles, string $home, string $target): ?array
+    {
+        if ($this->groups === null || !in_array('ROLE_ADMIN', $roles, true) || PlatformAccessJournal::isPlatformAccount($roles)) {
+            return null;
+        }
+        $group = $this->groups->ofSite($home);
+        if ($group === null || $group['head_tenant_code'] !== $home || $target === $home || !$this->groups->isOpenShop((int) $group['id'], $target)) {
+            return null;
+        }
+        $site = $this->agencies->tenant($home);
+
+        return $site !== null && $this->multiShopOn((string) $site['dbname']) ? $group : null;
+    }
+
+    /** Lot G-1b : le module Multi-boutiques est-il actif au siège (lu dans SA base, sans toucher à la connexion de la requête) ? */
+    private function multiShopOn(string $dbname): bool
+    {
+        $value = $this->databases->pdo($dbname)->query('SELECT is_multi_shop_active FROM entreprise ORDER BY id LIMIT 1')->fetchColumn();
+
+        return in_array($value, [true, 't', 'true', 1, '1'], true);
+    }
+
+    /**
+     * Lot G-1b : une boutique quitte le groupe (ou il est dissous, `$target` null) : les entrées du directeur se ferment TOUT DE SUITE, la
+     * requête suivante reçoit 401 `ENTRY_ENDED`.
+     */
+    public function endForGroup(int $groupId, ?string $target, string $reason): void
+    {
+        foreach ($this->entries->endForGroup($groupId, $target, $reason) as $id) {
+            $this->cache->delete(self::cacheKey($id));
+        }
     }
 
     /** Le compte a-t-il une session vivante sur le site courant (le site d'attache) : un jeton de renouvellement non échu ? */
@@ -397,7 +470,8 @@ class EntryService
         try {
             $this->databases->pdo($dbname)->prepare('INSERT INTO content_audit_log (created_at, user_identifier, tenant, resource, resource_id, action, fields, after_state) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
                 ->execute([(new \DateTimeImmutable('now', new \DateTimeZone('UTC')))->format('Y-m-d H:i:s'), mb_substr($label, 0, 180), $code, self::JOURNAL_RESOURCE, (string) $id,
-                    self::JOURNAL_ACTION, 'mode', json_encode(['mode' => $mode, 'agency' => $agencyName, 'firstName' => $mode === self::MODE_AGENCY ? $firstName : null], \JSON_UNESCAPED_UNICODE)]);
+                    self::JOURNAL_ACTION, 'mode', json_encode(['mode' => $mode, 'agency' => $mode === self::MODE_GROUP ? null : $agencyName, 'group' => $mode === self::MODE_GROUP ? $agencyName : null,
+                    'firstName' => $mode !== self::MODE_SUPER_ADMIN ? $firstName : null], \JSON_UNESCAPED_UNICODE)]);
         } catch (\Throwable $e) {
             $this->logger->error('Entrée dans un autre site : trace non écrite au journal du site visé (' . $e::class . ') : entrée refusée.');
             $this->entries->end($id, 'trace');

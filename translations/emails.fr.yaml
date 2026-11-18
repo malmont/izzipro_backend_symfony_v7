@@ -306,3 +306,10 @@ assistance_request:
     button: 'Ouvrir « Tous mes clients »'
     validity: 'Sans entrée dans les 24 heures, la demande expire. Le commerçant peut fermer l''assistance à tout moment, et voit chaque écran consulté.'
     ignore: 'Pendant l''assistance, les clés, Stripe, le courriel expéditeur, les comptes et les exports restent fermés, et aucun paiement, remboursement ni encaissement ne peut être fait.'
+group_invitation:
+    subject: '%site% : invitation à rejoindre le groupe %group%'
+    title: 'Invitation à rejoindre un groupe'
+    greeting: 'Bonjour,'
+    message: 'Le groupe « %group% » (siège : %head%) invite votre boutique %site% à le rejoindre. %consent% Pour accepter ou refuser, ouvrez votre espace d''administration : la demande vous attend dans l''onglet « Groupe ».'
+    validity: 'L''invitation vaut %days% jours. Sans réponse, elle expire.'
+    ignore: 'Si vous ne connaissez pas ce groupe, refusez l''invitation ou ignorez ce message : rien ne change sans votre accord.'

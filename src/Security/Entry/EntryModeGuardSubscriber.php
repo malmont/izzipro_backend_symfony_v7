@@ -63,6 +63,27 @@ class EntryModeGuardSubscriber implements EventSubscriberInterface
         ['#^/admin/(mon-site|configuration)(/|$)#', [], 'figures'],
         ['#^/admin/acces-plateforme(/|$)#', [], 'journal'],
     ];
+    /** Lot G-1b : posé sur une requête du directeur d'un groupe servie, pour la trace de son écriture */
+    public const GROUP_ATTRIBUTE = '_entry_group';
+    /**
+     * Lot G-1b : fermés au DIRECTEUR d'un groupe (`GroupOperator`), qui a sinon tout le site (décision du propriétaire du 18/11/2026 : sans
+     * Stripe ni remboursement, et pas le compte). Les gestes d'argent d'une commande (annuler, capturer, retour) remboursent ou encaissent
+     * par Stripe ; les gestes de module changent ce que la boutique paie. Expression du chemin => [méthodes (vide : toutes), raison].
+     */
+    private const GROUP_CLOSED = [
+        ['#stripe#i', [], 'payment'],
+        ['#^/api/pos/terminal(/|$)#', [], 'payment'],
+        ['#(^|/)(refunds?|rembourser|remboursements?)(/|$)#i', [], 'refund'],
+        ['#^/admin/orders/\d+/(annuler|capturer|retour)$#', [], 'refund'],
+        ['#^/api/order/cancel/\d+$#', [], 'refund'],
+        ['#^/api/pos/(returns|exchanges)$#', ['POST'], 'refund'],
+        ['#^/api/pos/rentals/deposits/\d+/return$#', [], 'refund'],
+        ['#^/api/site/features/[^/]+/(request|trial|enable|disable)$#', [], 'modules'],
+        ['#^/api/site/features$#', ['PUT', 'PATCH', 'POST'], 'modules'],
+        // Mémoires Vivantes : un projet à part (décision du propriétaire du 16/11/2026), outil de l'équipe et de ses clients, jamais du
+        // directeur d'un groupe (ses routes attendent un compte du site : trouvé par la sonde de G-1b)
+        ['#^/api/memoires(/|$)#', [], 'memoires'],
+    ];
     /** Champs du coût d'un article, jamais écrits par l'opérateur (le coût d'achat, et le coût de la commande fournisseur que lisent la
      *  marge, la valeur du stock et le résultat de période) */
     private const COST_FIELDS = ['purchasePrice', 'coefficientMultiplier', 'commande', 'commandeCostCents', 'commandeQuantity', 'commandeAttachedAt', 'commandeCostEstimated'];
@@ -122,6 +143,29 @@ class EntryModeGuardSubscriber implements EventSubscriberInterface
         return [self::OPEN, $target, null];
     }
 
+    /**
+     * Lot G-1b : la décision pour le DIRECTEUR d'un groupe : null = servie ; sinon la raison du refus. Tout le site est ouvert, sauf le compte
+     * (`@compte` : un jeton d'entrée n'en obtient pas d'autre), les écrans du paiement et GROUP_CLOSED.
+     */
+    public static function groupDecision(string $method, string $path, ?string $adminTarget = null): ?string
+    {
+        $method = strtoupper($method);
+        $target = self::isAdmin($path) && $adminTarget !== null ? $adminTarget : ScreenRegistry::classify($method, $path);
+        if ($target === '@compte') {
+            return 'account';
+        }
+        if ($target === 'admin.paiement') {
+            return 'payment';
+        }
+        foreach (self::GROUP_CLOSED as [$pattern, $methods, $reason]) {
+            if (preg_match($pattern, $path) === 1 && ($methods === [] || in_array($method, $methods, true))) {
+                return $reason;
+            }
+        }
+
+        return null;
+    }
+
     /** Lot AG-3c : une page d'EasyAdmin (`/admin` et ses pages à adresse propre) */
     public static function isAdmin(string $path): bool
     {
@@ -138,6 +182,11 @@ class EntryModeGuardSubscriber implements EventSubscriberInterface
         }
         $request = $event->getRequest();
         $user = $this->tokens->getToken()?->getUser();
+        if ($user instanceof GroupOperator) {
+            $this->groupRequest($event, $request);
+
+            return;
+        }
         if (!$user instanceof ExternalOperator) {
             // l'entrée du compte de la plateforme garde tous ses écrans de site, mais n'écrit rien sur un compte (profil, adresse, mot
             // de passe : une telle écriture rendrait un jeton ordinaire)
@@ -186,6 +235,32 @@ class EntryModeGuardSubscriber implements EventSubscriberInterface
             return;
         }
         $request->attributes->set(self::ATTRIBUTE, $target);
+    }
+
+    /** Lot G-1b : la requête du directeur d'un groupe ; une requête `/admin` se juge sur ce qu'EasyAdmin va exécuter, comme pour l'agence */
+    private function groupRequest(RequestEvent $event, Request $request): void
+    {
+        $path = RequestPath::of($request);
+        if (in_array($path, self::ADMIN_EXITS, true)) {
+            return;
+        }
+        $adminTarget = null;
+        if ($path === '/admin') {
+            [$adminPath, $adminTarget, $refused] = $this->adminRequest($request);
+            if ($refused !== null) {
+                $event->setResponse($this->adminRefusal($refused));
+
+                return;
+            }
+            $path = $adminPath;
+        }
+        $reason = self::groupDecision($request->getMethod(), $path, $adminTarget);
+        if ($reason !== null) {
+            $event->setResponse(self::isAdmin($path) ? $this->adminRefusal($reason) : $this->refusal($reason));
+
+            return;
+        }
+        $request->attributes->set(self::GROUP_ATTRIBUTE, true);
     }
 
     /**
@@ -323,6 +398,11 @@ class EntryModeGuardSubscriber implements EventSubscriberInterface
 
             return; // une section ouverte par le commerçant : servie entière (ni champs sensibles de la construction à retirer, ni filtre)
         }
+        if ($event->isMainRequest() && $request->attributes->get(self::GROUP_ATTRIBUTE) === true) {
+            $this->traceWrite($request, $event->getResponse()->getStatusCode()); // le directeur : tout servi, chaque écriture tracée « Groupe X, prénom »
+
+            return;
+        }
         $target = $request->attributes->get(self::ATTRIBUTE);
         $response = $event->getResponse();
         if (!is_string($target) || !$event->isMainRequest()) {
@@ -417,14 +497,15 @@ class EntryModeGuardSubscriber implements EventSubscriberInterface
     private function traceWrite(Request $request, int $status): void
     {
         $operator = $this->tokens->getToken()?->getUser();
-        if (!in_array($request->getMethod(), self::WRITE, true) || $status >= 400 || !$operator instanceof ExternalOperator) {
+        if (!in_array($request->getMethod(), self::WRITE, true) || $status >= 400 || !($operator instanceof ExternalOperator || $operator instanceof GroupOperator)) {
             return;
         }
         try {
             $this->emProvider->getEntityManager()->getConnection()->insert('content_audit_log', [
                 'created_at' => (new \DateTimeImmutable('now', new \DateTimeZone('UTC')))->format('Y-m-d H:i:s'), 'user_identifier' => mb_substr($operator->getUserIdentifier(), 0, 180),
                 'tenant' => (string) ($this->tenants?->getTenantCode() ?? ''), 'resource' => \App\Services\Entry\EntryService::JOURNAL_RESOURCE, 'resource_id' => (string) $operator->getEntryId(),
-                'action' => 'write', 'fields' => 'request', 'after_state' => json_encode(['method' => $request->getMethod(), 'path' => mb_substr(RequestPath::of($request), 0, 200), 'status' => $status], \JSON_UNESCAPED_SLASHES),
+                'action' => 'write', 'fields' => 'request', 'after_state' => json_encode(['method' => $request->getMethod(), 'path' => mb_substr(RequestPath::of($request), 0, 200), 'status' => $status]
+                    + ($operator instanceof GroupOperator ? ['mode' => \App\Services\Entry\EntryService::MODE_GROUP] : []), \JSON_UNESCAPED_SLASHES), // lot G-1b : lue par « Accès extérieurs »
             ]);
         } catch (\Throwable) {
             // la trace manque : la réponse part quand même (l'écriture est faite)

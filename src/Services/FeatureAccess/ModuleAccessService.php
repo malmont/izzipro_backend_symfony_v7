@@ -31,6 +31,8 @@ class ModuleAccessService
      * `management` ; son indicateur est vérifié en plus par `App\LossPrevention\LossPreventionModuleSubscriber` (aucun motif dans ROUTES).
      */
     public const LOSS_PREVENTION = 'loss_prevention';
+    /** Multi-boutiques (lot G-1a, 18/11/2026) : droit module.multi_shop */
+    public const MULTI_SHOP = 'multi_shop';
     /** E-commerce mobile (lot ENT-1, 16/11/2026) : droit app.mobile_shop, gardé sur les débuts de parcours marqués `X-App: mobile` (AppRightRoutes) */
     public const MOBILE_SHOP = 'mobile_shop';
 
@@ -44,6 +46,7 @@ class ModuleAccessService
         self::MANAGEMENT => 'is_management_app_active',
         self::SUPPORT => 'is_support_active',
         self::LOSS_PREVENTION => 'is_loss_prevention_active',
+        self::MULTI_SHOP => 'is_multi_shop_active',
         self::MOBILE_SHOP => 'is_mobile_shop_active',
     ];
 
@@ -51,7 +54,7 @@ class ModuleAccessService
     public const FEATURE_KEYS = [
         self::LANDING => 'module.landing', self::BOUTIQUE => 'module.boutique', self::POS => 'module.pos', self::MEMOIRES => 'module.memoires',
         self::BOUSSOLE => 'module.boussole', self::MANAGEMENT => 'app.management', self::SUPPORT => 'module.support',
-        self::LOSS_PREVENTION => 'module.loss_prevention', self::MOBILE_SHOP => 'app.mobile_shop',
+        self::LOSS_PREVENTION => 'module.loss_prevention', self::MULTI_SHOP => 'module.multi_shop', self::MOBILE_SHOP => 'app.mobile_shop',
     ];
 
     public const LABELS = [
@@ -63,6 +66,7 @@ class ModuleAccessService
         self::MANAGEMENT => 'Application de gestion',
         self::SUPPORT => 'Assistance',
         self::LOSS_PREVENTION => 'Prévention des pertes',
+        self::MULTI_SHOP => 'Multi-boutiques',
         self::MOBILE_SHOP => 'E-commerce mobile',
     ];
 

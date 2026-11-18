@@ -75,6 +75,8 @@ final class ScreenRegistry
         'site.essai' => ['family' => self::VENTE, 'module' => null],
         // lot AG-3d : « J'ai vérifié mes taxes », un geste du commerçant seul (jamais de l'agence, qui garde les taxes en construction)
         'site.taxes' => ['family' => self::VENTE, 'module' => null],
+        // lot G-1a : le groupe de boutiques (siège) et les invitations reçues (boutique) : gestes du commerçant, jamais de l'agence
+        'groupe' => ['family' => self::VENTE, 'module' => null],
         'imports.commandes' => ['family' => self::VENTE, 'module' => 'module.boutique'],
         'imports.clients' => ['family' => self::CLIENTS, 'module' => 'module.boutique'],
         // --- Clients, assistance, contenus (web)
@@ -290,6 +292,7 @@ final class ScreenRegistry
         ['#^/api/site/assistant(/|$)#', 'site.assistant'],
         ['#^/api/site/essai(/|$)#', 'site.essai'],
         ['#^/api/site/taxes(/|$)#', 'site.taxes'],
+        ['#^/api/(group|site/group-invitations)(/|$)#', 'groupe'],
         ['#^/api/site/domain(/|$)#', 'site.domaine'],
         ['#^/api/site/features(/|$)#', 'site.modules'],
         ['#^/api/site/help(/|$)#', 'site.aide'],

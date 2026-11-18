@@ -64,9 +64,10 @@ final class AdminPassAuthenticator extends AbstractAuthenticator
         }
         $entry = ['id' => $claims['entry'], 'mode' => $claims['mode'], 'home' => $claims['home'], 'target' => $claims['target'],
             'account' => $claims['account'] ?? null, 'email' => $claims['email'] ?? null];
-        if ($claims['mode'] === EntryService::MODE_AGENCY) {
+        if (in_array($claims['mode'], [EntryService::MODE_AGENCY, EntryService::MODE_GROUP], true)) {
+            // l'opérateur d'une agence, ou (lot G-1b) le directeur d'un groupe : ni l'un ni l'autre n'a de compte sur ce site
             try {
-                $user = $this->entries->userFor(['entry' => ['id' => $claims['entry'], 'mode' => EntryService::MODE_AGENCY, 'home' => $claims['home']],
+                $user = $this->entries->userFor(['entry' => ['id' => $claims['entry'], 'mode' => $claims['mode'], 'home' => $claims['home']],
                     'username' => 'entry:' . $claims['entry'], 'tenant_code' => $current], $current);
             } catch (\Throwable) {
                 throw new CustomUserMessageAuthenticationException('entry');

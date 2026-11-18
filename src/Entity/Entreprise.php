@@ -109,6 +109,10 @@ class Entreprise implements TranslatableInterface
     #[ORM\Column(name: 'is_loss_prevention_active', options: ['default' => false])]
     private bool $isLossPreventionActive = false;
 
+    /** Module Multi-boutiques (lot G-1a, 18/11/2026) : droit module.multi_shop projeté ; faux par défaut */
+    #[ORM\Column(name: 'is_multi_shop_active', options: ['default' => false])]
+    private bool $isMultiShopActive = false;
+
     #[ORM\Column(type: 'boolean', options: ['default' => false])]
     private ?bool $isMemoireVivanteActive = false;
 
@@ -858,6 +862,8 @@ class Entreprise implements TranslatableInterface
 
     public function isLossPreventionActive(): bool { return $this->isLossPreventionActive; }
     public function setIsLossPreventionActive(bool $on): static { $this->isLossPreventionActive = $on; return $this; }
+    public function isMultiShopActive(): bool { return $this->isMultiShopActive; }
+    public function setIsMultiShopActive(bool $on): static { $this->isMultiShopActive = $on; return $this; }
 
     public function isBoussoleEsgActive(): ?bool
     {

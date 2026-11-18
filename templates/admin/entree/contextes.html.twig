@@ -1,7 +1,7 @@
 {% extends ea() is not null ? '@EasyAdmin/page/content.html.twig' : 'base_admin.html.twig' %}
 {# Lot AG-3c : le sélecteur de sites d'EasyAdmin, même liste que la gestion web (/api/me/contexts) #}
-{% block title %}{{ mode == 'super_admin' ? 'Tous les sites' : 'Les sites de mes clients' }}{% endblock %}
-{% block content_title %}{{ mode == 'super_admin' ? 'Tous les sites' : 'Les sites de mes clients' }}{% endblock %}
+{% block title %}{{ mode == 'super_admin' ? 'Tous les sites' : (mode == 'group' ? 'Les boutiques du groupe' : 'Les sites de mes clients') }}{% endblock %}
+{% block content_title %}{{ mode == 'super_admin' ? 'Tous les sites' : (mode == 'group' ? 'Les boutiques du groupe' : 'Les sites de mes clients') }}{% endblock %}
 
 {% block main %}{{ block('panel') }}{% endblock %}
 {% block body %}{% if ea() is null %}<div class="container py-3">{{ block('panel') }}</div>{% else %}{{ parent() }}{% endif %}{% endblock %}

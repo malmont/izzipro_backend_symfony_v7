@@ -119,7 +119,7 @@ class AdminEntryController extends AbstractController
         return new RedirectResponse('/?tenant=' . rawurlencode($entry['home']));
     }
 
-    /** Le compte qui peut ouvrir une entrée : un compte du site (jamais un opérateur), agence ou plateforme, hors d'une entrée en cours */
+    /** Le compte qui peut ouvrir une entrée : un compte du site (jamais un opérateur), agence, plateforme ou directeur d'un groupe, hors d'une entrée en cours */
     private function entrant(Request $request): ?User
     {
         $user = $this->getUser();
@@ -127,7 +127,12 @@ class AdminEntryController extends AbstractController
             return null;
         }
 
-        return AgencyRoles::has($user->getRoles()) || PlatformAccessJournal::isPlatformAccount($user->getRoles()) ? $user : null;
+        if (AgencyRoles::has($user->getRoles()) || PlatformAccessJournal::isPlatformAccount($user->getRoles())) {
+            return $user;
+        }
+
+        // lot G-1b : un administrateur du siège d'un groupe (mode « groupe » des contextes) entre dans les boutiques du groupe
+        return in_array('ROLE_ADMIN', $user->getRoles(), true) && $this->contexts->isGroupHead() ? $user : null;
     }
 
     /** L'âge (secondes) de la validation du code de CE compte sur CE site ; null : plus de 12 heures, ou inconnue */

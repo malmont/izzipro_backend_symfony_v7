@@ -681,6 +681,9 @@ class DashboardController extends AbstractDashboardController
         if ($user instanceof \App\Entity\User && (\App\Security\AgencyRoles::has($user->getRoles()) || \App\Services\Platform\PlatformAccessJournal::isPlatformAccount($user->getRoles()))
             && \App\Security\Entry\AdminEntrySession::get($this->requestStack->getSession()) === null) {
             yield MenuItem::linkToRoute(\App\Services\Platform\PlatformAccessJournal::isPlatformAccount($user->getRoles()) ? 'Tous les sites' : 'Les sites de mes clients', 'fas fa-exchange-alt', 'admin_contextes');
+        } elseif ($user instanceof \App\Entity\User && \App\Security\Entry\AdminEntrySession::get($this->requestStack->getSession()) === null
+            && in_array('ROLE_ADMIN', $user->getRoles(), true) && $this->contexts?->isGroupHead() === true) {
+            yield MenuItem::linkToRoute('Les boutiques du groupe', 'fas fa-exchange-alt', 'admin_contextes'); // lot G-1b : le directeur
         }
         
         yield MenuItem::section('Maintenance');

@@ -45,7 +45,7 @@ final class AdminEntrySubscriber implements EventSubscriberInterface
         $entry = AdminEntrySession::get($session);
         $user = $this->security->getUser();
         if ($entry === null) {
-            if ($user instanceof ExternalOperator) {
+            if ($user instanceof ExternalOperator || $user instanceof GroupOperator) {
                 // un opérateur sans entrée en session : jamais servi
                 $session->invalidate();
                 $event->setResponse(new RedirectResponse('/'));
@@ -55,12 +55,13 @@ final class AdminEntrySubscriber implements EventSubscriberInterface
         }
         $current = (string) ($this->tenants->getTenantCode() ?? '');
         $same = $user instanceof ExternalOperator ? ($entry['mode'] === EntryService::MODE_AGENCY && $user->getEntryId() === $entry['id'])
-            : ($user instanceof User && $entry['mode'] === EntryService::MODE_SUPER_ADMIN && $user->getId() === ($entry['account'] ?? null));
+            : ($user instanceof GroupOperator ? ($entry['mode'] === EntryService::MODE_GROUP && $user->getEntryId() === $entry['id']) // lot G-1b
+            : ($user instanceof User && $entry['mode'] === EntryService::MODE_SUPER_ADMIN && $user->getId() === ($entry['account'] ?? null)));
         if ($user === null || !$same || $entry['target'] !== $current) {
             // la session a quitté le site visé, ou n'est plus celle de l'entrée : l'entrée se ferme, la session continue sans elle
             $this->entries->endEntry($entry['id'], 'left');
             $session->remove(AdminEntrySession::KEY);
-            if ($user instanceof ExternalOperator) {
+            if ($user instanceof ExternalOperator || $user instanceof GroupOperator) {
                 $session->invalidate();
                 $event->setResponse(new RedirectResponse('/?tenant=' . rawurlencode($entry['home'])));
             }

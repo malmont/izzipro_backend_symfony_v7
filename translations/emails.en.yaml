@@ -301,3 +301,10 @@ assistance_request:
     button: 'Open "All my clients"'
     validity: 'Without an entry within 24 hours, the request expires. The merchant can close the support at any time and sees every screen viewed.'
     ignore: 'During support, keys, Stripe, the sender email, accounts and exports stay closed, and no payment, refund or cash collection can be made.'
+group_invitation:
+    subject: '%site%: invitation to join the group %group%'
+    title: 'Invitation to join a group'
+    greeting: 'Hello,'
+    message: 'The group "%group%" (head: %head%) invites your shop %site% to join it. %consent% To accept or refuse, open your administration space: the request is waiting in the "Group" tab.'
+    validity: 'The invitation is valid for %days% days. Without an answer, it expires.'
+    ignore: 'If you do not know this group, refuse the invitation or ignore this message: nothing changes without your consent.'

@@ -479,6 +479,61 @@ Essai : `tests/Functional/Platform/AgencyClientsTest.php`.
 
 Essai : `tests/Functional/Platform/AgencyAssistantTest.php` (5 mutations des filtres, toutes tuées).
 
+## 12. Lot G-1a : le multi-boutiques, groupes et invitations (18/11/2026, contrat validé par le chef, 4 ajouts)
+
+Plan : `docs/plan-entree-et-groupe.md` § 4. G-1b (entrée du directeur dans une boutique du groupe) suit, relu avec G-1a.
+
+- **Module** `module.multi_shop` (colonne `entreprise.is_multi_shop_active`, éteinte par défaut ; `ModuleAccessService::MULTI_SHOP`). Il faut le
+  module au SIÈGE pour créer le groupe et inviter ; une boutique invitée n'en a pas besoin.
+- **Base maître** (`ops/sql/groups_master.sql`, script `scripts/migrate_master_v2_groups.sh`) : `shop_groups` (siège, état actif | dissous,
+  `max_shops` 10), `shop_group_sites` (origine `head` | `created` | `associated`, un lien ouvert par site au plus : index unique),
+  `shop_group_invitations` (14 jours), `shop_group_events` (journal). Quitter ne supprime rien (`left_at`).
+- **Routes** (administrateur DU site ; entrée par jeton, agence comprise, et, pour écrire, compte de la plateforme : 403 `GROUP_FORBIDDEN`) :
+  - `GET /api/group` → `{ group: null | { id, code, name, head, role: head | shop, maxShops }, shops: [{ code, name, origin, joinedAt }], canCreate }` ;
+  - `POST /api/group` « Passer en multi-boutiques » → 201 ; 403 `MODULE_INACTIVE` ; 409 `GROUP_ALREADY_MEMBER` ;
+  - `POST /api/group/invitations` `{ site }` → 202 `{ asked: true, expiresInDays: 14 }`, **la même réponse** que le site existe ou non, soit le
+    siège, soit déjà dans un groupe ou déjà invité : le tri se fait en file (`SendGroupInvitationMessage`, file `email`), la raison d'un refus
+    reste au journal du groupe (`invitation_skipped`). Limiteur : 10 demandes par jour et par groupe, 429 `GROUP_INVITE_LIMIT` ; 403
+    `GROUP_HEAD_ONLY`, `MODULE_INACTIVE` ;
+  - `POST /api/group/leave` `{ shop? }` : la boutique quitte, ou le siège retire une boutique ; le siège seul dissout (409 `GROUP_NOT_EMPTY`
+    tant qu'il reste une autre boutique) ;
+  - `GET /api/site/group-invitations` → `{ invitations: [{ id, group, head, expiresAt, consent, consentVersion }] }` ;
+    `POST /api/site/group-invitations/{id}/accept` `{ consent: "g1-v1" }` → le groupe ; 422 `GROUP_CONSENT_REQUIRED` sans la version exacte ;
+    404 `GROUP_INVITATION_NOT_FOUND` (inconnue, d'un autre site, échue, traitée, groupe dissous) ; 409 `GROUP_ALREADY_MEMBER` | `GROUP_SHOP_LIMIT` ;
+    `POST …/{id}/refuse` → 204.
+- **Consentement** (texte du chef, `GroupService::consent`) : « Le directeur du groupe X pourra entrer dans votre boutique et y agir ; chaque geste
+  sera tracé ; vous pouvez quitter le groupe à tout moment. » Dit dans le courriel et dans la liste des invitations ; accepter sans sa version
+  est refusé : jamais d'ajout silencieux.
+- **Courriel** `group_invitation` (indispensable, `NotificationCatalog`) aux seuls administrateurs vérifiés du site invité, jamais au compte de
+  la plateforme ; sans lien : la réponse se donne dans l'espace d'administration.
+- Écran du registre `groupe` (famille vente) ; l'agence ne voit jamais le groupe (lien séparé, décision du propriétaire du 18/11).
+
+Essai : `tests/Functional/Group/GroupApiTest.php`.
+
+### 12.1 Lot G-1b : l'entrée du directeur dans une boutique du groupe
+
+- **Qui** : un administrateur du SIÈGE (ni le compte de la plateforme, qui a son mode, ni un simple compte), groupe actif, module actif au
+  siège, vers une boutique ouverte du groupe. Même chemin que l'agence : `POST /api/me/contexts/enter` (jeton de 15 minutes, session vivante
+  exigée) et, dans EasyAdmin, le sélecteur « Les boutiques du groupe » (`/admin/contextes`, code validé depuis moins de 12 heures, laissez-passer
+  d'une minute). Mode `group` dans `site_entries` (`group_id`, nom du groupe dans `agency_name`) ; l'objet est `GroupOperator`, jamais un
+  compte de la boutique. Si le compte a aussi un rôle d'agence, une boutique du groupe s'ouvre en mode groupe (deux liens séparés).
+- **Ce qu'il a** : tout le site, comme un administrateur, sauf (`EntryModeGuardSubscriber::groupDecision`, liste figée dans
+  `tests/Fixtures/ecrans/entree-groupe-fermees.json`) : Stripe et le terminal de paiement (`payment`), les remboursements et les gestes
+  d'argent d'une commande (annuler, capturer, retour ; retours et échanges de la caisse ; caution rendue : `refund`), les gestes de module
+  (`modules` : ils changent ce que la boutique paie, ajout tranché ici), le compte (`@compte` : `account`). Les routes du groupe et la
+  vérification des taxes refusent toute entrée (gestes du commerçant). Refus : 403 `MODE_FORBIDDEN` avec `reason`.
+- **Traces** : l'entrée au journal de la boutique (« Groupe X, prénom », canal `entry_group`) ; chaque écriture réussie (canal `group_write`,
+  méthode et chemin), lues par « Accès extérieurs » (`PlatformAccessJournal::groupWrites`).
+- **Fin** : la boutique quitte le groupe (ou le siège la retire, ou dissout) → ses entrées se ferment TOUT DE SUITE (`EntryService::endForGroup`,
+  cache vidé) : la requête suivante reçoit 401 `ENTRY_ENDED`. Relu à chaque requête (une minute au plus) : rôle d'administrateur perdu
+  (`role`), module éteint au siège (`module`), groupe dissous ou siège changé (`group`).
+- **Contextes** (`GET /api/me/contexts`) : clé `group` dans toute réponse (null hors groupe) ; au siège, mode `group`, le siège (`home: true`)
+  puis les boutiques (`home: false`) ; dans une boutique membre, mode `single` et `group: { id, name, role: "shop" }` pour son administrateur.
+- Sans Stripe ni remboursement au premier lot ; « le directeur peut rembourser », réglage par boutique allumé par son administrateur, sera un
+  lot à part (décision du propriétaire du 18/11).
+
+Essai : `tests/Functional/Group/GroupEntryTest.php` (dont une sonde de toutes les lectures sans paramètre : aucune panne pour le directeur).
+
 ## Tenir cette fiche à jour
 
 À chaque écran, famille ou liste hors écran ajoutés ; à chaque champ sensible trouvé ; à chaque mode nouveau.

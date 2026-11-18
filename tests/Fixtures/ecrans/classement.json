@@ -756,6 +756,15 @@
         "GET /api/gestion/journee",
         "POST /api/gestion/accueil/vignettes/{id}/ecarter"
     ],
+    "groupe": [
+        "GET /api/group",
+        "GET /api/site/group-invitations",
+        "POST /api/group",
+        "POST /api/group/invitations",
+        "POST /api/group/leave",
+        "POST /api/site/group-invitations/{id}/accept",
+        "POST /api/site/group-invitations/{id}/refuse"
+    ],
     "imports": [
         "GET /api/site/imports",
         "GET /api/site/imports/{id}",
