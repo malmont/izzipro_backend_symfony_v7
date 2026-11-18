@@ -3,6 +3,7 @@
 namespace App\LossPrevention;
 
 use App\LossPrevention\Services\LossPairingService;
+use Symfony\Component\DependencyInjection\Attribute\AutowireServiceClosure;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 use Symfony\Component\HttpKernel\KernelEvents;
 
@@ -13,7 +14,13 @@ use Symfony\Component\HttpKernel\KernelEvents;
  */
 class LossPairingTraceSubscriber implements EventSubscriberInterface
 {
-    public function __construct(private readonly LossPairingService $pairing)
+    /**
+     * Train 102 : sans cela, CHAQUE requête construisait le service de jumelage et sa chaîne (envoi des courriels compris) à la fin de la
+     * réponse. Le service partagé n'est demandé (par la fermeture) que si une requête a noté un refus ; c'est alors l'instance qui l'a noté.
+     *
+     * @param \Closure(): LossPairingService $pairing
+     */
+    public function __construct(#[AutowireServiceClosure(LossPairingService::class)] private readonly \Closure $pairing)
     {
     }
 
@@ -24,6 +31,9 @@ class LossPairingTraceSubscriber implements EventSubscriberInterface
 
     public function onTerminate(): void
     {
-        $this->pairing->flushRefusals();
+        if (!LossPairingService::hasPendingRefusals()) {
+            return;
+        }
+        ($this->pairing)()->flushRefusals();
     }
 }

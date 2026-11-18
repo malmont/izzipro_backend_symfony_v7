@@ -49,6 +49,8 @@ class LossPairingService
     /** Les seules raisons qui ferment un jumelage relié : des preuves lues sur le boîtier que ce jumelage a créé */
     /** @var list<array{site: string, userId: int, shipment: ?int}> lot L6-b : les saisies refusées de cette requête, tracées après la réponse */
     private array $refusals = [];
+    /** Train 102 : vrai si une requête a noté un refus ; lu par `LossPairingTraceSubscriber` sans construire ce service */
+    private static bool $pending = false;
     private const CLOSING = [LossBoxChannelService::PAIRED_REVOKED, LossBoxChannelService::PAIRED_KEY_RESET, LossBoxChannelService::PAIRED_OTHER_MACHINE];
 
     public function __construct(
@@ -259,6 +261,7 @@ class LossPairingService
         // inconnu et pour un code réservé à un autre site : la réponse garde la même durée, et l'on garde la trace des tentatives
         $invalid = function (?int $shipment = null) use ($locale, $site, $userId): GestionConflictException {
             $this->refusals[] = ['site' => $site, 'userId' => $userId, 'shipment' => $shipment];
+            self::$pending = true;
 
             return new GestionConflictException(self::INVALID, $this->texts->t('boxes.error.' . self::INVALID, $locale), 404);
         };
@@ -303,8 +306,14 @@ class LossPairingService
      * module du site qui a saisi (la même ligne pour un code inconnu et pour un code réservé ailleurs : le site n'apprend rien de plus), et
      * au journal des expéditions de la plateforme quand le code était réservé à un autre site.
      */
+    public static function hasPendingRefusals(): bool
+    {
+        return self::$pending;
+    }
+
     public function flushRefusals(): void
     {
+        self::$pending = false;
         [$refusals, $this->refusals] = [$this->refusals, []];
         foreach ($refusals as $refusal) {
             try {
