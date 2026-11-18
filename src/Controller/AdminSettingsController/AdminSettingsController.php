@@ -195,7 +195,7 @@ class AdminSettingsController extends AbstractController
         ]);
     }
 
-    #[Route('/api/admin-settings/presets/{id}', name: 'delete_admin_preset', methods: ['DELETE'])]
+    #[Route('/api/admin-settings/presets/{id}', name: 'delete_admin_preset', methods: ['DELETE'], requirements: ['id' => '\d+'])]
     public function deletePreset(int $id): JsonResponse
     {
         $pdo = $this->connectionManager->getPdoMaster();

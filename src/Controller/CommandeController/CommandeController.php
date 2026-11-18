@@ -37,7 +37,7 @@ class CommandeController extends AbstractController
         $this->cache = $cache;
     }
 
-    #[Route('/api/collections/{id}/commandes', name: 'get_commandes_by_collection', methods: ['GET'])]
+    #[Route('/api/collections/{id}/commandes', name: 'get_commandes_by_collection', methods: ['GET'], requirements: ['id' => '\d+'])]
     public function getCommandesByCollection(Collections $collection, Request $request): JsonResponse
     {
         $host = $request->getSchemeAndHttpHost();
@@ -59,7 +59,7 @@ class CommandeController extends AbstractController
         return $this->json($commandesDTO, JsonResponse::HTTP_OK);
     }
 
-    #[Route('/api/collections/{id}/commandes', name: 'create_commande', methods: ['POST'])]
+    #[Route('/api/collections/{id}/commandes', name: 'create_commande', methods: ['POST'], requirements: ['id' => '\d+'])]
     public function createCommande(Request $request, Collections $collection): JsonResponse
     {
         $data = json_decode($request->getContent(), true);

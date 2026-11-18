@@ -72,6 +72,9 @@ class GroupApiTest extends WebTestCase
         $this->assertSame(array_fill(0, 5, [202, json_encode(['asked' => true, 'expiresInDays' => GroupService::INVITATION_DAYS])]), $answers);
         $this->assertSame(1, (int) $this->master->query("SELECT COUNT(*) FROM shop_group_invitations WHERE tenant_code = '" . MV_TEST_TENANT2_CODE . "'")->fetchColumn(), 'une seule invitation en attente');
         $this->assertSame(0, (int) $this->master->query("SELECT COUNT(*) FROM shop_group_invitations WHERE tenant_code <> '" . MV_TEST_TENANT2_CODE . "'")->fetchColumn());
+        // relecture neuve : deux messages simultanés ne font jamais deux invitations ouvertes (index unique partiel)
+        $groupId = (int) $this->master->query('SELECT id FROM shop_groups')->fetchColumn();
+        $this->assertNull(static::getContainer()->get(\App\Services\Group\GroupRepository::class)->invite($groupId, MV_TEST_TENANT2_CODE, hash('sha256', 'double'), 'essai', new \DateTimeImmutable('+1 day')));
         $this->assertSame(['unknown', 'head', 'pending', 'unknown'], $this->master->query("SELECT payload->>'reason' FROM shop_group_events WHERE event = 'invitation_skipped' ORDER BY id")->fetchAll(\PDO::FETCH_COLUMN));
 
         $this->assertSame(1, (int) $this->master->query("SELECT COUNT(*) FROM shop_group_events WHERE event = 'invited' AND tenant_code = '" . MV_TEST_TENANT2_CODE . "'")->fetchColumn());

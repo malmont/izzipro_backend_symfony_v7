@@ -46,7 +46,7 @@ class EntrepriseController extends AbstractController
         return $this->json($entrepriseDto);
     }
 
-    #[Route('/api/entreprise/{id}', name: 'api_entreprise_get', methods: ['GET'])]
+    #[Route('/api/entreprise/{id}', name: 'api_entreprise_get', methods: ['GET'], requirements: ['id' => '\d+'])]
     public function getEntreprise(int $id, Request $request): JsonResponse
     {
         $host = $this->mediaUrlResolver?->getPublicHost($request->getSchemeAndHttpHost())
@@ -73,7 +73,7 @@ class EntrepriseController extends AbstractController
         return $this->json($entrepriseDto);
     }
 
-    #[Route('/api/entreprise/{id}', name: 'api_entreprise_update', methods: ['PUT'])]
+    #[Route('/api/entreprise/{id}', name: 'api_entreprise_update', methods: ['PUT'], requirements: ['id' => '\d+'])]
     public function updateEntreprise(int $id, Request $request): JsonResponse
     {
         $data = json_decode($request->getContent(), true) ?? [];

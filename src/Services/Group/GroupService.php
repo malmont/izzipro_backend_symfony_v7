@@ -90,11 +90,10 @@ class GroupService
         if (!$this->modules->isEnabled(ModuleAccessService::MULTI_SHOP)) {
             throw new GroupException('MODULE_INACTIVE', 403, 'Le module Multi-boutiques n\'est pas actif sur ce site.', ['module' => 'module.multi_shop']);
         }
-        if ($this->groups->invitationsAskedToday((int) $group['id']) >= self::INVITATIONS_PER_DAY) {
+        $code = is_string($target) ? mb_strtolower(trim($target)) : '';
+        if (!$this->groups->askInvitation((int) $group['id'], mb_substr($code, 0, 50), self::INVITATIONS_PER_DAY, self::who($by))) {
             throw new GroupException('GROUP_INVITE_LIMIT', 429, 'Trop d\'invitations demandées aujourd\'hui pour ce groupe ; réessayez demain.', ['perDay' => self::INVITATIONS_PER_DAY]);
         }
-        $code = is_string($target) ? mb_strtolower(trim($target)) : '';
-        $this->groups->event((int) $group['id'], 'invitation_asked', mb_substr($code, 0, 50), [], self::who($by));
         $this->bus->dispatch(new SendGroupInvitationMessage((int) $group['id'], mb_substr($code, 0, 50), self::who($by), $locale === 'en' ? 'en' : 'fr'));
 
         return ['asked' => true, 'expiresInDays' => self::INVITATION_DAYS];
@@ -162,10 +161,9 @@ class GroupService
             throw new GroupException('GROUP_HEAD_ONLY', 403, 'Seul le siège retire une autre boutique du groupe.');
         }
         if ($target === $group['head_tenant_code']) {
-            if (count($this->groups->shops((int) $group['id'])) > 1) {
+            if (!$this->groups->dissolve((int) $group['id'], (string) $group['head_tenant_code'], $by->getUserIdentifier())) {
                 throw new GroupException('GROUP_NOT_EMPTY', 409, 'Le siège dissout le groupe quand il n\'a plus d\'autre boutique.');
             }
-            $this->groups->dissolve((int) $group['id'], $by->getUserIdentifier());
             $this->entries?->endForGroup((int) $group['id'], null, 'dissolved'); // lot G-1b : plus aucune entrée du directeur
             $this->groups->event((int) $group['id'], 'dissolved', $site, [], self::who($by));
 

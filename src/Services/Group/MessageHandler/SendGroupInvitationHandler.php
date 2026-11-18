@@ -47,6 +47,11 @@ final class SendGroupInvitationHandler
         }
         $expires = new \DateTimeImmutable('+' . GroupService::INVITATION_DAYS . ' days', new \DateTimeZone('UTC'));
         $id = $this->groups->invite((int) $group['id'], (string) $site['code'], hash('sha256', random_bytes(32)), $message->by, $expires);
+        if ($id === null) {
+            $this->groups->event((int) $group['id'], 'invitation_skipped', $message->siteCode, ['reason' => 'pending'], $message->by);
+
+            return;
+        }
         $headName = $this->groups->shops((int) $group['id'])[0]['name'] ?? $group['head_tenant_code'];
         try {
             $sent = $this->mailer->notify((string) $site['dbname'], (string) $site['name'], (string) $group['name'], (string) $headName, GroupService::INVITATION_DAYS, $message->locale);

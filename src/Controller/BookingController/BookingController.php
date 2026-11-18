@@ -15,7 +15,7 @@ use Symfony\Component\Validator\Validator\ValidatorInterface;
 #[Route('/api/booking')]
 class BookingController extends AbstractController
 {
-    #[Route('/check/{productId}', name: 'api_booking_check', methods: ['GET'])]
+    #[Route('/check/{productId}', name: 'api_booking_check', methods: ['GET'], requirements: ['productId' => '\d+'])]
     public function check(
         int $productId,
         Request $request,
@@ -67,7 +67,7 @@ class BookingController extends AbstractController
         }
     }
 
-    #[Route('/calendar/{productId}', name: 'api_booking_calendar', methods: ['GET'])]
+    #[Route('/calendar/{productId}', name: 'api_booking_calendar', methods: ['GET'], requirements: ['productId' => '\d+'])]
     public function calendar(
         int $productId,
         Request $request,

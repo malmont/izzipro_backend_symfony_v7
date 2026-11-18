@@ -76,7 +76,7 @@ class RechercheApiController extends AbstractController
         return $this->json(new RechercheOutputDto($recherche, $baseImageUrl), Response::HTTP_CREATED);
     }
 
-    #[Route('/{id}', name: 'api_recherche_update', methods: ['PUT'])]
+    #[Route('/{id}', name: 'api_recherche_update', methods: ['PUT'], requirements: ['id' => '\d+'])]
     public function update(int $id, #[MapRequestPayload] RechercheInputDto $dto, Request $request): JsonResponse
     {
         $recherche = $this->updateRechercheUseCase->execute($id, $dto);
@@ -84,7 +84,7 @@ class RechercheApiController extends AbstractController
         return $this->json(new RechercheOutputDto($recherche));
     }
 
-    #[Route('/{id}', name: 'api_recherche_delete', methods: ['DELETE'])]
+    #[Route('/{id}', name: 'api_recherche_delete', methods: ['DELETE'], requirements: ['id' => '\d+'])]
     public function delete(int $id): JsonResponse
     {
         $this->deleteRechercheUseCase->execute($id);

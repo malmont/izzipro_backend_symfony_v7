@@ -34,7 +34,7 @@ class ProductVariantController extends AbstractController
         $this->cache = $cache;
     }
 
-    #[Route('/api/products/{id}/variants', name: 'get_product_variants', methods: ['GET'])]
+    #[Route('/api/products/{id}/variants', name: 'get_product_variants', methods: ['GET'], requirements: ['id' => '\d+'])]
     public function getProductVariants(Product $product): JsonResponse
     {
         $cacheKey = 'product_variants_' . $product->getId();

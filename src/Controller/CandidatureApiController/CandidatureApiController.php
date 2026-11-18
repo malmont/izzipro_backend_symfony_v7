@@ -30,7 +30,7 @@ class CandidatureApiController extends AbstractController
 
         return $this->json(array_map(fn($candidature) => new CandidatureOutputDto($candidature), $candidatures));
     }
-     #[Route('/{id}', name: 'api_candidature_get_one', methods: ['GET'])]
+     #[Route('/{id}', name: 'api_candidature_get_one', methods: ['GET'], requirements: ['id' => '\d+'])]
     public function getOne(int $id): JsonResponse
     {
         $candidature = $this->getCandidatureByIdUseCase->execute($id);

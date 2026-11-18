@@ -51,7 +51,7 @@ class CategorieMarqueApiController extends AbstractController
         return $this->json($categoriesDto);
     }
 
-    #[Route('/{id}/marques', name: 'api_categorie_marque_get_marques', methods: ['GET'])]
+    #[Route('/{id}/marques', name: 'api_categorie_marque_get_marques', methods: ['GET'], requirements: ['id' => '\d+'])]
     public function getMarquesForCategory(int $id, Request $request): JsonResponse
     {
         $locale = CacheLocale::normalize($request->get('locale'));
@@ -79,14 +79,14 @@ class CategorieMarqueApiController extends AbstractController
         return $this->json(new CategorieMarqueOutputDto($categorie), Response::HTTP_CREATED);
     }
 
-    #[Route('/{id}', name: 'api_categorie_marque_update', methods: ['PUT'])]
+    #[Route('/{id}', name: 'api_categorie_marque_update', methods: ['PUT'], requirements: ['id' => '\d+'])]
     public function update(int $id, #[MapRequestPayload] CategorieMarqueInputDto $dto): JsonResponse
     {
         $categorie = $this->updateCategorieMarqueUseCase->execute($id, $dto);
         return $this->json(new CategorieMarqueOutputDto($categorie));
     }
 
-    #[Route('/{id}', name: 'api_categorie_marque_delete', methods: ['DELETE'])]
+    #[Route('/{id}', name: 'api_categorie_marque_delete', methods: ['DELETE'], requirements: ['id' => '\d+'])]
     public function delete(int $id): JsonResponse
     {
         $this->deleteCategorieMarqueUseCase->execute($id);

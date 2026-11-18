@@ -17,7 +17,7 @@ class CustomizationConfigController extends AbstractController
         $this->useCase = $useCase;
     }
 
-    #[Route('/config/{variantId}', name: 'api_customization_get_config', methods: ['GET'])]
+    #[Route('/config/{variantId}', name: 'api_customization_get_config', methods: ['GET'], requirements: ['variantId' => '\d+'])]
     public function __invoke(int $variantId): JsonResponse
     {
         $configDto = $this->useCase->execute($variantId);

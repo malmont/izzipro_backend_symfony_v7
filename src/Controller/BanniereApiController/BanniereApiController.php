@@ -85,7 +85,7 @@ class BanniereApiController extends AbstractController
         return $this->json($outputDto, Response::HTTP_CREATED);
     }
 
-    #[Route('/{id}', name: 'api_banniere_update', methods: ['PUT'])]
+    #[Route('/{id}', name: 'api_banniere_update', methods: ['PUT'], requirements: ['id' => '\d+'])]
     public function update(int $id, #[MapRequestPayload] BanniereInputDto $dto, Request $request): JsonResponse
     {
         $banniere = $this->updateBanniereUseCase->execute($id, $dto);
@@ -96,7 +96,7 @@ class BanniereApiController extends AbstractController
         return $this->json($outputDto, Response::HTTP_OK);
     }
 
-    #[Route('/{id}', name: 'api_banniere_delete', methods: ['DELETE'])]
+    #[Route('/{id}', name: 'api_banniere_delete', methods: ['DELETE'], requirements: ['id' => '\d+'])]
     public function delete(int $id): JsonResponse
     {
         $this->deleteBanniereUseCase->execute($id);

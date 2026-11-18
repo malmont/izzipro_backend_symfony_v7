@@ -51,14 +51,14 @@ class EmploiApiController extends AbstractController
         return $this->json(new EmploiOutputDto($emploi), Response::HTTP_CREATED);
     }
 
-    #[Route('/{id}', name: 'api_emploi_update', methods: ['PUT'])]
+    #[Route('/{id}', name: 'api_emploi_update', methods: ['PUT'], requirements: ['id' => '\d+'])]
     public function update(int $id, #[MapRequestPayload] EmploiInputDto $dto): JsonResponse
     {
         $emploi = $this->updateEmploiUseCase->execute($id, $dto);
         return $this->json(new EmploiOutputDto($emploi));
     }
 
-    #[Route('/{id}', name: 'api_emploi_delete', methods: ['DELETE'])]
+    #[Route('/{id}', name: 'api_emploi_delete', methods: ['DELETE'], requirements: ['id' => '\d+'])]
     public function delete(int $id): JsonResponse
     {
         $this->deleteEmploiUseCase->execute($id);

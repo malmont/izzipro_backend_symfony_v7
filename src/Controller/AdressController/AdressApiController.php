@@ -115,7 +115,7 @@ class AdressApiController extends AbstractController
     /**
      * Modifier une adresse
      */
-    #[Route('/{id}', name: 'edit_adress', methods: ['PUT'])]
+    #[Route('/{id}', name: 'edit_adress', methods: ['PUT'], requirements: ['id' => '\d+'])]
     public function editAdress(Request $request, ValidatorInterface $validator, Adress $adress, EntityManagerInterface $em): JsonResponse
     {
         /** @var User $user */
@@ -199,7 +199,7 @@ class AdressApiController extends AbstractController
     /**
      * Définir une adresse existante comme adresse principale
      */
-    #[Route('/{id}/set-primary', name: 'set_primary_adress', methods: ['PUT'])]
+    #[Route('/{id}/set-primary', name: 'set_primary_adress', methods: ['PUT'], requirements: ['id' => '\d+'])]
     public function setPrimaryAddress(Adress $adress, EntityManagerInterface $em): JsonResponse
     {
         /** @var User $user */
@@ -218,7 +218,7 @@ class AdressApiController extends AbstractController
     /**
      * Supprimer une adresse
      */
-    #[Route('/{id}', name: 'delete_adress', methods: ['DELETE'])]
+    #[Route('/{id}', name: 'delete_adress', methods: ['DELETE'], requirements: ['id' => '\d+'])]
     public function deleteAdress(Adress $adress): JsonResponse
     {
         /** @var User $user */

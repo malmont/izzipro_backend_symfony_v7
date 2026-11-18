@@ -70,16 +70,26 @@ class EntryModeGuardSubscriber implements EventSubscriberInterface
      * Stripe ni remboursement, et pas le compte). Les gestes d'argent d'une commande (annuler, capturer, retour) remboursent ou encaissent
      * par Stripe ; les gestes de module changent ce que la boutique paie. Expression du chemin => [méthodes (vide : toutes), raison].
      */
+    // (relecture neuve de G-1 : les motifs se ferment par préfixe, jamais sur `\d+$` : un identifiant mal formé `5%20` était converti en 5
+    // par PHP et passait à côté de la règle)
     private const GROUP_CLOSED = [
         ['#stripe#i', [], 'payment'],
         ['#^/api/pos/terminal(/|$)#', [], 'payment'],
         ['#(^|/)(refunds?|rembourser|remboursements?)(/|$)#i', [], 'refund'],
-        ['#^/admin/orders/\d+/(annuler|capturer|retour)$#', [], 'refund'],
-        ['#^/api/order/cancel/\d+$#', [], 'refund'],
-        ['#^/api/pos/(returns|exchanges)$#', ['POST'], 'refund'],
-        ['#^/api/pos/rentals/deposits/\d+/return$#', [], 'refund'],
-        ['#^/api/site/features/[^/]+/(request|trial|enable|disable)$#', [], 'modules'],
-        ['#^/api/site/features$#', ['PUT', 'PATCH', 'POST'], 'modules'],
+        ['#^/admin/orders/[^/]+/(annuler|capturer|retour)(/|$)#', [], 'refund'],
+        ['#^/api/order/cancel(/|$)#', [], 'refund'],
+        ['#^/api/pos/(returns|exchanges)(/|$)#', ['POST', 'PUT', 'PATCH', 'DELETE'], 'refund'],
+        ['#^/api/pos/rentals/deposits/[^/]+/return(/|$)#', [], 'refund'],
+        // les cartes-cadeaux : un remboursement en espèces, une annulation ou un ajustement rendent ou changent de l'argent
+        ['#^/api/pos/gift-cards/[^/]+/(cash-out|cancel|adjust)(/|$)#', [], 'refund'],
+        ['#^/api/site/features/.+/(request|trial|enable|disable)(/|$)#', [], 'modules'],
+        ['#^/api/site/features/?$#', ['PUT', 'PATCH', 'POST'], 'modules'],
+        // les mêmes gestes de module dans EasyAdmin (« Mon site »)
+        ['#^/admin/mon-site/(demander|essayer|module|regler)(/|$)#', [], 'modules'],
+        // les comptes et leurs rôles : le directeur ne se fait jamais un compte qui survivrait à son entrée (comme pendant une assistance)
+        ['#(^|/)(users?|accounts?|comptes?|roles?|team-roles?)(/|$)#i', [], 'accounts'],
+        ['#^/api/support/agents(/|$)#', [], 'accounts'],
+        ['#^/admin/memoires(/|$)#', [], 'memoires'],
         // Mémoires Vivantes : un projet à part (décision du propriétaire du 16/11/2026), outil de l'équipe et de ses clients, jamais du
         // directeur d'un groupe (ses routes attendent un compte du site : trouvé par la sonde de G-1b)
         ['#^/api/memoires(/|$)#', [], 'memoires'],
@@ -156,6 +166,15 @@ class EntryModeGuardSubscriber implements EventSubscriberInterface
         }
         if ($target === 'admin.paiement') {
             return 'payment';
+        }
+        // relecture neuve de G-1 : les écrans d'EasyAdmin se jugent aussi par leur code (le chemin d'un écran CRUD est `/admin`)
+        $closedScreens = ['admin.utilisateurs' => 'accounts', 'admin.memoires' => 'memoires', 'admin.abonnements' => 'payment'];
+        if (is_string($target) && isset($closedScreens[$target])) {
+            return $closedScreens[$target];
+        }
+        // les réglages sensibles (serveur d'envoi des courriels et son mot de passe, clés des applications, devise, unités IA)
+        if (is_string($target) && !str_starts_with($target, '@') && ScreenRegistry::familyOf($target) === ScreenRegistry::SECURITE) {
+            return 'security';
         }
         foreach (self::GROUP_CLOSED as [$pattern, $methods, $reason]) {
             if (preg_match($pattern, $path) === 1 && ($methods === [] || in_array($method, $methods, true))) {
@@ -255,6 +274,12 @@ class EntryModeGuardSubscriber implements EventSubscriberInterface
             $path = $adminPath;
         }
         $reason = self::groupDecision($request->getMethod(), $path, $adminTarget);
+        // relecture neuve de G-1 : sur un écran CRUD, seules les actions ordinaires d'EasyAdmin ; une action propre à un écran (rembourser le
+        // dernier paiement, annuler un abonnement, remettre un NIP à zéro…) est fermée par défaut au directeur
+        $crudAction = $request->query->get('crudAction');
+        if ($reason === null && $path === '/admin' && $adminTarget !== null && is_string($crudAction) && $crudAction !== '' && !in_array($crudAction, self::GROUP_EA_ACTIONS, true)) {
+            $reason = 'action';
+        }
         if ($reason !== null) {
             $event->setResponse(self::isAdmin($path) ? $this->adminRefusal($reason) : $this->refusal($reason));
 
@@ -317,6 +342,8 @@ class EntryModeGuardSubscriber implements EventSubscriberInterface
 
     /** Lot AG-3c : les actions d'un écran CRUD d'EasyAdmin qui ne font que LIRE (une assistance en consultation n'ouvre qu'elles) */
     private const EA_READS = ['index', 'detail'];
+    /** Lot G-1b : les seules actions d'un écran CRUD servies au directeur d'un groupe */
+    private const GROUP_EA_ACTIONS = ['index', 'detail', 'new', 'edit', 'delete', 'autocomplete', 'renderFilters'];
     /** Attribut posé sur une requête d'EasyAdmin : vrai si elle ne fait que lire */
     private const EA_READ = '_entry_ea_read';
 
@@ -497,6 +524,7 @@ class EntryModeGuardSubscriber implements EventSubscriberInterface
     private function traceWrite(Request $request, int $status): void
     {
         $operator = $this->tokens->getToken()?->getUser();
+        // (lot G-1b : les actions d'EasyAdmin qui écrivent en GET sont fermées au directeur : seules les actions ordinaires lui sont servies)
         if (!in_array($request->getMethod(), self::WRITE, true) || $status >= 400 || !($operator instanceof ExternalOperator || $operator instanceof GroupOperator)) {
             return;
         }
@@ -505,7 +533,11 @@ class EntryModeGuardSubscriber implements EventSubscriberInterface
                 'created_at' => (new \DateTimeImmutable('now', new \DateTimeZone('UTC')))->format('Y-m-d H:i:s'), 'user_identifier' => mb_substr($operator->getUserIdentifier(), 0, 180),
                 'tenant' => (string) ($this->tenants?->getTenantCode() ?? ''), 'resource' => \App\Services\Entry\EntryService::JOURNAL_RESOURCE, 'resource_id' => (string) $operator->getEntryId(),
                 'action' => 'write', 'fields' => 'request', 'after_state' => json_encode(['method' => $request->getMethod(), 'path' => mb_substr(RequestPath::of($request), 0, 200), 'status' => $status]
-                    + ($operator instanceof GroupOperator ? ['mode' => \App\Services\Entry\EntryService::MODE_GROUP] : []), \JSON_UNESCAPED_SLASHES), // lot G-1b : lue par « Accès extérieurs »
+                    + ($operator instanceof GroupOperator ? ['mode' => \App\Services\Entry\EntryService::MODE_GROUP] : [])
+                    // l'écran, l'action et la fiche d'une requête d'EasyAdmin (sinon la ligne ne dirait que « POST /admin »)
+                    + ($operator instanceof GroupOperator && RequestPath::of($request) === '/admin' ? array_filter(['screen' => mb_substr((string) $request->query->get('crudControllerFqcn', ''), 0, 120),
+                        'action' => mb_substr((string) $request->query->get('crudAction', ''), 0, 40), 'entityId' => mb_substr((string) $request->query->get('entityId', ''), 0, 20),
+                        'route' => mb_substr((string) $request->query->get('routeName', ''), 0, 80)], static fn (string $v): bool => $v !== '') : []), \JSON_UNESCAPED_SLASHES), // lot G-1b : lue par « Accès extérieurs »
             ]);
         } catch (\Throwable) {
             // la trace manque : la réponse part quand même (l'écriture est faite)

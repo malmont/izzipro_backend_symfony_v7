@@ -239,7 +239,7 @@ class ReservationApiController extends AbstractController
      * liste). Publique jusqu'au 27/10/2026 : n'importe qui confirmait n'importe quel identifiant, le courriel partait
      * au client et la réponse donnait son adresse. Règle access_control en second rempart (security.yaml).
      */
-    #[Route('/{id}/confirm', name: 'api_reservations_confirm', methods: ['POST'])]
+    #[Route('/{id}/confirm', name: 'api_reservations_confirm', methods: ['POST'], requirements: ['id' => '\d+'])]
     public function confirm(int $id, Request $request): JsonResponse
     {
         $user = $this->getUser();

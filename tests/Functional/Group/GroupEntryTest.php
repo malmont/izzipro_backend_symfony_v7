@@ -74,8 +74,15 @@ class GroupEntryTest extends WebTestCase
         // fermés : Stripe, remboursements, modules, compte ; le groupe lui-même ; la vérification des taxes (geste du commerçant)
         foreach ([['GET', '/api/pos/terminal/payments', 'payment'], ['POST', '/api/pos/returns', 'refund'], ['POST', '/api/pos/terminal/payments/1/refund', 'payment'],
             ['POST', '/api/order/cancel/1', 'refund'], ['POST', '/api/site/features/module.boutique/disable', 'modules'], ['GET', '/api/profile', 'account'],
-            ['POST', '/api/me/contexts/enter', 'account']] as [$method, $path, $reason]) {
+            ['POST', '/api/me/contexts/enter', 'account'],
+            // relecture neuve : un identifiant mal formé ne passe plus à côté de la règle ; les comptes et les cartes-cadeaux
+            ['POST', '/api/order/cancel/5', 'refund'], ['POST', '/api/support/agents', 'accounts'],
+            ['POST', '/api/pos/gift-cards/ABC/cash-out', 'refund']] as [$method, $path, $reason]) {
             $this->assertSame([403, $reason], $this->reason($method, $path, $token), "$method $path");
+        }
+        // formes déformées d'une route d'argent : jamais servies (refus de la garde ou route introuvable)
+        foreach (['/api/order/cancel/5%20', '/api/order/cancel/+5', '/api/order/cancel/5.', '//api/order/cancel/5', '/api/order/cancel//5', '/api/order/cancel/5%2F', '/api/order//cancel/5'] as $odd) {
+            $this->assertContains($this->request('POST', $odd, $token, MV_TEST_TENANT2_HOST, [])->getStatusCode(), [403, 404, 405], $odd);
         }
         $this->assertSame([403, 'GROUP_FORBIDDEN'], $this->reason('POST', '/api/group/leave', $token, null, 'code'), 'le directeur ne retire pas la boutique depuis la boutique');
         $this->assertSame([403, 'TAXES_VERIFY_FORBIDDEN'], $this->reason('POST', '/api/site/taxes/verify', $token, null, 'code'));
@@ -148,6 +155,17 @@ class GroupEntryTest extends WebTestCase
             }
         }
         $this->assertSame([], $failures, 'un écran d\'EasyAdmin ne tombe jamais en panne pour le directeur');
+        // relecture neuve : fermés en page HTML, les comptes, Mémoires Vivantes, les gestes de module, un abonnement, une action propre à un écran
+        foreach (['GET /admin?crudAction=index&crudControllerFqcn=' . rawurlencode('App\\Controller\\Admin\\UserCrudController'),
+            'GET /admin?crudAction=new&crudControllerFqcn=' . rawurlencode('App\\Controller\\Admin\\UserCrudController'),
+            'GET /admin?crudAction=index&crudControllerFqcn=' . rawurlencode('App\\Controller\\Admin\\BookCrudController'),
+            'GET /admin?crudAction=refundLatest&entityId=1&crudControllerFqcn=' . rawurlencode('App\\Controller\\Admin\\SubscriptionCrudController'),
+            'GET /admin?crudAction=uneActionPropre&entityId=1&crudControllerFqcn=' . rawurlencode('App\\Controller\\Admin\\ProductCrudController'),
+            'GET /admin/memoires/ai-quotas', 'POST /admin/mon-site/module/module.boutique/off'] as $line) {
+            [$method, $url] = explode(' ', $line, 2);
+            $this->client->request($method, 'https://' . MV_TEST_TENANT2_HOST . $url, [], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT2_HOST]);
+            $this->assertSame(403, $this->client->getResponse()->getStatusCode(), $line);
+        }
         // le remboursement d'une commande : refusé, en page HTML
         $this->client->request('GET', 'https://' . MV_TEST_TENANT2_HOST . '/admin/orders/1/rembourser', [], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT2_HOST]);
         $this->assertSame(403, $this->client->getResponse()->getStatusCode());
@@ -239,7 +257,11 @@ class GroupEntryTest extends WebTestCase
         // la décision se prend sur le chemin décodé, casse comprise
         $this->assertSame('payment', EntryModeGuardSubscriber::groupDecision('POST', '/api/Stripe/create-intent'));
         $this->assertSame('refund', EntryModeGuardSubscriber::groupDecision('GET', '/admin/orders/12/rembourser'));
-        $this->assertNull(EntryModeGuardSubscriber::groupDecision('POST', '/api/pos/returns/lookup'));
+        $this->assertSame('refund', EntryModeGuardSubscriber::groupDecision('POST', '/api/pos/returns/lookup'), 'une écriture sous les retours de la caisse');
+        $this->assertNull(EntryModeGuardSubscriber::groupDecision('GET', '/api/pos/returns/lookup'), 'la recherche d\'une vente à rendre se lit');
+        $this->assertSame('refund', EntryModeGuardSubscriber::groupDecision('POST', '/api/order/cancel/5 '));
+        $this->assertSame('accounts', EntryModeGuardSubscriber::groupDecision('GET', '/admin', 'admin.utilisateurs'));
+        $this->assertSame('security', EntryModeGuardSubscriber::groupDecision('GET', '/admin', 'admin.courriel'));
     }
 
     /** Le groupe : siège = premier site de test, boutique = second, module actif au siège */

@@ -72,7 +72,7 @@ class TransporteurController extends AbstractController
         return $this->json(['id' => $transporteur->getId(), 'name' => $transporteur->getName(), 'logo' => $transporteur->getLogo(), 'contact' => $transporteur->getContact()]);
     }
 
-    #[Route('/api/transporteurs/{id}', name: 'delete_transporteur', methods: ['DELETE'])]
+    #[Route('/api/transporteurs/{id}', name: 'delete_transporteur', methods: ['DELETE'], requirements: ['id' => '\d+'])]
     public function deleteTransporteur(\App\Entity\Transporteur $transporteur): \Symfony\Component\HttpFoundation\Response
     {
         $this->deleteTransporteurUseCase->execute($transporteur);

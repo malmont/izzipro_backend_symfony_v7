@@ -121,7 +121,7 @@ class ContextService
             $sites[] = $this->site($site, $current, self::SITE_FAMILIES, $hasRole);
         }
         // une boutique du groupe (pas le siège) le dit à son administrateur ; jamais à un compte sans rôle d'équipe
-        $member = $group !== null && $this->team && $group['head_tenant_code'] !== $current ? ['id' => (int) $group['id'], 'name' => (string) $group['name'], 'role' => 'shop'] : null;
+        $member = $group !== null && $hasRole('ROLE_ADMIN') && $group['head_tenant_code'] !== $current ? ['id' => (int) $group['id'], 'name' => (string) $group['name'], 'role' => 'shop'] : null;
 
         return ['mode' => self::MODE_SINGLE, 'site' => $current, 'agency' => null, 'group' => $member, 'sites' => $sites, 'all' => null];
     }

@@ -540,7 +540,7 @@ class OrderController extends AbstractController
         return $result;
     }
 
-    #[Route('/api/order/cancel/{id}', name: 'order_cancel', methods: ['POST'])]
+    #[Route('/api/order/cancel/{id}', name: 'order_cancel', methods: ['POST'], requirements: ['id' => '\d+'])] // G-1 : un identifiant mal formé (« 5%20 ») n'atteint plus le contrôleur
     public function cancelOrder(int $id, Request $request): JsonResponse
     {
         $user = $this->getUser();

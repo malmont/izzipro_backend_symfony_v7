@@ -58,7 +58,7 @@ class MarqueApiController extends AbstractController
         return $this->json(new MarqueOutputDto($marque, $baseImageUrl), Response::HTTP_CREATED);
     }
 
-    #[Route('/{id}', name: 'api_marque_update', methods: ['PUT'])]
+    #[Route('/{id}', name: 'api_marque_update', methods: ['PUT'], requirements: ['id' => '\d+'])]
     public function update(int $id, #[MapRequestPayload] MarqueInputDto $dto, Request $request): JsonResponse
     {
         $marque = $this->updateMarqueUseCase->execute($id, $dto);
@@ -67,7 +67,7 @@ class MarqueApiController extends AbstractController
         return $this->json(new MarqueOutputDto($marque, $baseImageUrl));
     }
 
-    #[Route('/{id}', name: 'api_marque_delete', methods: ['DELETE'])]
+    #[Route('/{id}', name: 'api_marque_delete', methods: ['DELETE'], requirements: ['id' => '\d+'])]
     public function delete(int $id): JsonResponse
     {
         $this->deleteMarqueUseCase->execute($id);

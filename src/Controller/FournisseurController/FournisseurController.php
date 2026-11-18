@@ -78,7 +78,7 @@ class FournisseurController extends AbstractController
         return $this->json(new FournisseurOutputDTO($fournisseur, $request->getSchemeAndHttpHost(), $this->currency?->code() ?? \App\Services\BoutiqueSettingsService\TenantCurrencyProvider::DEFAULT));
     }
 
-    #[Route('/api/fournisseurs/{id}', name: 'delete_fournisseur', methods: ['DELETE'])]
+    #[Route('/api/fournisseurs/{id}', name: 'delete_fournisseur', methods: ['DELETE'], requirements: ['id' => '\d+'])]
     public function deleteFournisseur(Fournisseur $fournisseur): \Symfony\Component\HttpFoundation\Response
     {
         $this->deleteFournisseurUseCase->execute($fournisseur);

@@ -41,7 +41,7 @@ class BaniereStatiqueApiController extends AbstractController
         return $this->json($dtos);
     }
 
-    #[Route('/{id}', name: 'api_baniere_statique_get_one', methods: ['GET'])]
+    #[Route('/{id}', name: 'api_baniere_statique_get_one', methods: ['GET'], requirements: ['id' => '\d+'])]
     public function getOne(int $id, Request $request): JsonResponse
     {
         $locale = CacheLocale::normalize($request->query->get('locale'));

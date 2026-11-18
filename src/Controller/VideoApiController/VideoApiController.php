@@ -50,7 +50,7 @@ class VideoApiController extends AbstractController
         return $this->json($dtos);
     }
 
-    #[Route('/{id}', name: 'api_video_get_one', methods: ['GET'])]
+    #[Route('/{id}', name: 'api_video_get_one', methods: ['GET'], requirements: ['id' => '\d+'])]
     public function getOne(int $id, Request $request): JsonResponse
     {
         $locale = CacheLocale::normalize($request->query->get('locale'));
@@ -82,7 +82,7 @@ class VideoApiController extends AbstractController
         return $this->json(new VideoOutputDto($video, $baseImageUrl), Response::HTTP_CREATED);
     }
 
-    #[Route('/{id}', name: 'api_video_update', methods: ['PUT'])]
+    #[Route('/{id}', name: 'api_video_update', methods: ['PUT'], requirements: ['id' => '\d+'])]
     public function update(int $id, #[MapRequestPayload] VideoInputDto $dto, Request $request): JsonResponse
     {
         $video = $this->updateVideoUseCase->execute($id, $dto);
@@ -90,7 +90,7 @@ class VideoApiController extends AbstractController
         return $this->json(new VideoOutputDto($video));
     }
 
-    #[Route('/{id}', name: 'api_video_delete', methods: ['DELETE'])]
+    #[Route('/{id}', name: 'api_video_delete', methods: ['DELETE'], requirements: ['id' => '\d+'])]
     public function delete(int $id): JsonResponse
     {
         $this->deleteVideoUseCase->execute($id);

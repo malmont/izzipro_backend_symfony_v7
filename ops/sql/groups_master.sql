@@ -43,6 +43,8 @@ CREATE TABLE IF NOT EXISTS shop_group_invitations (
     refused_at TIMESTAMP(0) WITHOUT TIME ZONE DEFAULT NULL,
     answered_by VARCHAR(255) DEFAULT NULL
 );
+-- relecture neuve de G-1 : une seule invitation OUVERTE par groupe et par site (deux messages simultanés n'en font jamais deux)
+CREATE UNIQUE INDEX IF NOT EXISTS uniq_shop_group_invitations_open ON shop_group_invitations (group_id, tenant_code) WHERE accepted_at IS NULL AND refused_at IS NULL;
 CREATE INDEX IF NOT EXISTS idx_shop_group_invitations_site ON shop_group_invitations (tenant_code) WHERE accepted_at IS NULL AND refused_at IS NULL;
 CREATE INDEX IF NOT EXISTS idx_shop_group_invitations_group ON shop_group_invitations (group_id, created_at);
 

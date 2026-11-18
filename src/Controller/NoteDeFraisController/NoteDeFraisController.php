@@ -40,7 +40,7 @@ class NoteDeFraisController extends AbstractController
         $this->cache = $cache;
     }
 
-    #[Route('/api/collections/{id}/notes-de-frais', name: 'get_notes_de_frais_by_collection', methods: ['GET'])]
+    #[Route('/api/collections/{id}/notes-de-frais', name: 'get_notes_de_frais_by_collection', methods: ['GET'], requirements: ['id' => '\d+'])]
     public function getNotesDeFraisByCollection(Collections $collection, Request $request): JsonResponse
     {
         $host = $request->getSchemeAndHttpHost();
@@ -56,7 +56,7 @@ class NoteDeFraisController extends AbstractController
         return new JsonResponse($notes, JsonResponse::HTTP_OK);
     }
 
-    #[Route('/api/collections/{id}/notes-de-frais', name: 'create_note_de_frais', methods: ['POST'])]
+    #[Route('/api/collections/{id}/notes-de-frais', name: 'create_note_de_frais', methods: ['POST'], requirements: ['id' => '\d+'])]
     public function createNoteDeFrais(Collections $collection, Request $request): JsonResponse
     {
         $data = json_decode($request->getContent(), true);
@@ -81,7 +81,7 @@ class NoteDeFraisController extends AbstractController
     }
 
     /** Écriture : administrateur ou propriétaire de la collection de la note (S2.7, 30/10/2026 : avant, tout utilisateur connecté, toute note) */
-    #[Route('/api/notes-de-frais/{id}', name: 'update_note_de_frais', methods: ['PUT'])]
+    #[Route('/api/notes-de-frais/{id}', name: 'update_note_de_frais', methods: ['PUT'], requirements: ['id' => '\d+'])]
     public function updateNoteDeFrais(NoteDeFrais $note, Request $request): JsonResponse
     {
         if (($refused = $this->refuseUnlessOwnerOrAdmin($note)) !== null) {
@@ -107,7 +107,7 @@ class NoteDeFraisController extends AbstractController
         return $this->json(new \App\Dto\NoteDeFraisOutputDTO($note, $this->host($request), $this->currencyCode()), JsonResponse::HTTP_OK); // 200 avec l'objet (lot G4)
     }
 
-    #[Route('/api/notes-de-frais/{id}', name: 'delete_note_de_frais', methods: ['DELETE'])]
+    #[Route('/api/notes-de-frais/{id}', name: 'delete_note_de_frais', methods: ['DELETE'], requirements: ['id' => '\d+'])]
     public function deleteNoteDeFrais(NoteDeFrais $note): \Symfony\Component\HttpFoundation\Response
     {
         if (($refused = $this->refuseUnlessOwnerOrAdmin($note)) !== null) {

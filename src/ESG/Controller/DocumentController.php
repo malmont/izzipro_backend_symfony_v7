@@ -85,7 +85,7 @@ class DocumentController extends AbstractController
         }
     }
 
-    #[Route('/{id}', name: 'esg_documents_delete', methods: ['DELETE'])]
+    #[Route('/{id}', name: 'esg_documents_delete', methods: ['DELETE'], requirements: ['id' => '\d+'])]
     public function delete(int $id, DeleteDocumentUseCase $useCase): Response
     {
         /** @var EsgUser|null $user */
@@ -104,7 +104,7 @@ class DocumentController extends AbstractController
         }
     }
 
-    #[Route('/download/{id}', name: 'esg_documents_download_id', methods: ['GET'])]
+    #[Route('/download/{id}', name: 'esg_documents_download_id', methods: ['GET'], requirements: ['id' => '\d+'])]
     public function downloadById(int $id, DownloadDocumentUseCase $useCase): Response
     {
         /** @var EsgUser|null $user */

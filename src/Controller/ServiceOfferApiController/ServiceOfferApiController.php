@@ -51,7 +51,7 @@ class ServiceOfferApiController extends AbstractController
         return $this->json($dtos);
     }
 
-    #[Route('/{id}', name: 'api_service_offer_get_one', methods: ['GET'])]
+    #[Route('/{id}', name: 'api_service_offer_get_one', methods: ['GET'], requirements: ['id' => '\d+'])]
     public function getOne(int $id, Request $request): JsonResponse
     {
         $locale = CacheLocale::normalize($request->getLocale());
@@ -82,7 +82,7 @@ class ServiceOfferApiController extends AbstractController
         return $this->json(new ServiceOfferOutputDto($serviceOffer, $baseImageUrl, $request->getLocale()), Response::HTTP_CREATED);
     }
 
-    #[Route('/{id}', name: 'api_service_offer_update', methods: ['PUT'])]
+    #[Route('/{id}', name: 'api_service_offer_update', methods: ['PUT'], requirements: ['id' => '\d+'])]
     public function update(int $id, #[MapRequestPayload] ServiceOfferInputDto $dto, Request $request): JsonResponse
     {
         $serviceOffer = $this->updateServiceOfferUseCase->execute($id, $dto);
@@ -91,7 +91,7 @@ class ServiceOfferApiController extends AbstractController
         return $this->json(new ServiceOfferOutputDto($serviceOffer, $baseImageUrl, $request->getLocale()));
     }
 
-    #[Route('/{id}', name: 'api_service_offer_delete', methods: ['DELETE'])]
+    #[Route('/{id}', name: 'api_service_offer_delete', methods: ['DELETE'], requirements: ['id' => '\d+'])]
     public function delete(int $id): JsonResponse
     {
         $this->deleteServiceOfferUseCase->execute($id);

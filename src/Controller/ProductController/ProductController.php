@@ -71,7 +71,7 @@ class ProductController extends AbstractController
             ?? $request->getSchemeAndHttpHost();
     }
 
-    #[Route('/api/commandes/{id}/products', name: 'get_products_by_commande', methods: ['GET'])]
+    #[Route('/api/commandes/{id}/products', name: 'get_products_by_commande', methods: ['GET'], requirements: ['id' => '\d+'])]
     public function getProductsByCommande(Commande $commande, Request $request): JsonResponse
     {
         $host = $this->resolveHost($request);
@@ -88,7 +88,7 @@ class ProductController extends AbstractController
         return $this->json($products, JsonResponse::HTTP_OK);
     }
 
-    #[Route('/api/commandes/{id}/products', name: 'create_product_by_commande', methods: ['POST'])]
+    #[Route('/api/commandes/{id}/products', name: 'create_product_by_commande', methods: ['POST'], requirements: ['id' => '\d+'])]
     public function createProductByCommande(Commande $commande, Request $request): JsonResponse
     {
         // Prix d'achat en cents entiers, coefficient décimal (lot G1, 09/11/2026) ; 422 VALIDATION_FAILED, hors du try (le 500 ne le masque pas).
@@ -123,7 +123,7 @@ class ProductController extends AbstractController
 
     // Route masquée par l'opération Delete d'API Platform sur Product (même chemin, déclarée avant) : DELETE /api/products/{id} passe par API
     // Platform. La garde PRODUCT_IN_USE est au niveau de Doctrine (ProductUsageGuardSubscriber, ART-SUPPR, 12/11/2026) et couvre les deux.
-    #[Route('/api/products/{id}', name: 'delete_product', methods: ['DELETE'])]
+    #[Route('/api/products/{id}', name: 'delete_product', methods: ['DELETE'], requirements: ['id' => '\d+'])]
     public function deleteProduct(int $id): \Symfony\Component\HttpFoundation\Response
     {
         try {
@@ -191,7 +191,7 @@ class ProductController extends AbstractController
      * ou d'un de ses enfants (variante, stock, image, traduction) et par celle d'un référentiel ; une fiche introuvable
      * (exception) n'est pas mise en cache.
      */
-    #[Route('/api/productsid/{id}', name: 'get_product_by_id', methods: ['GET'])]
+    #[Route('/api/productsid/{id}', name: 'get_product_by_id', methods: ['GET'], requirements: ['id' => '\d+'])]
     public function getProductById(int $id, Request $request): JsonResponse
     {
         try {

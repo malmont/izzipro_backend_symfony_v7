@@ -35,7 +35,7 @@ class DashboardCommandeController extends AbstractController
     /**
      * Fermer une commande
      */
-    #[Route('/api/dashboard/commande/{id}/close', name: 'close_command', methods: ['POST'])]
+    #[Route('/api/dashboard/commande/{id}/close', name: 'close_command', methods: ['POST'], requirements: ['id' => '\d+'])]
     public function closeCommand(Commande $commande): JsonResponse
     {
         // 200 avec le tableau de bord figé, 409 ALREADY_CLOSED si déjà fermée (lot G2, 09/11/2026 ; avant : {"message"} / 400)
@@ -45,7 +45,7 @@ class DashboardCommandeController extends AbstractController
     /**
      * Récupérer les métriques d'une commande pour le dashboard
      */
-    #[Route('/api/dashboard/commande/{id}', name: 'dashboard_commande', methods: ['GET'])]
+    #[Route('/api/dashboard/commande/{id}', name: 'dashboard_commande', methods: ['GET'], requirements: ['id' => '\d+'])]
     public function getCommandeMetrics(Commande $commande): JsonResponse
     {
         $cacheKey = 'dashboard_commande_' . $commande->getId() . ($commande->getIsClosed() ? '_closed' : '_open');

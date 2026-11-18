@@ -76,7 +76,7 @@ class CollectionController extends AbstractController
         return new JsonResponse($result['items'], JsonResponse::HTTP_OK, $query->headers($result['total']));
     }
 
-    #[Route('/api/collections/{id}', name: 'delete_collection', methods: ['DELETE'])]
+    #[Route('/api/collections/{id}', name: 'delete_collection', methods: ['DELETE'], requirements: ['id' => '\d+'])]
     public function deleteCollection(Collections $collection): \Symfony\Component\HttpFoundation\Response
     {
         $this->deleteCollectionUseCase->execute($collection); // suppression logique

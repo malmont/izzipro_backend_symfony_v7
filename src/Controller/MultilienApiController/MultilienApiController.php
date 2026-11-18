@@ -48,7 +48,7 @@ class MultilienApiController extends AbstractController
         return $this->json($multiliensDto);
     }
 
-    #[Route('/{id}', name: 'api_multilien_get_one', methods: ['GET'])]
+    #[Route('/{id}', name: 'api_multilien_get_one', methods: ['GET'], requirements: ['id' => '\d+'])]
     public function getOne(int $id, Request $request): JsonResponse
     {
         $multilien = $this->getMultilienByIdUseCase->execute($id);
@@ -69,7 +69,7 @@ class MultilienApiController extends AbstractController
         return $this->json(new MultilienOutputDto($multilien, $baseImageUrl), Response::HTTP_CREATED);
     }
 
-    #[Route('/{id}', name: 'api_multilien_update', methods: ['PUT'])]
+    #[Route('/{id}', name: 'api_multilien_update', methods: ['PUT'], requirements: ['id' => '\d+'])]
     public function update(int $id, #[MapRequestPayload] MultilienInputDto $dto, Request $request): JsonResponse
     {
         $multilien = $this->updateMultilienUseCase->execute($id, $dto);
@@ -77,7 +77,7 @@ class MultilienApiController extends AbstractController
         return $this->json(new MultilienOutputDto($multilien));
     }
 
-    #[Route('/{id}', name: 'api_multilien_delete', methods: ['DELETE'])]
+    #[Route('/{id}', name: 'api_multilien_delete', methods: ['DELETE'], requirements: ['id' => '\d+'])]
     public function delete(int $id): JsonResponse
     {
         $this->deleteMultilienUseCase->execute($id);

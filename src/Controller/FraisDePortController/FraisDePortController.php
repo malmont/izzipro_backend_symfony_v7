@@ -39,7 +39,7 @@ class FraisDePortController extends AbstractController
         $this->mediaUrlResolver = $mediaUrlResolver;
     }
 
-    #[Route('/api/commandes/{id}/frais-de-port', name: 'create_frais_de_port', methods: ['POST'])]
+    #[Route('/api/commandes/{id}/frais-de-port', name: 'create_frais_de_port', methods: ['POST'], requirements: ['id' => '\d+'])]
     public function createFraisDePort(Commande $commande, Request $request): JsonResponse
     {
         $data = json_decode($request->getContent(), true);
@@ -64,7 +64,7 @@ class FraisDePortController extends AbstractController
         return $this->json(new \App\Dto\FraisDePortOutputDTO($fraisDePort, $host, $this->currency?->code() ?? \App\Services\BoutiqueSettingsService\TenantCurrencyProvider::DEFAULT), JsonResponse::HTTP_CREATED);
     }
 
-    #[Route('/api/commandes/{id}/frais-de-port', name: 'get_frais_de_port', methods: ['GET'])]
+    #[Route('/api/commandes/{id}/frais-de-port', name: 'get_frais_de_port', methods: ['GET'], requirements: ['id' => '\d+'])]
     public function getFraisDePort(Commande $commande, Request $request): JsonResponse
     {
         $host = $this->mediaUrlResolver 
@@ -112,7 +112,7 @@ class FraisDePortController extends AbstractController
         return $this->json(new \App\Dto\FraisDePortOutputDTO($fraisDePort, $host, $this->currency?->code() ?? \App\Services\BoutiqueSettingsService\TenantCurrencyProvider::DEFAULT));
     }
 
-    #[Route('/api/commandes/{id}/frais-de-port', name: 'delete_frais_de_port', methods: ['DELETE'])]
+    #[Route('/api/commandes/{id}/frais-de-port', name: 'delete_frais_de_port', methods: ['DELETE'], requirements: ['id' => '\d+'])]
     public function deleteFraisDePort(Commande $commande): \Symfony\Component\HttpFoundation\Response
     {
         $this->deleteFraisDePortUseCase->execute($commande);

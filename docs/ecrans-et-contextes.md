@@ -534,6 +534,29 @@ Essai : `tests/Functional/Group/GroupApiTest.php`.
 
 Essai : `tests/Functional/Group/GroupEntryTest.php` (dont une sonde de toutes les lectures sans paramètre : aucune panne pour le directeur).
 
+### 12.2 POINT DE REPRISE de G-1 (arrêt du soir, 18/11/2026 ~04:00 UTC, consigne du propriétaire)
+
+État : branche `lot-g1` (worktree `var/devtree-iaa`), sur dd28313a (train 101) ; **pas en ligne**. Commits : fcc516ff (G-1a + G-1b) puis le
+commit « corrections de la relecture, passe 1 » (ce point de reprise).
+- **Relecture neuve, passe 1 : faite**, constats tous corrigés : comptes et rôles fermés au directeur (API et EasyAdmin, invitation d'agents
+  comprise : il ne se fait jamais un compte qui survivrait à son entrée) ; sur un écran CRUD d'EasyAdmin, seules les actions ordinaires
+  (`GROUP_EA_ACTIONS`) ; abonnements, Mémoires Vivantes (EasyAdmin compris), gestes de module d'EasyAdmin (« Mon site »), réglages de la famille
+  sécurité fermés ; cartes-cadeaux (espèces, annulation, ajustement) classées remboursement (validé par le chef) ; motifs par PRÉFIXE ;
+  écritures d'EasyAdmin tracées avec écran, action, fiche ; dissolution et limiteur sous verrou ; une seule invitation ouverte par site (index
+  unique `uniq_shop_group_invitations_open`) ; mention du groupe dans les contextes d'une boutique réservée à son administrateur. Écran Clients
+  d'EasyAdmin fermé au directeur (même code d'écran que les comptes) : à annoncer à la photo.
+- **Garde-fou des identifiants (demande du chef)** : `tests/Functional/Security/RouteIdRequirementTest.php` ; 63 routes de l'API reçoivent
+  l'exigence `\d+` (un identifiant non numérique y répond 404, à annoncer) ; exceptions écrites : API Platform, Mémoires Vivantes, la tâche
+  de l'assistant de page (identifiant textuel).
+- Essais verts dans la branche : `tests/Functional/Group` (9), `Security` (209, garde-fou compris), `Screens` (4).
+- **À FAIRE à la reprise** : (1) `Platform` : 4 échecs d'attentes de COMPTES (AgencySitesTest 11 au lieu de 10 modules, PlatformConsoleApiTest
+  13 au lieu de 12) dus au module `module.multi_shop` ajouté : relire et ajuster les attentes ; (2) fusionner la production (54f5c88d ou
+  plus) dans `lot-g1` : conflits attendus dans `AdminEntryController`, `AdminEntrySubscriber`, `EntryService` (BANDEAU et RETOUR) ; brancher
+  le directeur sur RETOUR (entrant : administrateur du siège, `returningAccount` doit l'accepter) ; (3) **relecture neuve, passe 2** (fraîche,
+  code seul) puis mutations ; (4) suite complète, contrat de photo (`/api/me/contexts` : clé `group` dans toute réponse ; écran `groupe` ;
+  routes du groupe ; 404 des identifiants non numériques ; écran Clients fermé au directeur), migration
+  `scripts/migrate_all_v2_multi_boutiques.sh` (10 bases) et `scripts/migrate_master_v2_groups.sh` (base maître) AVANT l'échange.
+
 ## Tenir cette fiche à jour
 
 À chaque écran, famille ou liste hors écran ajoutés ; à chaque champ sensible trouvé ; à chaque mode nouveau.

@@ -43,7 +43,7 @@ class DashboardListCollectionController extends AbstractController
         $this->cache = $cache;
     }
 
-    #[Route('/api/dashboard/collection/{id}', name: 'dashboard_collection', methods: ['GET'])]
+    #[Route('/api/dashboard/collection/{id}', name: 'dashboard_collection', methods: ['GET'], requirements: ['id' => '\d+'])]
     public function dashboardCollection(Collections $collection): JsonResponse
     {
         $closed = $this->calendar ? $this->calendar->isClosed($collection) : (bool) $collection->getIsClosed(); // période fermée par la date comprise (lot P1, 10/11/2026)
@@ -91,7 +91,7 @@ class DashboardListCollectionController extends AbstractController
         return new JsonResponse($combinedData, JsonResponse::HTTP_OK);
     }
 
-    #[Route('/api/dashboard/collection/{id}/close', name: 'close_collection', methods: ['POST'])]
+    #[Route('/api/dashboard/collection/{id}/close', name: 'close_collection', methods: ['POST'], requirements: ['id' => '\d+'])]
     public function closeCollection(Collections $collection): JsonResponse
     {
         // 200 avec le tableau de bord figé, 409 ALREADY_CLOSED si déjà fermée (lot G2, 09/11/2026 ; avant : {"message"} / 400)
@@ -99,7 +99,7 @@ class DashboardListCollectionController extends AbstractController
     }
 
     /** Réouverture manuelle (lot P1, 10/11/2026) : 200 tableau de bord vivant ; 409 NOT_CLOSED si déjà ouverte */
-    #[Route('/api/dashboard/collection/{id}/reopen', name: 'reopen_collection', methods: ['POST'])]
+    #[Route('/api/dashboard/collection/{id}/reopen', name: 'reopen_collection', methods: ['POST'], requirements: ['id' => '\d+'])]
     public function reopenCollection(Collections $collection): JsonResponse
     {
         return new JsonResponse($this->reopenCollectionUseCase->execute($collection)->toArray(), JsonResponse::HTTP_OK);

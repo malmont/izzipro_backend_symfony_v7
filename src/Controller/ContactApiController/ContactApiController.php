@@ -44,7 +44,7 @@ class ContactApiController extends AbstractController
         return $this->json(array_map(fn($contact) => new ContactOutputDto($contact), $contacts), Response::HTTP_OK, ['X-Total-Count' => (string) count($contacts)]);
     }
 
-    #[Route('/{id}', name: 'api_contact_get_one', methods: ['GET'])]
+    #[Route('/{id}', name: 'api_contact_get_one', methods: ['GET'], requirements: ['id' => '\d+'])]
     public function getOne(int $id): JsonResponse
     {
         $contact = $this->getContactByIdUseCase->execute($id);
@@ -88,14 +88,14 @@ class ContactApiController extends AbstractController
         return $this->json(new ContactOutputDto($contact), Response::HTTP_CREATED);
     }
 
-    #[Route('/{id}', name: 'api_contact_update', methods: ['PUT'])]
+    #[Route('/{id}', name: 'api_contact_update', methods: ['PUT'], requirements: ['id' => '\d+'])]
     public function update(int $id, #[MapRequestPayload] ContactInputDto $dto): JsonResponse
     {
         $contact = $this->updateContactUseCase->execute($id, $dto);
         return $this->json(new ContactOutputDto($contact));
     }
 
-    #[Route('/{id}', name: 'api_contact_delete', methods: ['DELETE'])]
+    #[Route('/{id}', name: 'api_contact_delete', methods: ['DELETE'], requirements: ['id' => '\d+'])]
     public function delete(int $id): JsonResponse
     {
         $this->deleteContactUseCase->execute($id);

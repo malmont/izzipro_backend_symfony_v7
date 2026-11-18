@@ -65,7 +65,7 @@ class TeamController extends AbstractController
         return $this->json($teams);
     }
 
-    #[Route('/api/team/{id}', name: 'api_team_get', methods: ['GET'])]
+    #[Route('/api/team/{id}', name: 'api_team_get', methods: ['GET'], requirements: ['id' => '\d+'])]
     public function getTeam(int $id, Request $request): JsonResponse
     {
         $host = $this->resolveHost($request);
@@ -83,7 +83,7 @@ class TeamController extends AbstractController
         return $this->json($teamDto);
     }
 
-    #[Route('/api/team/{id}', name: 'api_team_update', methods: ['PUT'])]
+    #[Route('/api/team/{id}', name: 'api_team_update', methods: ['PUT'], requirements: ['id' => '\d+'])]
     public function update(int $id, Request $request): JsonResponse
     {
         $data = json_decode($request->getContent(), true) ?? [];
@@ -95,7 +95,7 @@ class TeamController extends AbstractController
         return $this->json($teamDto);
     }
 
-    #[Route('/api/team/{id}', name: 'api_team_delete', methods: ['DELETE'])]
+    #[Route('/api/team/{id}', name: 'api_team_delete', methods: ['DELETE'], requirements: ['id' => '\d+'])]
     public function delete(int $id, Request $request): JsonResponse
     {
         $locale = $request->get('locale', 'fr');
