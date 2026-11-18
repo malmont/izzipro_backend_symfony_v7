@@ -16,8 +16,9 @@ use Doctrine\DBAL\Driver\Statement;
  * requête ; une boutique en envoie une quinzaine. Tant qu'une échéance est posée (`AllShopsReader::readOnly`, et là seulement), chaque
  * requête SQL est d'abord vérifiée :
  * - échéance passée : `ShopDeadlineExceeded`, aucune requête de plus ;
- * - temps restant tombé sous la moitié du `statement_timeout` en place : il est resserré (`SET LOCAL`, dans la transaction de la boutique),
- *   si bien qu'une requête commencée juste avant l'échéance ne la dépasse que de peu.
+ * - `statement_timeout` en place plus long que le temps restant de plus de `SLACK_MS` : il est resserré au temps restant (`SET LOCAL`,
+ *   dans la transaction de la boutique) ; une requête ne dépasse donc jamais l'échéance de plus de `SLACK_MS` (une quinzaine de
+ *   resserrages au plus sur 3 s).
  * `tripped()` dit si l'échéance a été atteinte, même si un service a attrapé l'exception et continué : la boutique est alors en `timeout`,
  * jamais servie avec des chiffres partiels.
  *
@@ -26,6 +27,8 @@ use Doctrine\DBAL\Driver\Statement;
 #[AsMiddleware]
 final class ShopDeadline implements Middleware
 {
+    public const SLACK_MS = 200;
+
     private static ?int $deadline = null;
     private static int $timeoutMs = 0;
     private static bool $tripped = false;
@@ -59,7 +62,7 @@ final class ShopDeadline implements Middleware
             self::$tripped = true;
             throw new ShopDeadlineExceeded('Toutes les boutiques : délai de la boutique dépassé');
         }
-        if ($remaining < self::$timeoutMs / 2) {
+        if (self::$timeoutMs > $remaining + self::SLACK_MS) {
             self::$timeoutMs = $remaining;
 
             return $remaining;

@@ -279,6 +279,18 @@ class GroupAllShopsTest extends WebTestCase
         $this->assertSame(2, $calls, 'deux boutiques, lues une fois chacune');
         $reader(10_000, 3000)->read($group, 'gestion_journee', '/api/gestion/journee', ['essai' => $this->tag . '-autre'], $counted);
         $this->assertSame(4, $calls);
+        // une table verrouillée dans une boutique (une migration en cours) : la lecture n'attend pas, elle passe en `timeout` dans le délai
+        $locker = $this->pdo(MV_TEST_TENANT2_DB);
+        $locker->exec('BEGIN');
+        try {
+            $locker->exec('LOCK TABLE entreprise IN ACCESS EXCLUSIVE MODE');
+            $started = hrtime(true);
+            $read = $reader(10_000, 300)->read($group, 'gestion_pertes', '/api/gestion/pertes', [], fn (): array => ['data' => ['n' => 1]]);
+            $this->assertSame([GroupScope::OK, GroupScope::TIMEOUT], array_column($read['shops'], 'status'));
+            $this->assertLessThan(1500, (hrtime(true) - $started) / 1e6, 'aucune attente sans fin du verrou');
+        } finally {
+            $locker->exec('ROLLBACK');
+        }
         // une écriture tentée pendant une lecture de boutique échoue : jamais rien d'écrit
         $write = fn (): array => ['data' => ['n' => $provider->getEntityManager()->getConnection()->executeStatement("UPDATE entreprise SET name = name || ' g2'")]];
         $read = $reader(10_000, 3000)->read($group, 'gestion_pertes', '/api/gestion/pertes', [], $write);
@@ -367,6 +379,15 @@ class GroupAllShopsTest extends WebTestCase
         $this->assertSame([200, 80, 14], [$i['stockValue']['value'], $i['stockValue']['costValue'], $i['stockValue']['lastYear']]);
         $this->assertSame([40000], array_column($totals[0]['chart']['points'], 'revenue'));
         $this->assertSame(['a', 'b'], $totals[0]['shops']);
+
+        // journée : une boutique sans historique (moyenne nulle) ne gonfle pas la comparaison au même jour de semaine
+        $day = static fn (string $site, int $total, int $average): array => ['site' => $site, 'status' => GroupScope::OK, 'currency' => 'CAD', 'data' => [
+            'sales' => ['total' => $total, 'orders' => 1, 'byChannel' => [], 'vsSameWeekdayAverage' => ['percent' => null, 'average' => $average, 'weeks' => 4, 'asOf' => '10:00']],
+            'toShip' => ['count' => 1, 'oldestAt' => $site === 'a' ? '2026-11-10T10:00:00+00:00' : '2026-11-12T10:00:00+00:00'], 'cash' => null, 'stock' => ['lowCount' => 2], 'screens' => []]];
+        $merged = AllShopsMerger::day([$day('a', 1000, 500), $day('b', 3000, 0)])[0];
+        $this->assertSame([4000, 100.0, 500, ['a']], [$merged['sales']['total'], $merged['sales']['vsSameWeekdayAverage']['percent'], $merged['sales']['vsSameWeekdayAverage']['average'],
+            $merged['sales']['vsSameWeekdayAverage']['shops']]);
+        $this->assertSame(['2026-11-10T10:00:00+00:00', 2, 4], [$merged['toShip']['oldestAt'], $merged['toShip']['count'], $merged['stock']['lowCount']]);
     }
 
     /** Champs datés de l'instant de la lecture : hors de la comparaison */

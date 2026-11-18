@@ -142,9 +142,13 @@ final class AllShopsMerger
             $sum = self::sum($data);
             // ce qui ne s'additionne pas : le jour et l'heure de chaque boutique ; la comparaison au même jour de semaine est recalculée
             unset($sum['date'], $sum['timezone'], $sum['generatedAt'], $sum['currency']);
-            $average = (int) ($sum['sales']['vsSameWeekdayAverage']['average'] ?? 0);
-            $sum['sales']['vsSameWeekdayAverage'] = ['percent' => $average > 0 ? round(((int) $sum['sales']['total'] - $average) / $average * 100, 1) : null,
-                'average' => $average, 'weeks' => $data[0]['sales']['vsSameWeekdayAverage']['weeks'] ?? null, 'asOf' => null];
+            // la comparaison ne porte que sur les boutiques qui ont un historique (moyenne non nulle) : une boutique neuve ne la gonfle pas
+            $compared = array_values(array_filter($data, static fn (array $d): bool => (int) ($d['sales']['vsSameWeekdayAverage']['average'] ?? 0) > 0));
+            $average = (int) array_sum(array_map(static fn (array $d): int => (int) $d['sales']['vsSameWeekdayAverage']['average'], $compared));
+            $today = (int) array_sum(array_map(static fn (array $d): int => (int) $d['sales']['total'], $compared));
+            $sum['sales']['vsSameWeekdayAverage'] = ['percent' => $average > 0 ? round(($today - $average) / $average * 100, 1) : null,
+                'average' => $average, 'weeks' => $data[0]['sales']['vsSameWeekdayAverage']['weeks'] ?? null, 'asOf' => null,
+                'shops' => array_values(array_map(static fn (array $p): string => $p['site'], array_filter($parts, static fn (array $p): bool => (int) ($p['data']['sales']['vsSameWeekdayAverage']['average'] ?? 0) > 0)))];
             $sum['toShip']['oldestAt'] = self::earliest(array_map(static fn (array $d) => $d['toShip']['oldestAt'] ?? null, $data));
             foreach (['outstandingStoreCredit', 'outstandingGiftCards'] as $balance) { // l'instant de lecture de chaque boutique : sans objet pour le total
                 if (isset($sum['receipts'][$balance]) && is_array($sum['receipts'][$balance])) {
@@ -173,6 +177,9 @@ final class AllShopsMerger
             $sum = self::sum($data);
             // les postes de caisse sont propres à chaque boutique (identifiants de sa base) : jamais réunis ; l'analyse non plus
             unset($sum['counts']['byRegister'], $sum['lastAnalysis'], $sum['currency']);
+            // le « aujourd'hui » de chaque boutique (fuseaux différents) : la plage qui les couvre toutes
+            $periods = array_values(array_filter(array_map(static fn (array $d) => $d['period'] ?? null, $data)));
+            $sum['period'] = $periods === [] ? null : ['from' => min(array_column($periods, 'from')), 'to' => max(array_column($periods, 'to'))];
             $sum['caveats'] = self::caveats($parts);
             $totals[] = ['currency' => $currency, 'shops' => array_map(static fn (array $p): string => $p['site'], $parts)] + $sum;
         }
@@ -252,7 +259,7 @@ final class AllShopsMerger
                 }
             }
             if ($key === null) {
-                return $first === [] ? [] : null; // liste sans clé : ne se réunit pas
+                return $all === [] ? [] : null; // liste sans clé : ne se réunit pas (vide partout : vide)
             }
             $groups = [];
             foreach ($all as $item) {

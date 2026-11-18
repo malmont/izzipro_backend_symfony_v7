@@ -602,19 +602,30 @@ Le directeur d'un groupe lit plusieurs écrans de la gestion pour toutes ses bou
     réunis par clé. Une comparaison absente d'une boutique (an dernier, valeur passée du stock) : le total ne porte que celles qui l'ont,
     remarque `PARTIAL_COMPARISON`. Remarques réunies par code avec leurs boutiques ; le texte n'est gardé que s'il est le même partout.
   - Journée : sommes champ par champ, listes réunies par canal et par moyen ; comparaison au même jour de semaine recalculée sur les
-    sommes, `asOf` nul ; plus ancienne commande à expédier ; trésorerie : somme des soldes et état le plus grave ; instants de lecture nuls.
-  - Pertes : comptes et montants sommés ; postes de caisse jamais réunis (propres à chaque boutique). Par poste et par jour, jamais
+    seules boutiques qui ont un historique (`shops`), `asOf` nul ; plus ancienne commande à expédier ; trésorerie : somme des soldes et
+    état le plus grave ; instants de lecture nuls.
+  - Pertes : comptes et montants sommés ; période qui couvre celle de chaque boutique ; postes de caisse jamais réunis (propres à chaque
+    boutique). Par poste et par jour, jamais
     par personne : la part ne porte ni la notice aux salariés ni aucun nom (`AllShopsMerger::lossPart`).
 - **Lecture boutique par boutique** dans la requête (`AllShopsReader`) : changement de site, puis retour au siège dans un `finally`, même
   si une boutique lève une exception. Chaque boutique est lue dans une transaction `READ ONLY` annulée à la fin : une lecture qui tenterait
   d'écrire échoue (statut `error`), elle n'écrit rien. Une erreur de validation (422) remonte telle quelle.
-- **Délai et budget** : `statement_timeout` local de 3 s par boutique (ou ce qui reste du budget) ; au-delà, `timeout`. Budget de la
-  réponse : 15 s, les boutiques restantes en `skipped`. Plafond : 20 boutiques (`truncated`).
-- **Cache** (statistiques et journée ; jamais les pertes) : la part d'une boutique, 5 minutes, sous les étiquettes du site et de sa base.
+- **Délai et budget** : échéance de 3 s pour la lecture ENTIÈRE d'une boutique (ou ce qui reste du budget), comptée dès le changement de
+  site : devise, fuseau, modules, empreinte et part sont lus dans la transaction, sous `statement_timeout` et `lock_timeout` locaux (un
+  verrou posé par une migration ne pend pas la requête). L'intergiciel DBAL `ShopDeadline` refuse toute requête après l'échéance et
+  resserre `statement_timeout` au temps restant (dépassement de 200 ms au plus) ; il ne fait rien hors de cette lecture. Une boutique
+  qui dépasse : `timeout`, jamais des chiffres partiels (ni servis, ni gardés en cache), même si un service a avalé l'annulation.
+  Budget de la réponse : 15 s, les boutiques restantes en `skipped`. Plafond : 20 boutiques (`truncated`). Deux codes de site sur la
+  même base : lue et comptée une fois, le second en `duplicate` (`sameAs`).
+- **Cache** (statistiques et journée ; jamais les pertes) : la part d'une boutique, 5 minutes, sous les étiquettes du site et de sa base
+  (posées par `AllShopsReader`, permis dans `CacheTagConventionTest` : la part est lue depuis l'hôte du siège). Clé des statistiques bornée
+  à `range`, `from`, `to`, `source` et la langue (`GroupScope::STATISTICS_PARAMS`).
   La clé porte le jour de la boutique et l'EMPREINTE des tables lues (`GroupScope::TABLES`, compteurs d'écritures de PostgreSQL) : une
   écriture dans une table lue, par Doctrine ou en SQL, périme la part dès que PostgreSQL l'a comptée (à la fin de la requête qui écrit ;
   au plus 10 s pour un worker qui garde sa connexion). Garde-fou `GroupScopeReadTablesTest` : toute table lue par la route doit être
   dans la liste.
+- Relecture neuve en deux passes et mutations (16 + 8) : toutes tuées sauf deux mutants équivalents (le forçage `analyse=0`, déjà
+  posé par `['analyse' => '0'] + …` ; le contrôle `tripped`, impliqué par la durée).
 - Mesure (environnement d'essai, 3 boutiques, noyau en débogage) : statistiques du mois 265 ms à froid, 121 à 141 ms en cache (193 ms
   seule) ; journée 377 ms à froid, 114 ms en cache (161 ms seule) ; pertes 151 ms (jamais en cache).
 

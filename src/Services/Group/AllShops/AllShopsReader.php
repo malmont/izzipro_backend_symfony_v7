@@ -129,17 +129,29 @@ class AllShopsReader
                 throw new \RuntimeException('boutique sans base connue');
             }
             $this->emProvider->switchTenant((string) $shop['dbname'], (string) $shop['tenant_code']);
-            $identity = ['currency' => $this->currency->code(), 'timezone' => $this->clock->timezone()->getName()];
-            if (!$this->modulesOn($path, $config)) {
-                return self::part($shop, GroupScope::MODULE_OFF) + $identity;
-            }
-            $read = fn (): array => $this->readOnly($one, $timeoutMs);
-            $result = $config['cache'] ? $this->cached($shop, $route, $keyParts, $read) : $read();
-            if (self::since($started) > $timeoutMs) {
-                return self::part($shop, GroupScope::TIMEOUT) + $identity; // trop lente cette fois : la part reste en cache pour la suivante
-            }
 
-            return self::part($shop, GroupScope::OK) + $identity + $result;
+            // TOUT ce qui lit la boutique (devise, fuseau, modules, empreinte, part) passe dans la transaction READ ONLY et sous l'échéance,
+            // comptée depuis le début de la boutique (relecture neuve, passe 2 : un verrou posé par une migration ne pend plus la requête)
+            return $this->readOnly($timeoutMs, $started, function () use ($shop, $route, $path, $config, $keyParts, $one, $started, $timeoutMs): array {
+                $identity = ['currency' => $this->currency->code(), 'timezone' => $this->clock->timezone()->getName()];
+                if (!$this->modulesOn($path, $config)) {
+                    return self::part($shop, GroupScope::MODULE_OFF) + $identity;
+                }
+                $compute = static function () use ($one): array {
+                    $result = $one();
+                    if (ShopDeadline::tripped()) {
+                        throw new ShopDeadlineExceeded('échéance atteinte pendant la lecture'); // jamais des chiffres partiels, ni en cache
+                    }
+
+                    return $result;
+                };
+                $result = $config['cache'] ? $this->cached($shop, $route, $keyParts, $compute) : $compute();
+                if (ShopDeadline::tripped() || self::since($started) > $timeoutMs) {
+                    return self::part($shop, GroupScope::TIMEOUT) + $identity; // trop lente cette fois : une part complète reste en cache
+                }
+
+                return self::part($shop, GroupScope::OK) + $identity + $result;
+            });
         } catch (GestionValidationException|HttpExceptionInterface $e) {
             throw $e; // la requête elle-même est fausse : 422 ou refus, comme la route seule
         } catch (\Throwable $e) {
@@ -169,22 +181,24 @@ class AllShopsReader
         return true;
     }
 
-    /** @return array<string, mixed> */
-    private function readOnly(callable $one, int $timeoutMs): array
+    /**
+     * La lecture d'une boutique dans une transaction `READ ONLY`, sous `statement_timeout` et `lock_timeout` locaux et sous l'échéance de la
+     * boutique entière (`ShopDeadline`) : ce qui reste du délai depuis `$started`. Annulée à la fin, quoi qu'il arrive.
+     *
+     * @return array<string, mixed>
+     */
+    private function readOnly(int $timeoutMs, int $started, callable $body): array
     {
         $conn = $this->emProvider->getEntityManager()->getConnection();
         $conn->beginTransaction();
         try {
+            $remaining = max(1, $timeoutMs - self::since($started));
             $conn->executeStatement('SET TRANSACTION READ ONLY');
-            $conn->executeStatement('SET LOCAL statement_timeout = ' . max(1, $timeoutMs));
-            // l'échéance de la boutique entière, pas seulement de chaque requête (relecture neuve) : voir `ShopDeadline`
-            ShopDeadline::start(max(1, $timeoutMs));
-            $result = $one();
-            if (ShopDeadline::tripped()) {
-                throw new ShopDeadlineExceeded('échéance atteinte pendant la lecture'); // jamais des chiffres partiels
-            }
+            $conn->executeStatement('SET LOCAL statement_timeout = ' . $remaining);
+            $conn->executeStatement('SET LOCAL lock_timeout = ' . $remaining);
+            ShopDeadline::start($remaining);
 
-            return $result;
+            return $body();
         } finally {
             ShopDeadline::stop();
             try {
