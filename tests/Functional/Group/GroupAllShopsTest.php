@@ -44,7 +44,6 @@ class GroupAllShopsTest extends WebTestCase
 
     protected function tearDown(): void
     {
-        static::getContainer()->get(PlatformModeService::class)->setMode('demo', 'test');
         $this->clean();
         parent::tearDown();
     }
@@ -64,8 +63,8 @@ class GroupAllShopsTest extends WebTestCase
         $this->assertSame([400, GroupScope::INVALID], $this->refusal('GET', '/api/gestion/journee', $director, MV_TEST_TENANT_HOST, 'toutes'));
         $this->assertSame([403, GroupScope::READ_ONLY], $this->refusal('POST', '/api/gestion/pertes/analyse', $director));
         $this->assertSame([403, GroupScope::READ_ONLY], $this->refusal('PUT', '/api/gestion/pertes/regles/EXIT_WITHOUT_SALE', $director));
-        $this->assertSame([400, GroupScope::UNSUPPORTED], $this->refusal('GET', '/api/gestion/statistiques/annee', $director), 'une route qui ne sait pas réunir');
-        $this->assertSame([400, GroupScope::UNSUPPORTED], $this->refusal('GET', '/api/gestion/tresorerie/soldes', $director));
+        $this->assertSame([400, GroupScope::UNSUPPORTED], $this->refusal('GET', '/api/gestion/tresorerie', $director), 'une route qui ne sait pas réunir (la projection reste à la boutique)');
+        $this->assertSame([400, GroupScope::UNSUPPORTED], $this->refusal('GET', '/api/gestion/tresorerie/rapprochements', $director));
         $this->assertSame([400, GroupScope::UNSUPPORTED], $this->refusal('GET', '/api/contacts', $director));
         $this->assertSame([400, GroupScope::UNSUPPORTED], $this->refusal('GET', '/api/gestion/statistiques?sections=payments', $director), 'une section');
         $this->assertSame([400, GroupScope::UNSUPPORTED], $this->refusal('GET', '/api/gestion/statistiques?periodId=1', $director), 'une période est propre à un site');
@@ -85,7 +84,8 @@ class GroupAllShopsTest extends WebTestCase
         // les contextes du directeur nomment les routes qui savent réunir
         $this->module(MV_TEST_TENANT_DB, MV_TEST_TENANT_CODE, 'is_multi_shop_active', true);
         $contexts = $this->json('GET', '/api/me/contexts', $director, MV_TEST_TENANT_HOST, null);
-        $this->assertSame(['/api/gestion/statistiques', '/api/gestion/journee', '/api/gestion/pertes'], $contexts['group']['allShops']);
+        $this->assertSame(['/api/gestion/statistiques', '/api/gestion/journee', '/api/gestion/pertes', '/api/commandes/lignes/a-recevoir', '/api/gestion/tresorerie/soldes',
+            '/api/gestion/tresorerie/mouvements', '/api/gestion/statistiques/annee', '/api/gestion/groupe/resultat'], $contexts['group']['allShops']);
     }
 
     public function testEachShopPartIsTheRouteReadAloneAndTheTotalsAreTheirSums(): void
@@ -181,18 +181,36 @@ class GroupAllShopsTest extends WebTestCase
 
     public function testAShopWithoutTheModuleIsListedAsSuchInLiveMode(): void
     {
-        $this->group();
-        $director = $this->account(MV_TEST_TENANT_DB, MV_TEST_TENANT_CODE, 'directeur', ['ROLE_ADMIN']);
-        static::getContainer()->get(PlatformModeService::class)->setMode('live', 'test');
-        $this->module(MV_TEST_TENANT_DB, MV_TEST_TENANT_CODE, 'is_management_app_active', true);
-        $this->module(MV_TEST_TENANT2_DB, MV_TEST_TENANT2_CODE, 'is_management_app_active', false);
+        // La plateforme entière n'est PAS passée en mode réel (cela changerait les droits de module des autres essais) : le lecteur reçoit
+        // une plateforme simulée « réelle », et la boutique perd le module de gestion le temps de l'essai.
+        $groupId = $this->group();
+        $container = static::getContainer();
+        $provider = $container->get(TenantEntityManagerProvider::class);
+        $provider->switchTenant(MV_TEST_TENANT_DB, MV_TEST_TENANT_CODE);
+        $live = new class ($container->get(TenantConnectionManager::class), $container->get(\Symfony\Contracts\Cache\CacheInterface::class), $container->get(\Psr\Log\LoggerInterface::class)) extends PlatformModeService {
+            public function isDemo(): bool
+            {
+                return false;
+            }
+        };
+        $reader = new AllShopsReader($provider, $container->get(TenantConnectionProvider::class), $container->get(\App\Services\Group\GroupRepository::class),
+            $container->get(\App\Services\FeatureAccess\ModuleAccessService::class), $live, $container->get(\App\Services\CaisseService\StoreClock::class),
+            $container->get(\App\Services\BoutiqueSettingsService\TenantCurrencyProvider::class), $container->get(\Symfony\Contracts\Cache\TagAwareCacheInterface::class),
+            $container->get(\Psr\Log\LoggerInterface::class));
+        $read = static fn (): array => ['data' => ['n' => 1]];
+        $columns = 'is_management_app_active';
+        $before = [$this->pdo(MV_TEST_TENANT_DB)->query("SELECT $columns FROM entreprise ORDER BY id LIMIT 1")->fetchColumn(), $this->pdo(MV_TEST_TENANT2_DB)->query("SELECT $columns FROM entreprise ORDER BY id LIMIT 1")->fetchColumn()];
         try {
-            $all = $this->json('GET', '/api/gestion/journee', $director, MV_TEST_TENANT_HOST, GroupScope::VALUE);
-            $this->assertSame([GroupScope::OK, GroupScope::MODULE_OFF], array_column($all['shops'], 'status'));
-            $this->assertArrayNotHasKey('data', $all['shops'][1]);
-            $this->assertSame([[MV_TEST_TENANT_CODE]], array_column($all['totals'], 'shops'), 'les totaux ne portent que les boutiques lues');
+            $this->module(MV_TEST_TENANT_DB, MV_TEST_TENANT_CODE, $columns, true);
+            $this->module(MV_TEST_TENANT2_DB, MV_TEST_TENANT2_CODE, $columns, false);
+            $out = $reader->read(['id' => $groupId, 'name' => 'Siège'], 'gestion_journee', '/api/gestion/journee', ['essai' => $this->tag], $read);
+            $this->assertSame([GroupScope::OK, GroupScope::MODULE_OFF], array_column($out['shops'], 'status'));
+            $this->assertArrayNotHasKey('data', $out['shops'][1]);
+            $this->assertSame([[MV_TEST_TENANT_CODE]], array_column(AllShopsMerger::losses(array_map(static fn (array $s): array => $s + ($s['status'] === GroupScope::OK
+                ? ['data' => AllShopsMerger::lossPart([])] : []), $out['shops'])), 'shops'), 'les totaux ne portent que les boutiques lues');
         } finally {
-            $this->module(MV_TEST_TENANT2_DB, MV_TEST_TENANT2_CODE, 'is_management_app_active', true);
+            $this->module(MV_TEST_TENANT_DB, MV_TEST_TENANT_CODE, $columns, in_array($before[0], [true, 1, '1', 't'], true));
+            $this->module(MV_TEST_TENANT2_DB, MV_TEST_TENANT2_CODE, $columns, in_array($before[1], [true, 1, '1', 't'], true));
         }
     }
 
@@ -390,10 +408,105 @@ class GroupAllShopsTest extends WebTestCase
         $this->assertSame(['2026-11-10T10:00:00+00:00', 2, 4], [$merged['toShip']['oldestAt'], $merged['toShip']['count'], $merged['stock']['lowCount']]);
     }
 
+    public function testG3ListsAreMergedWithTheirShopAndTheToReceiveDepthIsCapped(): void
+    {
+        $this->group();
+        $director = $this->account(MV_TEST_TENANT_DB, MV_TEST_TENANT_CODE, 'directeur', ['ROLE_ADMIN']);
+        $shopAdmin = $this->account(MV_TEST_TENANT2_DB, MV_TEST_TENANT2_CODE, 'boutique', ['ROLE_ADMIN']);
+        $alone = [MV_TEST_TENANT_CODE => [$director, MV_TEST_TENANT_HOST], MV_TEST_TENANT2_CODE => [$shopAdmin, MV_TEST_TENANT2_HOST]];
+
+        // à recevoir : au plus 500 lignes lues par boutique
+        $this->assertSame([400, GroupScope::PAGE_TOO_DEEP], $this->refusal('GET', '/api/commandes/lignes/a-recevoir?page=3&limit=200', $director));
+        $response = $this->request('GET', '/api/commandes/lignes/a-recevoir?page=1&limit=50', $director, MV_TEST_TENANT_HOST, GroupScope::VALUE, null);
+        $this->assertSame(200, $response->getStatusCode(), (string) $response->getContent());
+        $all = json_decode((string) $response->getContent(), true);
+        $totals = 0;
+        foreach ($all['shops'] as $shop) {
+            [$token, $host] = $alone[$shop['site']];
+            $own = $this->request('GET', '/api/commandes/lignes/a-recevoir?page=1&limit=1', $token, $host, null, null);
+            $this->assertSame((int) $own->headers->get('X-Total-Count'), $shop['total'], $shop['site']);
+            $this->assertArrayNotHasKey('data', $shop, 'les lignes ne sont rendues qu\'une fois, réunies');
+            $totals += $shop['total'];
+        }
+        $this->assertSame([$totals, (string) $totals], [$all['total'], $response->headers->get('X-Total-Count')]);
+        $this->assertLessThanOrEqual(50, count($all['rows']));
+        $dates = array_map(static fn (array $r) => (string) ($r['commande']['date'] ?? ''), $all['rows']);
+        $sorted = $dates;
+        sort($sorted);
+        $this->assertSame($sorted, $dates, 'triées par date de commande');
+        foreach ($all['rows'] as $row) {
+            $this->assertArrayHasKey('site', $row);
+        }
+
+        // soldes : le dernier solde de chaque boutique additionné par devise
+        $this->pdo(MV_TEST_TENANT2_DB)->exec("DELETE FROM gestion_cash_balance WHERE note = 'g3-{$this->tag}'");
+        $this->pdo(MV_TEST_TENANT2_DB)->exec("INSERT INTO gestion_cash_balance (balance_date, amount_cents, note, created_by, created_at, updated_at) VALUES (CURRENT_DATE - 1, 77700, 'g3-{$this->tag}', 'essai', NOW(), NOW())");
+        try {
+            $balances = $this->json('GET', '/api/gestion/tresorerie/soldes', $director, MV_TEST_TENANT_HOST, GroupScope::VALUE);
+            $latest = 0;
+            foreach ($balances['shops'] as $shop) {
+                $latest += $shop['data'][0]['amount'] ?? 0;
+            }
+            $this->assertSame($latest, array_sum(array_column($balances['totals'], 'balance')));
+            $this->assertContains(MV_TEST_TENANT2_CODE, array_column(array_merge(...array_column($balances['totals'], 'rows')), 'site'));
+        } finally {
+            $this->pdo(MV_TEST_TENANT2_DB)->exec("DELETE FROM gestion_cash_balance WHERE note = 'g3-{$this->tag}'");
+        }
+
+        // mouvements : réunis avec leur boutique ; les salaires toujours regroupés (aucun nom)
+        $movements = $this->json('GET', '/api/gestion/tresorerie/mouvements', $director, MV_TEST_TENANT_HOST, GroupScope::VALUE);
+        foreach ($movements['shops'] as $shop) {
+            foreach ($shop['data'] as $row) {
+                if (($row['category'] ?? null) === 'salaries') {
+                    $this->assertTrue($row['grouped'] ?? false, 'salaires regroupés');
+                }
+            }
+        }
+
+        // l'année : chaque part est la route lue seule ; les mois réunis par mois civil
+        $this->assertSame([400, GroupScope::UNSUPPORTED], $this->refusal('GET', '/api/gestion/statistiques/annee?pricePercent=10', $director));
+        $year = $this->json('GET', '/api/gestion/statistiques/annee', $director, MV_TEST_TENANT_HOST, GroupScope::VALUE);
+        foreach ($year['shops'] as $shop) {
+            [$token, $host] = $alone[$shop['site']];
+            $this->assertSame(self::stable($this->json('GET', '/api/gestion/statistiques/annee', $token, $host, null)), self::stable($shop['data']), $shop['site']);
+        }
+        foreach ($year['totals'] as $total) {
+            $parts = array_values(array_filter($year['shops'], static fn (array $s): bool => in_array($s['site'], $total['shops'], true)));
+            $this->assertSame(array_sum(array_map(static fn (array $p) => (int) $p['data']['totals']['sales'], $parts)), $total['totals']['sales']);
+        }
+    }
+
+    public function testG3TheGroupResultOverDatesWritesNothingInAnyShop(): void
+    {
+        $this->group();
+        $director = $this->account(MV_TEST_TENANT_DB, MV_TEST_TENANT_CODE, 'directeur', ['ROLE_ADMIN']);
+        $from = (new \DateTimeImmutable('first day of last month'))->format('Y-m-d');
+        $to = (new \DateTimeImmutable('last day of last month'))->format('Y-m-d');
+        $response = $this->request('GET', "/api/gestion/groupe/resultat?from=$from&to=$to", $director, MV_TEST_TENANT_HOST, null, null);
+        $this->assertSame([400, GroupScope::REQUIRED], [$response->getStatusCode(), json_decode((string) $response->getContent(), true)['code'] ?? null], 'route du groupe seulement');
+        $this->assertSame(422, $this->request('GET', "/api/gestion/groupe/resultat?from=$to&to=$from", $director, MV_TEST_TENANT_HOST, GroupScope::VALUE, null)->getStatusCode());
+        $this->assertSame(422, $this->request('GET', '/api/gestion/groupe/resultat?from=2026-02-30&to=2026-03-01', $director, MV_TEST_TENANT_HOST, GroupScope::VALUE, null)->getStatusCode());
+
+        $count = fn (string $db): array => array_map(fn (string $t): int => (int) $this->pdo($db)->query("SELECT COUNT(*) FROM $t")->fetchColumn(), ['collections' => 'collections', 'period_result' => 'period_result', 'gestion_stock_snapshot' => 'gestion_stock_snapshot']);
+        $before = [$count(MV_TEST_TENANT_DB), $count(MV_TEST_TENANT2_DB)];
+        $all = $this->json('GET', "/api/gestion/groupe/resultat?from=$from&to=$to", $director, MV_TEST_TENANT_HOST, GroupScope::VALUE);
+        $this->json('GET', '/api/gestion/statistiques/annee', $director, MV_TEST_TENANT_HOST, GroupScope::VALUE);
+        $this->assertSame($before, [$count(MV_TEST_TENANT_DB), $count(MV_TEST_TENANT2_DB)], 'aucune période, aucun résultat figé, aucun instantané');
+        $this->assertSame([GroupScope::OK, GroupScope::OK], array_column($all['shops'], 'status'));
+        foreach ($all['shops'] as $shop) {
+            $this->assertSame([$from, $to, null], [$shop['data']['period']['start'], $shop['data']['period']['end'], $shop['data']['period']['id']]);
+        }
+        foreach ($all['totals'] as $total) {
+            $parts = array_values(array_filter($all['shops'], static fn (array $s): bool => in_array($s['site'], $total['shops'], true)));
+            $this->assertSame(array_sum(array_map(static fn (array $p) => $p['data']['sales']['revenue'], $parts)), $total['sales']['revenue']);
+            $this->assertSame(array_sum(array_map(static fn (array $p) => $p['data']['result']['net'], $parts)), $total['result']['net']);
+        }
+    }
+
     /** Champs datés de l'instant de la lecture : hors de la comparaison */
     private static function stable(array $data): array
     {
-        unset($data['generatedAt']);
+        unset($data['generatedAt'], $data['today']);
         if (isset($data['sales']['vsSameWeekdayAverage'])) {
             unset($data['sales']['vsSameWeekdayAverage']['asOf'], $data['receipts']['outstandingStoreCredit']['asOf'], $data['receipts']['outstandingGiftCards']['asOf']);
         }

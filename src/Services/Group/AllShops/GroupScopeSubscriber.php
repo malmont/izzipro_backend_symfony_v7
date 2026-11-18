@@ -63,6 +63,15 @@ class GroupScopeSubscriber implements EventSubscriberInterface
 
             return;
         }
+        if (isset($config['maxDepth'])) {
+            $page = max(1, (int) $request->query->get('page', 1));
+            $limit = max(1, min(200, (int) $request->query->get('limit', 50)));
+            if ($page * $limit > $config['maxDepth']) {
+                $event->setResponse($this->refuse(GroupScope::PAGE_TOO_DEEP, sprintf('Toutes les boutiques : au plus %d lignes par boutique (page × limite). Filtrez, ou choisissez une boutique.', $config['maxDepth']), 400));
+
+                return;
+            }
+        }
         $group = $this->directedGroup();
         if ($group === null) {
             $event->setResponse($this->refuse(GroupScope::FORBIDDEN, 'Toutes les boutiques : réservé au directeur du groupe, sur le site du siège.', 403));

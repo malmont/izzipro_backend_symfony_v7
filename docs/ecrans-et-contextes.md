@@ -629,6 +629,29 @@ Le directeur d'un groupe lit plusieurs écrans de la gestion pour toutes ses bou
 - Mesure (environnement d'essai, 3 boutiques, noyau en débogage) : statistiques du mois 265 ms à froid, 121 à 141 ms en cache (193 ms
   seule) ; journée 377 ms à froid, 114 ms en cache (161 ms seule) ; pertes 151 ms (jamais en cache).
 
+## 14. Lot G-3 : les réunions plus coûteuses (18/11/2026, contrat validé par le chef, 2 précisions)
+
+Même mécanique que G-2 (§ 13) : en-tête `X-Group-Scope: all` du directeur au siège, garde fermée par défaut, chaque boutique lue dans sa
+transaction READ ONLY sous son échéance, totaux par devise. Code : `AllShopsListMerger`, `GestionGroupResultController`.
+
+- **À recevoir** (`GET /api/commandes/lignes/a-recevoir`) : les `page × limite` premières lignes de chaque boutique (tri par date de commande),
+  réunies avec `site` et `currency`, retriées, puis la page demandée (`rows`, `total`, `page`, `limit`, en-têtes `X-Total-Count`, `X-Page`,
+  `X-Limit`). `shops[]` porte le `total` de chaque boutique, sans ses lignes. Profondeur plafonnée : `page × limite` au-delà de 500 →
+  400 `GROUP_SCOPE_PAGE_TOO_DEEP` (« filtrez, ou choisissez une boutique »). Jamais en cache.
+- **Trésorerie** : `GET /api/gestion/tresorerie/soldes` (par devise : `balance` = somme du dernier solde de chaque boutique, `balanceShops`,
+  `oldestBalanceDate`, `rows` réunies du plus récent au plus ancien) ; `GET /api/gestion/tresorerie/mouvements` (par devise, `rows` avec
+  `site` ; les salaires TOUJOURS regroupés, aucun nom). La projection reste à la boutique. Jamais en cache.
+- **Année** (`GET /api/gestion/statistiques/annee`, `year` permis, `pricePercent` refusé) : chaque boutique garde son exercice ; mois réunis
+  par mois civil (`key` AAAA-MM, `elapsed` `partial` quand les boutiques diffèrent), sommes, taux de marque recalculé sur les ventes au coût
+  connu (`unknownCostRevenue`), cumul refait ; `totals` et `profitability.tauxMarque` ; remarque `FISCAL_YEARS_DIFFER` quand les mois de
+  début diffèrent. Projection, point mort et leviers restent à la boutique. En cache (empreinte des tables lues).
+- **Résultat du groupe sur des dates** (`GET /api/gestion/groupe/resultat?from=&to=`, route nouvelle, groupe seulement : sans l'en-tête,
+  400 `GROUP_SCOPE_REQUIRED` ; 422 `REQUIRED`, `INVALID_DATE`, `BEFORE_START`, `RANGE_TOO_LONG` au-delà de 366 jours). Chaque boutique
+  calcule son résultat sur ces dates avec une période NON ENREGISTRÉE (`PeriodResultCalculator::compute`, jamais figé), dans la
+  transaction READ ONLY : aucune période, aucun résultat figé, aucun instantané créé (essai). Totaux par devise : ventes, coût, frais
+  (port, notes, publicité), frais fixes, résultat ; taux de marge, de marque, net et net après frais fixes recalculés. Le budget des
+  périodes attend (les postes sont propres à chaque site). En cache (empreinte des tables lues).
+
 ## Tenir cette fiche à jour
 
 À chaque écran, famille ou liste hors écran ajoutés ; à chaque champ sensible trouvé ; à chaque mode nouveau.

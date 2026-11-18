@@ -18,6 +18,10 @@ final class GroupScope
     public const ATTRIBUTE = '_group_scope';
 
     public const INVALID = 'GROUP_SCOPE_INVALID';
+    /** lot G-3 : « à recevoir » au-delà de 500 lignes lues par boutique (page × limite) */
+    public const PAGE_TOO_DEEP = 'GROUP_SCOPE_PAGE_TOO_DEEP';
+    /** lot G-3 : une route du groupe appelée sans l'en-tête */
+    public const REQUIRED = 'GROUP_SCOPE_REQUIRED';
     public const READ_ONLY = 'GROUP_SCOPE_READ_ONLY';
     public const UNSUPPORTED = 'GROUP_SCOPE_UNSUPPORTED';
     public const FORBIDDEN = 'GROUP_SCOPE_FORBIDDEN';
@@ -33,6 +37,14 @@ final class GroupScope
         'gestion_journee' => ['path' => '/api/gestion/journee', 'module' => null, 'refused' => [], 'cache' => true],
         // les pertes : jamais d'analyse lancée (analyse=0 imposé), jamais en cache (constats écrits en SQL, comme la route seule)
         'gestion_pertes' => ['path' => '/api/gestion/pertes', 'module' => \App\Services\FeatureAccess\ModuleAccessService::LOSS_PREVENTION, 'refused' => [], 'cache' => false],
+        // lot G-3 : listes réunies (jamais en cache : elles changent à chaque réception ou saisie) ; « à recevoir » plafonnée en profondeur
+        'commande_lines_to_receive' => ['path' => '/api/commandes/lignes/a-recevoir', 'module' => null, 'refused' => [], 'cache' => false, 'maxDepth' => 500],
+        'gestion_tresorerie_soldes' => ['path' => '/api/gestion/tresorerie/soldes', 'module' => null, 'refused' => [], 'cache' => false],
+        'gestion_tresorerie_mouvements' => ['path' => '/api/gestion/tresorerie/mouvements', 'module' => null, 'refused' => [], 'cache' => false],
+        // l'année : chaque boutique garde son exercice, réunion par mois civil ; les leviers (`pricePercent`) restent à la boutique
+        'gestion_statistiques_annee' => ['path' => '/api/gestion/statistiques/annee', 'module' => null, 'refused' => ['pricePercent'], 'cache' => true],
+        // le résultat du groupe sur des DATES (une période est propre à un site) : route du groupe seulement
+        'gestion_groupe_resultat' => ['path' => '/api/gestion/groupe/resultat', 'module' => null, 'refused' => [], 'cache' => true],
     ];
 
     /**
@@ -48,6 +60,16 @@ final class GroupScope
             'gestion_cash_movement', 'gestion_cash_setting', 'gestion_document', 'gestion_stock_snapshot', 'import_order', 'import_order_line',
             'marketing_campaign', 'note_de_frais', 'order', 'order_items', 'payments', 'pos_gift_card', 'pos_gift_card_transaction', 'pos_return',
             'product', 'product_variant', 'size', 'support_ticket'],
+        // lot G-3 : ventes et marge (statistiques), frais variables à leur date (port d'achat, publicité, notes, voyages), frais fixes
+        // (mouvements prévus), budgets des périodes (projection), archive d'avant la migration, fiche et calendrier du site
+        'gestion_statistiques_annee' => ['address_entreprise', 'booking', 'collections', 'commande', 'commande_line', 'entreprise', 'frais_de_port',
+            'gestion_budget_line', 'gestion_cash_balance', 'gestion_cash_movement', 'gestion_cash_setting', 'gestion_reprise', 'gestion_stock_snapshot',
+            'gestion_trip', 'import_order', 'import_order_line', 'marketing_campaign', 'note_de_frais', 'order', 'order_items', 'payments', 'period_result',
+            'pos_gift_card', 'pos_gift_card_transaction', 'product', 'product_variant'],
+        'gestion_groupe_resultat' => ['address_entreprise', 'booking', 'collections', 'commande', 'commande_line', 'entreprise', 'frais_de_port',
+            'gestion_cash_balance', 'gestion_cash_movement', 'gestion_cash_setting', 'gestion_stock_snapshot', 'gestion_trip', 'import_order',
+            'import_order_line', 'marketing_campaign', 'note_de_frais', 'order', 'order_items', 'payments', 'pos_gift_card', 'pos_gift_card_transaction',
+            'product', 'product_variant'],
     ];
 
     /** Plafond de boutiques lues par réponse ; au-delà, `truncated` */

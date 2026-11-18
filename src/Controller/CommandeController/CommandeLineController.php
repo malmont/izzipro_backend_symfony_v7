@@ -16,7 +16,7 @@ use Symfony\Component\Routing\Attribute\Route;
  */
 class CommandeLineController extends AbstractController
 {
-    public function __construct(private readonly CommandeLineUseCase $useCase)
+    public function __construct(private readonly CommandeLineUseCase $useCase, private readonly ?\App\Services\Group\AllShops\AllShopsReader $allShops = null)
     {
     }
 
@@ -26,6 +26,22 @@ class CommandeLineController extends AbstractController
     {
         $page = max(1, (int) $request->query->get('page', 1));
         $limit = max(1, min(200, (int) $request->query->get('limit', 50)));
+        // lot G-3 : « Toutes les boutiques » : les page × limite premières lignes de chaque boutique (500 au plus, garde), réunies et retriées
+        $group = $this->allShops?->forRequest($request, 'commande_lines_to_receive', ['page' => $page, 'limit' => $limit], function () use ($page, $limit): array {
+            [$rows, $total] = $this->useCase->toReceive(1, $page * $limit);
+
+            return ['data' => ['rows' => $rows, 'total' => $total]];
+        }, static fn (array $shops): array => []);
+        if ($group !== null) {
+            $merged = \App\Services\Group\AllShops\AllShopsListMerger::toReceive($group['shops'], $page, $limit);
+            $group['shops'] = array_map(static fn (array $s): array => isset($s['data']) ? array_diff_key($s, ['data' => 1]) + ['total' => $s['data']['total']] : $s, $group['shops']);
+            $response = $this->json($group + ['page' => $page, 'limit' => $limit] + $merged);
+            $response->headers->set('X-Total-Count', (string) $merged['total']);
+            $response->headers->set('X-Page', (string) $page);
+            $response->headers->set('X-Limit', (string) $limit);
+
+            return $response;
+        }
         [$rows, $total] = $this->useCase->toReceive($page, $limit);
         $response = $this->json($rows);
         $response->headers->set('X-Total-Count', (string) $total);

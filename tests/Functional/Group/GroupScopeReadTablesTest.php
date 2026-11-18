@@ -34,6 +34,10 @@ class GroupScopeReadTablesTest extends KernelTestCase
                 fn () => $statistics->overviewWithSums(['from' => '2025-01-01', 'to' => '2025-12-31', 'source' => 'ecommerce'], 'fr'),
             ],
             'gestion_journee' => [fn () => $day->overview()],
+            'gestion_statistiques_annee' => [fn () => $container->get(\App\Gestion\Services\GestionYearService::class)->overview([], 'fr'),
+                fn () => $container->get(\App\Gestion\Services\GestionYearService::class)->overview(['year' => (string) ((int) date('Y') - 1)], 'en')],
+            'gestion_groupe_resultat' => [fn () => $container->get(\App\Gestion\Services\PeriodResultCalculator::class)->compute(
+                (new \App\Entity\Collections())->setNomCollection('essai')->setStartDateCollection(new \DateTime('-40 days'))->setEndDateCollection(new \DateTime('-1 day')), null)],
         ];
         $this->assertSame(array_keys(array_filter(GroupScope::ROUTES, static fn (array $r): bool => $r['cache'])), array_keys($reads), 'chaque route en cache est mesurée ici');
         $missing = [];

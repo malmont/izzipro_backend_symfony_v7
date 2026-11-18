@@ -776,6 +776,7 @@
         "POST /api/gestion/accueil/vignettes/{id}/ecarter"
     ],
     "groupe": [
+        "GET /api/gestion/groupe/resultat",
         "GET /api/group",
         "GET /api/site/group-invitations",
         "POST /api/group",
