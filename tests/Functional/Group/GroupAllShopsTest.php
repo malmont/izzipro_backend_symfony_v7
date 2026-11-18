@@ -63,8 +63,8 @@ class GroupAllShopsTest extends WebTestCase
         $this->assertSame([400, GroupScope::INVALID], $this->refusal('GET', '/api/gestion/journee', $director, MV_TEST_TENANT_HOST, 'toutes'));
         $this->assertSame([403, GroupScope::READ_ONLY], $this->refusal('POST', '/api/gestion/pertes/analyse', $director));
         $this->assertSame([403, GroupScope::READ_ONLY], $this->refusal('PUT', '/api/gestion/pertes/regles/EXIT_WITHOUT_SALE', $director));
-        $this->assertSame([400, GroupScope::UNSUPPORTED], $this->refusal('GET', '/api/gestion/statistiques/annee', $director), 'une route qui ne sait pas réunir');
-        $this->assertSame([400, GroupScope::UNSUPPORTED], $this->refusal('GET', '/api/gestion/tresorerie/soldes', $director));
+        $this->assertSame([400, GroupScope::UNSUPPORTED], $this->refusal('GET', '/api/gestion/tresorerie', $director), 'une route qui ne sait pas réunir (la projection reste à la boutique)');
+        $this->assertSame([400, GroupScope::UNSUPPORTED], $this->refusal('GET', '/api/gestion/tresorerie/rapprochements', $director));
         $this->assertSame([400, GroupScope::UNSUPPORTED], $this->refusal('GET', '/api/contacts', $director));
         $this->assertSame([400, GroupScope::UNSUPPORTED], $this->refusal('GET', '/api/gestion/statistiques?sections=payments', $director), 'une section');
         $this->assertSame([400, GroupScope::UNSUPPORTED], $this->refusal('GET', '/api/gestion/statistiques?periodId=1', $director), 'une période est propre à un site');
@@ -84,7 +84,8 @@ class GroupAllShopsTest extends WebTestCase
         // les contextes du directeur nomment les routes qui savent réunir
         $this->module(MV_TEST_TENANT_DB, MV_TEST_TENANT_CODE, 'is_multi_shop_active', true);
         $contexts = $this->json('GET', '/api/me/contexts', $director, MV_TEST_TENANT_HOST, null);
-        $this->assertSame(['/api/gestion/statistiques', '/api/gestion/journee', '/api/gestion/pertes'], $contexts['group']['allShops']);
+        $this->assertSame(['/api/gestion/statistiques', '/api/gestion/journee', '/api/gestion/pertes', '/api/commandes/lignes/a-recevoir', '/api/gestion/tresorerie/soldes',
+            '/api/gestion/tresorerie/mouvements', '/api/gestion/statistiques/annee', '/api/gestion/groupe/resultat'], $contexts['group']['allShops']);
     }
 
     public function testEachShopPartIsTheRouteReadAloneAndTheTotalsAreTheirSums(): void
@@ -407,10 +408,164 @@ class GroupAllShopsTest extends WebTestCase
         $this->assertSame(['2026-11-10T10:00:00+00:00', 2, 4], [$merged['toShip']['oldestAt'], $merged['toShip']['count'], $merged['stock']['lowCount']]);
     }
 
+    public function testG3ListsAreMergedWithTheirShopAndTheToReceiveDepthIsCapped(): void
+    {
+        $this->group();
+        $director = $this->account(MV_TEST_TENANT_DB, MV_TEST_TENANT_CODE, 'directeur', ['ROLE_ADMIN']);
+        $shopAdmin = $this->account(MV_TEST_TENANT2_DB, MV_TEST_TENANT2_CODE, 'boutique', ['ROLE_ADMIN']);
+        $alone = [MV_TEST_TENANT_CODE => [$director, MV_TEST_TENANT_HOST], MV_TEST_TENANT2_CODE => [$shopAdmin, MV_TEST_TENANT2_HOST]];
+
+        // à recevoir : au plus 500 lignes lues par boutique
+        $this->assertSame([400, GroupScope::PAGE_TOO_DEEP], $this->refusal('GET', '/api/commandes/lignes/a-recevoir?page=3&limit=200', $director));
+        $response = $this->request('GET', '/api/commandes/lignes/a-recevoir?page=1&limit=50', $director, MV_TEST_TENANT_HOST, GroupScope::VALUE, null);
+        $this->assertSame(200, $response->getStatusCode(), (string) $response->getContent());
+        $all = json_decode((string) $response->getContent(), true);
+        $totals = 0;
+        foreach ($all['shops'] as $shop) {
+            [$token, $host] = $alone[$shop['site']];
+            $own = $this->request('GET', '/api/commandes/lignes/a-recevoir?page=1&limit=1', $token, $host, null, null);
+            $this->assertSame((int) $own->headers->get('X-Total-Count'), $shop['total'], $shop['site']);
+            $this->assertArrayNotHasKey('data', $shop, 'les lignes ne sont rendues qu\'une fois, réunies');
+            $totals += $shop['total'];
+        }
+        $this->assertSame([$totals, (string) $totals], [$all['total'], $response->headers->get('X-Total-Count')]);
+        $this->assertLessThanOrEqual(50, count($all['rows']));
+        $dates = array_map(static fn (array $r) => (string) ($r['commande']['date'] ?? ''), $all['rows']);
+        $sorted = $dates;
+        sort($sorted);
+        $this->assertSame($sorted, $dates, 'triées par date de commande');
+        foreach ($all['rows'] as $row) {
+            $this->assertArrayHasKey('site', $row);
+        }
+
+        // soldes : le dernier solde de chaque boutique additionné par devise
+        $this->pdo(MV_TEST_TENANT2_DB)->exec("DELETE FROM gestion_cash_balance WHERE note = 'g3-{$this->tag}'");
+        $this->pdo(MV_TEST_TENANT2_DB)->exec("INSERT INTO gestion_cash_balance (balance_date, amount_cents, note, created_by, created_at, updated_at) VALUES (CURRENT_DATE - 1, 77700, 'g3-{$this->tag}', 'essai', NOW(), NOW())");
+        try {
+            $balances = $this->json('GET', '/api/gestion/tresorerie/soldes', $director, MV_TEST_TENANT_HOST, GroupScope::VALUE);
+            $latest = 0;
+            foreach ($balances['shops'] as $shop) {
+                $this->assertArrayNotHasKey('data', $shop, 'les soldes ne sont rendus qu\'une fois, dans les totaux');
+                [$token, $host] = $alone[$shop['site']];
+                $latest += $this->json('GET', '/api/gestion/tresorerie/soldes', $token, $host, null)[0]['amount'] ?? 0;
+            }
+            $this->assertSame($latest, array_sum(array_column($balances['totals'], 'balance')));
+            $this->assertContains(MV_TEST_TENANT2_CODE, array_column(array_merge(...array_column($balances['totals'], 'rows')), 'site'));
+            foreach (array_merge(...array_column($balances['totals'], 'rows')) as $row) {
+                $this->assertArrayNotHasKey('note', $row, 'texte libre de la boutique : jamais au directeur');
+            }
+        } finally {
+            $this->pdo(MV_TEST_TENANT2_DB)->exec("DELETE FROM gestion_cash_balance WHERE note = 'g3-{$this->tag}'");
+        }
+
+        // mouvements : réunis avec leur boutique ; les salaires toujours regroupés (aucun nom), même quand la boutique en saisit un nominatif
+        $shopPdo = $this->pdo(MV_TEST_TENANT2_DB);
+        $shopPdo->exec("DELETE FROM gestion_cash_movement WHERE notes = 'g3-{$this->tag}'");
+        $shopPdo->exec("INSERT INTO gestion_cash_movement (label, category, direction, amount_cents, start_date, recurrence, end_date, notes, fixed_cost, created_by, created_at, updated_at)
+            VALUES ('Salaire de Jeanne Témoin', 'salaries', 'out', 250000, CURRENT_DATE, 'monthly', NULL, 'g3-{$this->tag}', TRUE, 'essai', NOW(), NOW())");
+        try {
+            $movements = $this->json('GET', '/api/gestion/tresorerie/mouvements', $director, MV_TEST_TENANT_HOST, GroupScope::VALUE);
+            $this->assertStringNotContainsString('Jeanne', (string) json_encode($movements, JSON_UNESCAPED_UNICODE), 'aucun nom de salarié au directeur');
+            $own = $this->json('GET', '/api/gestion/tresorerie/mouvements', $shopAdmin, MV_TEST_TENANT2_HOST, null);
+            $this->assertStringContainsString('Jeanne', (string) json_encode($own, JSON_UNESCAPED_UNICODE), 'contrôle : la boutique, elle, voit le détail');
+        } finally {
+            $shopPdo->exec("DELETE FROM gestion_cash_movement WHERE notes = 'g3-{$this->tag}'");
+        }
+        $salaries = array_values(array_filter(array_merge(...array_column($movements['totals'], 'rows')), static fn (array $r): bool => ($r['category'] ?? null) === 'salaries'));
+        $this->assertNotSame([], $salaries, 'le salaire saisi est compté');
+        foreach ($salaries as $row) {
+            $this->assertTrue($row['grouped'] ?? false, 'salaires regroupés');
+        }
+
+        // l'année : chaque part est la route lue seule ; les mois réunis par mois civil
+        $this->assertSame([400, GroupScope::UNSUPPORTED], $this->refusal('GET', '/api/gestion/statistiques/annee?pricePercent=10', $director));
+        $this->assertSame([400, GroupScope::UNSUPPORTED], $this->refusal('GET', '/api/gestion/statistiques/annee?year=2025', $director), 'une année n\'existe pas dans tous les exercices');
+        $year = $this->json('GET', '/api/gestion/statistiques/annee', $director, MV_TEST_TENANT_HOST, GroupScope::VALUE);
+        foreach ($year['shops'] as $shop) {
+            [$token, $host] = $alone[$shop['site']];
+            $this->assertSame(self::stable($this->json('GET', '/api/gestion/statistiques/annee', $token, $host, null)), self::stable($shop['data']), $shop['site']);
+        }
+        foreach ($year['totals'] as $total) {
+            $parts = array_values(array_filter($year['shops'], static fn (array $s): bool => in_array($s['site'], $total['shops'], true)));
+            $this->assertSame(array_sum(array_map(static fn (array $p) => (int) $p['data']['totals']['sales'], $parts)), $total['totals']['sales']);
+        }
+    }
+
+    public function testG3TheGroupResultOverDatesWritesNothingInAnyShop(): void
+    {
+        $this->group();
+        $director = $this->account(MV_TEST_TENANT_DB, MV_TEST_TENANT_CODE, 'directeur', ['ROLE_ADMIN']);
+        $from = (new \DateTimeImmutable('first day of last month'))->format('Y-m-d');
+        $to = (new \DateTimeImmutable('last day of last month'))->format('Y-m-d');
+        $response = $this->request('GET', "/api/gestion/groupe/resultat?from=$from&to=$to", $director, MV_TEST_TENANT_HOST, null, null);
+        $this->assertSame([400, GroupScope::REQUIRED], [$response->getStatusCode(), json_decode((string) $response->getContent(), true)['code'] ?? null], 'route du groupe seulement');
+        $this->assertSame(422, $this->request('GET', "/api/gestion/groupe/resultat?from=$to&to=$from", $director, MV_TEST_TENANT_HOST, GroupScope::VALUE, null)->getStatusCode());
+        $this->assertSame(422, $this->request('GET', '/api/gestion/groupe/resultat?from=2026-02-30&to=2026-03-01', $director, MV_TEST_TENANT_HOST, GroupScope::VALUE, null)->getStatusCode());
+
+        // une note de frais qui nomme un salarié, recoupée par un frais fixe : ni son nom ni son texte ne remontent au directeur
+        $shopPdo = $this->pdo(MV_TEST_TENANT2_DB);
+        $shopPdo->exec("INSERT INTO gestion_cash_movement (label, category, direction, amount_cents, start_date, recurrence, end_date, notes, fixed_cost, created_by, created_at, updated_at)
+            VALUES ('Loyer', 'rent', 'out', 100000, '$from', 'monthly', NULL, 'g3-{$this->tag}', TRUE, 'essai', NOW(), NOW())");
+        $shopPdo->exec("INSERT INTO note_de_frais (id, name, description, montant, date) VALUES (nextval('note_de_frais_id_seq'), 'Salaire Marie Témoin', 'g3-{$this->tag}', 5000, '$from')");
+        $count = fn (string $db): array => array_map(fn (string $t): int => (int) $this->pdo($db)->query("SELECT COUNT(*) FROM $t")->fetchColumn(), ['collections' => 'collections', 'period_result' => 'period_result', 'gestion_stock_snapshot' => 'gestion_stock_snapshot']);
+        try {
+            $before = [$count(MV_TEST_TENANT_DB), $count(MV_TEST_TENANT2_DB)];
+            $all = $this->json('GET', "/api/gestion/groupe/resultat?from=$from&to=$to", $director, MV_TEST_TENANT_HOST, GroupScope::VALUE);
+            $this->json('GET', '/api/gestion/statistiques/annee', $director, MV_TEST_TENANT_HOST, GroupScope::VALUE);
+            $this->assertSame($before, [$count(MV_TEST_TENANT_DB), $count(MV_TEST_TENANT2_DB)], 'aucune période, aucun résultat figé, aucun instantané');
+        } finally {
+            $shopPdo->exec("DELETE FROM gestion_cash_movement WHERE notes = 'g3-{$this->tag}'");
+            $shopPdo->exec("DELETE FROM note_de_frais WHERE description = 'g3-{$this->tag}'");
+        }
+        $this->assertSame([GroupScope::OK, GroupScope::OK], array_column($all['shops'], 'status'));
+        $this->assertStringNotContainsString('Marie', (string) json_encode($all, JSON_UNESCAPED_UNICODE), 'aucun nom de note de frais au directeur');
+        $this->assertContains(['code' => 'FIXED_COSTS_MAY_OVERLAP_NOTES', 'text' => null, 'count' => 1], $all['shops'][1]['data']['fixedCosts']['caveats']);
+        foreach ($all['shops'] as $shop) {
+            $this->assertSame([$from, $to, null], [$shop['data']['period']['start'], $shop['data']['period']['end'], $shop['data']['period']['id']]);
+        }
+        foreach ($all['totals'] as $total) {
+            $parts = array_values(array_filter($all['shops'], static fn (array $s): bool => in_array($s['site'], $total['shops'], true)));
+            $this->assertSame(array_sum(array_map(static fn (array $p) => $p['data']['sales']['revenue'], $parts)), $total['sales']['revenue']);
+            $this->assertSame(array_sum(array_map(static fn (array $p) => $p['data']['result']['net'], $parts)), $total['result']['net']);
+        }
+    }
+
+    public function testG3MergesAddEveryShopAndKeepTheOrder(): void
+    {
+        $ok = static fn (string $site, mixed $data, string $currency = 'CAD'): array => ['site' => $site, 'status' => GroupScope::OK, 'currency' => $currency, 'data' => $data];
+        // à recevoir : totaux additionnés, lignes retriées par date de commande sur toutes les boutiques, puis la page
+        $line = static fn (int $id, string $date): array => ['id' => $id, 'commande' => ['date' => $date]];
+        $merged = \App\Services\Group\AllShops\AllShopsListMerger::toReceive([
+            $ok('a', ['rows' => [$line(1, '2026-11-03 10:00:00'), $line(2, '2026-11-05 10:00:00')], 'total' => 7]),
+            $ok('b', ['rows' => [$line(9, '2026-11-01 10:00:00'), $line(8, '2026-11-04 10:00:00')], 'total' => 5]),
+            ['site' => 'c', 'status' => GroupScope::ERROR],
+        ], 1, 3);
+        $this->assertSame([12, [['b', 9], ['a', 1], ['b', 8]]], [$merged['total'], array_map(static fn (array $r): array => [$r['site'], $r['id']], $merged['rows'])]);
+        $usd = \App\Services\Group\AllShops\AllShopsListMerger::toReceive([$ok('a', ['rows' => [['id' => 1, 'currency' => 'USD', 'commande' => ['date' => '2026-11-01']]], 'total' => 1], 'EUR')], 1, 10)['rows'][0];
+        $this->assertSame(['USD', 'EUR'], [$usd['currency'], $usd['siteCurrency']], 'la devise de la commande n\'est jamais remplacée par celle de la boutique');
+        // soldes : le dernier solde de chaque boutique additionné
+        $balance = static fn (int $id, string $date, int $amount): array => ['id' => $id, 'date' => $date, 'amount' => $amount];
+        $b = \App\Services\Group\AllShops\AllShopsListMerger::balances([$ok('a', [$balance(1, '2026-11-10', 1000), $balance(2, '2026-11-01', 50)]), $ok('b', [$balance(3, '2026-11-12', 300)])], 10)[0];
+        $this->assertSame([1300, 2, '2026-11-10', [3, 1, 2]], [$b['balance'], $b['balanceShops'], $b['oldestBalanceDate'], array_column($b['rows'], 'id')]);
+        // année : mois réunis par mois civil, ventes additionnées, taux de marque recalculé, cumul
+        $month = static fn (int $y, int $m, ?int $sales, ?int $gross, int $unknown = 0): array => ['year' => $y, 'month' => $m, 'from' => sprintf('%d-%02d-01', $y, $m), 'to' => sprintf('%d-%02d-28', $y, $m),
+            'elapsed' => $sales !== null, 'sales' => $sales, 'grossMargin' => $gross, 'unknownCostRevenue' => $sales === null ? null : $unknown, 'otherRevenue' => ['rentals' => 0, 'subscriptions' => 0, 'total' => 0],
+            'variableCosts' => ['total' => 0], 'fixedCosts' => 0, 'resultBeforeOtherRevenue' => $gross, 'result' => $gross];
+        $year = static fn (int $start, array $months): array => ['fiscalYear' => ['startMonth' => $start], 'months' => $months,
+            'totals' => ['from' => '2026-01-01', 'to' => '2026-11-18'] + array_diff_key($month(2026, 1, (int) array_sum(array_column($months, 'sales')), (int) array_sum(array_column($months, 'grossMargin'))), ['year' => 1, 'month' => 1, 'from' => 1, 'to' => 1, 'elapsed' => 1])];
+        $y = \App\Services\Group\AllShops\AllShopsListMerger::year([$ok('a', $year(1, [$month(2026, 10, 1000, 400), $month(2026, 11, 2000, 800, 1000)])), $ok('b', $year(4, [$month(2026, 11, 3000, 900), $month(2026, 12, null, null)]))])[0];
+        $this->assertSame(['2026-10', '2026-11', '2026-12'], array_column($y['months'], 'key'));
+        $this->assertSame([5000, 1700, 42.5], [$y['months'][1]['sales'], $y['months'][1]['grossMargin'], $y['months'][1]['grossMarginRate']]);
+        $this->assertSame([['a'], ['a', 'b'], ['b']], array_column($y['months'], 'shops'), 'chaque mois dit quelles boutiques il couvre');
+        $this->assertSame([6000, 2100], [$y['totals']['sales'], $y['totals']['grossMargin']]);
+        $this->assertSame([1000, 6000, null], array_column($y['cumulative'], 'sales'));
+        $this->assertSame('FISCAL_YEARS_DIFFER', $y['caveats'][0]['code']);
+    }
+
     /** Champs datés de l'instant de la lecture : hors de la comparaison */
     private static function stable(array $data): array
     {
-        unset($data['generatedAt']);
+        unset($data['generatedAt'], $data['today']);
         if (isset($data['sales']['vsSameWeekdayAverage'])) {
             unset($data['sales']['vsSameWeekdayAverage']['asOf'], $data['receipts']['outstandingStoreCredit']['asOf'], $data['receipts']['outstandingGiftCards']['asOf']);
         }

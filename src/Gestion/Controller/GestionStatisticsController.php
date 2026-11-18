@@ -54,7 +54,16 @@ class GestionStatisticsController extends AbstractController
     #[Route('/api/gestion/statistiques/annee', name: 'gestion_statistiques_annee', methods: ['GET'])]
     public function year(Request $request): JsonResponse
     {
-        return $this->json($this->years->overview($request->query->all(), $this->locale($request)));
+        // lot G-3 : « Toutes les boutiques » : chaque boutique à son exercice, réunion par mois civil (`pricePercent` refusé par la garde)
+        $yearQuery = []; // `year` refusé par la garde : l'exercice en cours de chaque boutique
+        $locale = $this->locale($request);
+        $group = $this->allShops?->forRequest($request, 'gestion_statistiques_annee', ['query' => $yearQuery, 'locale' => $locale],
+            fn (): array => ['data' => $this->years->overview($yearQuery, $locale)], \App\Services\Group\AllShops\AllShopsListMerger::year(...));
+        if ($group !== null) {
+            return $this->json($group);
+        }
+
+        return $this->json($this->years->overview($request->query->all(), $locale));
     }
 
     /** Lot AN : avis de l'IA sur une année terminée (409 YEAR_NOT_FINISHED sinon ; plafond partagé de 10 avis par jour) */

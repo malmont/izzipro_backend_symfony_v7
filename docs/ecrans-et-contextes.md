@@ -629,6 +629,40 @@ Le directeur d'un groupe lit plusieurs écrans de la gestion pour toutes ses bou
 - Mesure (environnement d'essai, 3 boutiques, noyau en débogage) : statistiques du mois 265 ms à froid, 121 à 141 ms en cache (193 ms
   seule) ; journée 377 ms à froid, 114 ms en cache (161 ms seule) ; pertes 151 ms (jamais en cache).
 
+## 14. Lot G-3 : les réunions plus coûteuses (18/11/2026, contrat validé par le chef, 2 précisions)
+
+Même mécanique que G-2 (§ 13) : en-tête `X-Group-Scope: all` du directeur au siège, garde fermée par défaut, chaque boutique lue dans sa
+transaction READ ONLY sous son échéance, totaux par devise. Code : `AllShopsListMerger`, `GestionGroupResultController`.
+
+- **À recevoir** (`GET /api/commandes/lignes/a-recevoir`) : les `page × limite` premières lignes de chaque boutique (tri par date de commande),
+  réunies avec `site` et `currency`, retriées, puis la page demandée (`rows`, `total`, `page`, `limit`, en-têtes `X-Total-Count`, `X-Page`,
+  `X-Limit`). Chaque ligne garde la devise de sa COMMANDE (`currency`) et porte celle de la boutique (`siteCurrency`) ; une commande sans
+  date passe en dernier, comme dans la base. `shops[]` porte le `total` de chaque boutique, sans ses lignes. Profondeur plafonnée : `page × limite` au-delà de 500 →
+  400 `GROUP_SCOPE_PAGE_TOO_DEEP` (« filtrez, ou choisissez une boutique »). Jamais en cache.
+- **Trésorerie** : `GET /api/gestion/tresorerie/soldes` (par devise : `balance` = somme du dernier solde de chaque boutique, `balanceShops`,
+  `oldestBalanceDate`, `rows` réunies du plus récent au plus ancien) ; `GET /api/gestion/tresorerie/mouvements` (par devise, `rows` avec
+  `site` ; les salaires TOUJOURS regroupés, aucun nom). Les textes libres de la boutique (`note` d'un solde, `notes` d'un mouvement) ne
+  sont jamais rendus au directeur ; le libellé d'un mouvement l'est. Soldes et mouvements ne sont rendus qu'une fois, dans `totals`.
+  La projection reste à la boutique. Jamais en cache.
+- **Année** (`GET /api/gestion/statistiques/annee`, `year` et `pricePercent` refusés : une année n'existe pas dans tous les exercices) :
+  chaque boutique garde son exercice en cours ; mois réunis par mois civil (`key` AAAA-MM, `shops` qui le couvrent, `elapsed` `partial`
+  quand les boutiques diffèrent), sommes, taux de marque recalculé sur les ventes au coût
+  connu (`unknownCostRevenue`), cumul refait ; `totals` et `profitability.tauxMarque` ; remarque `FISCAL_YEARS_DIFFER` quand les mois de
+  début diffèrent. Projection, point mort et leviers restent à la boutique. En cache (empreinte des tables lues).
+- **Résultat du groupe sur des dates** (`GET /api/gestion/groupe/resultat?from=&to=`, route nouvelle, groupe seulement : sans l'en-tête,
+  400 `GROUP_SCOPE_REQUIRED` ; 422 `REQUIRED`, `INVALID_DATE`, `BEFORE_START`, `RANGE_TOO_LONG` au-delà de 366 jours). Chaque boutique
+  calcule son résultat sur ces dates avec une période NON ENREGISTRÉE (`PeriodResultCalculator::compute`, jamais figé), dans la
+  transaction READ ONLY : aucune période, aucun résultat figé, aucun instantané créé (essai). La remarque des frais fixes qui cite des
+  notes de frais par leur nom (« Salaire … », dans `notes` et dans son texte) devient `{ code, text: null, count }`. Totaux par devise : ventes, coût, frais
+  (port, notes, publicité), frais fixes, résultat ; taux de marge, de marque, net et net après frais fixes recalculés. Le budget des
+  périodes attend (les postes sont propres à chaque site). En cache (empreinte des tables lues).
+
+- **Contrôles de G-3** : relecture neuve en deux passes, corrigées (devise des lignes, `year`, mois avec leurs boutiques, noms des notes
+  de frais jusque dans le texte d'une remarque, textes libres des soldes et des mouvements, tri des commandes sans date, ressources du
+  garde-fou des essais) ; mutations : toutes tuées.
+- **Garde-fou des essais** (`tests/PlatformModeGuardListener.php`, demande du chef) : un essai qui laisse la plateforme en mode « live »
+  échoue, et le mode est remis à « demo » (base, puis `PlatformModeService::setMode`, qui vide sa mémoire de 60 s).
+
 ## Tenir cette fiche à jour
 
 À chaque écran, famille ou liste hors écran ajoutés ; à chaque champ sensible trouvé ; à chaque mode nouveau.

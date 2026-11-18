@@ -208,6 +208,7 @@ final class ScreenRegistry
         ['#^/api/support/tickets/[^/]+#', 'assistance.demande'],
         ['#^/api/support(/|$)#', 'assistance'],
         // --- prévention des pertes
+        ['#^/api/gestion/groupe(/|$)#', 'groupe'], // lot G-3 : le résultat du groupe sur des dates (directeur, « Toutes les boutiques »)
         ['#^/api/gestion/pertes/constats/[^/]+#', 'pertes.constat'],
         ['#^/api/gestion/pertes/constats$#', 'pertes.constats'],
         ['#^/api/gestion/pertes/regles(/|$)#', 'pertes.regles'],
