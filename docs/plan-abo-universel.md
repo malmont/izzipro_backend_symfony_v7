@@ -90,7 +90,7 @@ relevés (AG-5, PROVISION-7 et 8) **non codés, prix non fixés**.
 - **Stockage privé** (`var/storage/private_media`, `/media/secure/{clé}`) et modèle de **preuve inaltérable** (`LossEvidence` : copie
   figée, empreinte SHA-256, déclencheur qui refuse la modification).
 - **Patron de quota** : crédits IA (`PlatformAiCreditsService`, réservation atomique sous verrou puis consommation).
-- **Gestion web et mobile** : routes `/api/gestion/...`, « Ma journée » (`docs/journee-gestion.md`), vignettes d'accueil.
+- **Gestion web** : la forme de « Ma journée » (`docs/journee-gestion.md`) et des vignettes d'accueil, pour « À faire aujourd'hui ».
 - **Rôles** : aucun rôle « intervenant ».
 
 ## 2. Ce qui manque (synthèse)
@@ -100,7 +100,7 @@ relevés (AG-5, PROVISION-7 et 8) **non codés, prix non fixés**.
 2. **Agenda** : trois modes de dates (client à la souscription, administrateur après, créneaux fixés), capacité sous verrou.
 3. **Règles** : délai d'annulation calculé, report plafonné, pause datée, engagement minimal appliqué.
 4. **Suivi** : « Fait » par occurrence, preuve facultative, confirmation ou contestation de l'abonné, intervenant assigné.
-5. **Écrans** : « À faire aujourd'hui » et suivi par abonné (gestion web et mobile) ; prochaines dates, historique, solde (boutique et
+5. **Écrans** : « À faire aujourd'hui » et suivi par abonné (gestion WEB seulement, décision du propriétaire du 18/11/2026) ; prochaines dates, historique, solde (boutique et
    applications) ; formules et prestations (EasyAdmin, plateforme et agences comprises).
 6. **Rappels et calendrier** : veille, place libérée, flux `.ics` signé.
 7. **Type 4 rendu modulaire** : la prestation « accès module » remplace `fulfillment_type` / `fulfillment_ref`.
@@ -139,7 +139,7 @@ Règles de calcul :
 | **ABO-0** Socle des prestations | Tables `benefit` et `plan_benefit` (types `session`, `service`, `quota` ; `module` **réservé** jusqu'à ABO-6) ; EasyAdmin « Prestations », et dans la fiche d'une formule, la liste de ses prestations avec une phrase « ce que verra l'abonné » (modèle de `RentalSummaryService`) ; `GET /api/subscription-plans` rend `benefits[]` ; **aucun effet sur la facturation**. Migration de sites + script | — | faible |
 | **ABO-1** Droits par période et solde | Occurrences nées de la facture payée (écouteur de l'événement « période payée » de PROVISION-3) ; fin de période (report plafonné, perte) par un passage quotidien ; solde et historique de l'abonné `GET /api/account/abonnements/{id}/prestations` ; vue de l'administrateur par abonné ; pause datée (Stripe `pause_collection` avec `resumes_at`) : pas de période donc pas de droits nés ; engagement minimal appliqué à la résiliation (si le propriétaire le veut, § 7) | ABO-0, PROVISION-3 | **à risque** (droits liés à l'argent) : relecteur neuf, mutations |
 | **ABO-2** Agenda | Créneaux fixés (règles récurrentes, génération 8 semaines devant, capacité, lieu, intervenant) ; trois modes de dates : (a) le client choisit à la souscription, (b) l'administrateur attribue après, (c) créneaux fixés avec choix du client ou attribution ; verrou de capacité ; délai d'annulation calculé ; report par le client avant le délai ; routes client et administrateur | ABO-1 | **à risque** (capacité concurrente, fuseau) |
-| **ABO-3** « Fait » et suivi | Bouton « Fait » par occurrence (administrateur, intervenant sur les siennes) ; « absent » ; preuve facultative (note, photo en stockage privé avec empreinte) ; courriel à l'abonné (sujet nouveau au `NotificationCatalog`) ; confirmer ou contester dans la boutique ; rôle **intervenant** (`ROLE_STAFF_PROVIDER`, ne voit que ses occurrences et le minimum de l'abonné) ; gestion web et mobile : « À faire aujourd'hui » (`GET /api/gestion/abonnements/aujourdhui`) et suivi par abonné | ABO-2 | moyen (données personnelles) |
+| **ABO-3** « Fait » et suivi | Bouton « Fait » par occurrence (administrateur, intervenant sur les siennes) ; « absent » ; preuve facultative (note, photo en stockage privé avec empreinte) ; courriel à l'abonné (sujet nouveau au `NotificationCatalog`) ; confirmer ou contester dans la boutique ; rôle **intervenant** (`ROLE_STAFF_PROVIDER`, ne voit que ses occurrences et le minimum de l'abonné) ; gestion web : « À faire aujourd'hui » (`GET /api/site/abonnements/aujourdhui`, `ROLE_ADMIN`) et suivi par abonné | ABO-2 | moyen (données personnelles) |
 | **ABO-4** Liste d'attente, rappels, calendrier | Liste d'attente par créneau, promotion automatique de la première personne et délai pour confirmer, puis la suivante ; rappel la veille à l'heure du magasin (minuteur horaire existant, sujet « suivi » ou « urgent » selon le § 7) ; flux `.ics` signé par abonné et par intervenant + pièce `.ics` dans les courriels (petit service commun, MV non touché) | ABO-2, ABO-3 | moyen |
 | **ABO-5** Formules de la plateforme modifiables et détachables | Les formules de la boutique de la plateforme deviennent des formules à prestations `module` ; une commande `app:abo:formules-plateforme` (aperçu, puis application) les crée **une fois** depuis `platform_offers`, ensuite elles vivent seules : prix, textes, prestations modifiables ; « détacher » = retirer la prestation `module`, ou décocher « suivre le prix de l'offre » ; `fulfillment_type` / `fulfillment_ref` lus depuis la prestation (une seule vérité), puis retirés | ABO-0, PROVISION-1 à 3 | **à risque** (droits de modules) |
 | **ABO-6** Formules des agences | Le site d'une agence vend des formules à prestations `module` qui ouvrent des droits de source `agency` sur les sites de ses clients, débités de son stock | PROVISION-7 et 8, prix d'AG-5 | **à risque** (argent), après décision des prix |
@@ -210,5 +210,9 @@ Ce sont des **valeurs par défaut**, réglables par formule ou par prestation l�
 - **Backend (ce dépôt)** : tout le modèle, les règles, les routes, les courriels, les minuteurs, EasyAdmin.
 - **Next (boutique et gestion web)** : affichage des prestations d'une formule, choix des dates, solde, historique, confirmer ou
   contester ; « À faire aujourd'hui » et suivi par abonné.
-- **Applications mobiles** (commerce mobile, gestion) : mêmes routes que le web ; contrat écrit à chaque lot.
+- **Gestion des abonnements, des prestations et des modules : EasyAdmin et la gestion WEB seulement** (décision du propriétaire du
+  18/11/2026). L'application de gestion mobile (MAUI) n'a aucun écran d'ABO ; les routes d'administration d'ABO se rangent sous
+  `/api/site/...` (`ROLE_ADMIN`), jamais sous `/api/gestion/...`, réservé à l'application de gestion.
+- **Applications du client** (commerce mobile) : prochaines dates, historique, solde, confirmer ou contester, par les mêmes routes que la
+  boutique web ; contrat écrit à chaque lot.
 - **Chaperon** : migrations, minuteurs, bascules.
