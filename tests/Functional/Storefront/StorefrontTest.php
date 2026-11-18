@@ -243,9 +243,9 @@ class StorefrontTest extends WebTestCase
         $this->db()->executeStatement('UPDATE stripe_config SET account_id = NULL, live_account_id = NULL');
         $checklist = $this->json($this->api('GET', '/api/site/storefront/checklist', null, $admin));
         $items = array_column($checklist['items'], null, 'key');
-        $this->assertSame([['construction', 'site', true, false], ['products', 'payment', 'terms', 'unbuyable'], [false, true, true]], [[$checklist['state'], $checklist['scope'], $checklist['shop'], $checklist['canOpen']], array_keys($items), [$items['payment']['ok'], $items['payment']['blocking'], !$items['products']['blocking'] && !$items['terms']['blocking']]]);
+        $this->assertSame([['construction', 'site', true, false], ['products', 'payment', 'terms', 'unbuyable', 'taxes'], [false, true, true]], [[$checklist['state'], $checklist['scope'], $checklist['shop'], $checklist['canOpen']], array_keys($items), [$items['payment']['ok'], $items['payment']['blocking'], !$items['products']['blocking'] && !$items['terms']['blocking']]]);
         $notReady = $this->api('POST', '/api/site/storefront/open', null, $admin);
-        $this->assertSame([409, 'STOREFRONT_NOT_READY', ['products', 'payment', 'terms', 'unbuyable']], [$notReady->getStatusCode(), $this->json($notReady)['code'], array_column($this->json($notReady)['items'], 'key')]);
+        $this->assertSame([409, 'STOREFRONT_NOT_READY', ['products', 'payment', 'terms', 'unbuyable', 'taxes']], [$notReady->getStatusCode(), $this->json($notReady)['code'], array_column($this->json($notReady)['items'], 'key')]);
         // un compte de paiement connecté mais pas encore actif (inscription abandonnée) ne suffit pas
         $this->assertGreaterThan(0, (int) $this->db()->fetchOne('SELECT COUNT(*) FROM stripe_config'), 'le modèle des tests porte une ligne de configuration de paiement');
         $this->db()->executeStatement("UPDATE stripe_config SET account_id = 'acct_essai_construction', is_active = false, live_account_id = NULL");
@@ -546,7 +546,7 @@ class StorefrontTest extends WebTestCase
         $page = $this->client->request('GET', $url);
         $this->assertSame(200, $this->client->getResponse()->getStatusCode(), substr((string) $this->client->getResponse()->getContent(), 0, 500));
         $this->assertSame(['construction', 'site'], [$page->filter('[data-etat]')->attr('data-etat'), $page->filter('[data-etat]')->attr('data-etendue')]);
-        $this->assertSame(['products', 'payment', 'terms', 'unbuyable'], $page->filter('table.ouverture-controle tr[data-point]')->each(static fn ($row) => $row->attr('data-point')));
+        $this->assertSame(['products', 'payment', 'terms', 'unbuyable', 'taxes'], $page->filter('table.ouverture-controle tr[data-point]')->each(static fn ($row) => $row->attr('data-point')));
         $this->assertCount(0, $page->filter('form.ouverture-refermer'));
         // un lien d'aperçu : rendu dans la réponse du geste, une fois ; il n'est gardé nulle part et ne se relit pas
         $shown = $this->client->submit($page->filter('form.ouverture-apercu')->form());
