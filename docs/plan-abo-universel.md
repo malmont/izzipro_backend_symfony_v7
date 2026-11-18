@@ -1,7 +1,7 @@
-# PLAN ABO UNIVERSEL — formules à prestations (18/11/2026, AUDIT + PLAN, sans code)
+# PLAN ABO UNIVERSEL — formules à prestations (18/11/2026, AUDIT + PLAN VALIDÉ par le propriétaire avec ses 13 réponses, sans code)
 
 Demande du propriétaire, relayée par le chef de projet. Ce document est un audit (ce qui existe, ce qui se réemploie, ce qui manque) et un
-plan découpé en lots. **Rien n'est codé avant la validation du plan et les réponses aux questions du § 7.**
+plan découpé en lots. **Plan et décisions du § 7 validés le 18/11/2026 ; chaque lot commence par un contrat validé par le chef.**
 
 Le modèle voulu : une **formule d'abonnement** (prix, période, Stripe, comme aujourd'hui) livre une **liste de prestations** de quatre
 types universels, créées sans code :
@@ -178,30 +178,32 @@ d'ABO-0 et de PROVISION-1 à 3.
 | Pause et périodes Stripe | pause par `pause_collection` avec `resumes_at` ; aucune facture, donc aucun droit né ; occurrences déjà planifiées pendant la pause selon le § 7 |
 | Carte de 10 séances = paiement unique, pas un abonnement | traitée à part (question § 7) : soit formule à une seule période sans renouvellement, soit produit de la boutique qui crée un quota |
 
-## 7. Questions au propriétaire (une recommandation pour chacune)
+## 7. Décisions du propriétaire (18/11/2026 : les 13 recommandations validées telles quelles, relayées par le chef)
 
-1. **Délai d'annulation par défaut** : 24 h avant (recommandé), réglable par prestation ? Annulation tardive et absence comptées comme
-   utilisées ?
-2. **Report** : combien d'occurrences non utilisées passent à la période suivante ? Recommandé : au plus le quota d'une période, valables
-   une période de plus, puis perdues.
-3. **Pause** : durée maximale (recommandé : 3 mois) et nombre par an (1) ? Les dates déjà planifiées pendant la pause sont-elles annulées
-   sans perte (recommandé) ?
-4. **Résiliation** : les occurrences déjà payées restent utilisables jusqu'à la fin de la période payée (recommandé), puis perdues ?
-   Engagement minimal (`minimum_terms`) appliqué : résiliation possible seulement après N périodes ?
-5. **Mode (a), le client choisit à la souscription** : places retenues 30 minutes pendant le paiement, puis libérées si le paiement
-   échoue (recommandé), ou choix seulement après le paiement ?
-6. **Contestation de l'abonné** : simple trace visible de l'administrateur et sujet d'Assistance ouvert automatiquement (recommandé), sans
-   remboursement automatique ?
-7. **Liste d'attente** : délai pour confirmer une place libérée (recommandé : 2 h, ou jusqu'à 1 h avant la séance) ; plus de promotion
-   automatique à moins de 1 h du début ?
-8. **Intervenant** : un compte du site avec un rôle propre (recommandé) ; voit-il le téléphone de l'abonné ?
-9. **Preuve** (note ou photo) : visible par l'abonné (recommandé : oui) ; conservation 12 mois ?
-10. **Rappel la veille** : à 18 h du magasin (recommandé), courriel et notification de l'application ; classé « urgent » (passe même au
-    niveau « Essentiel ») ou « suivi » ?
-11. **Carte de 10 séances** : paiement unique avec une validité (recommandé : 6 mois), vendue comme formule à une seule période ?
-12. **Au-delà du quota** : séance supplémentaire payante à l'unité (plus tard), ou refus simple pour commencer (recommandé) ?
-13. **Ordre** : ABO-0 → ABO-1 → ABO-2 → ABO-3 → ABO-4, puis ABO-5 ; ou ABO-5 avant ABO-2 pour ouvrir la boutique de la plateforme
-    plus tôt ?
+Ce sont des **valeurs par défaut**, réglables par formule ou par prestation là où c'est indiqué.
+
+1. **Délai d'annulation** : 24 h avant, réglable par prestation (`cancel_deadline_hours`). Une annulation tardive ou une absence compte
+   comme utilisée (`late_cancelled`, `missed`).
+2. **Report** : au plus le quota d'une période (`carry_over_max`, réglable par prestation de la formule), valable une période de plus, puis
+   perdu (`expired`).
+3. **Pause** : 3 mois au plus, une fois par an (réglable par formule) ; les dates déjà planifiées pendant la pause sont annulées sans perte
+   (elles redeviennent à planifier).
+4. **Résiliation** : ce qui est payé reste utilisable jusqu'à la fin de la période payée, puis perdu. Engagement minimal
+   (`minimum_terms`) appliqué quand la formule en a un : résiliation possible seulement après N périodes.
+5. **Dates choisies à la souscription** : places retenues 30 minutes pendant le paiement, libérées s'il échoue.
+6. **Contestation d'un « Fait »** : trace visible de l'administrateur et demande d'Assistance ouverte automatiquement, sans remboursement
+   automatique.
+7. **Liste d'attente** : 2 h pour confirmer une place libérée, ou jusqu'à 1 h avant la séance ; plus de promotion automatique à moins
+   d'1 h du début.
+8. **Intervenant** : compte du site avec un rôle propre ; il ne voit que ses interventions, le prénom et l'adresse de l'intervention, sans
+   le téléphone de l'abonné.
+9. **Preuve du service** (note ou photo) : visible de l'abonné, conservée 12 mois.
+10. **Rappel la veille** : à 18 h du magasin, par courriel et notification de l'application, classé « urgent » (il passe même au niveau
+    « Essentiel »).
+11. **Carte de 10 séances** : paiement unique valable 6 mois, vendu comme une formule à une seule période, sans renouvellement.
+12. **Au-delà du quota** : refus simple pour commencer ; la séance supplémentaire payante à l'unité viendra plus tard.
+13. **Ordre des lots** : ABO-0, ABO-1, ABO-2, ABO-3, ABO-4, puis ABO-5 ; ABO-6 après les prix des agences. Avant ABO-0 : PROVISION-1 et
+    PROVISION-3 (avec l'événement « période payée ») ; le contrat d'ABO-0 est validé par le chef avant le code.
 
 ## 8. Responsabilités
 
