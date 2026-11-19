@@ -208,7 +208,11 @@ class AboRightsService
         $rows = $this->emProvider->getEntityManager()->getRepository(SubscriptionAboEvent::class)->findBy(['subscription' => $subscription], ['at' => 'DESC', 'id' => 'DESC'], self::HISTORY_MAX);
 
         return array_map(fn (SubscriptionAboEvent $e) => ['type' => $e->getType(), 'benefitId' => $e->getBenefitId(), 'quantity' => $e->getQuantity(), 'at' => $this->at($e->getAt())]
-            + ($forTeam ? ['by' => $e->getByUser(), 'note' => $e->getNote()] : []), $rows);
+            + ($forTeam ? ['by' => $e->getByUser(), 'note' => $e->getNote()] : [])
+            // une utilisation : le droit utilisé et la limite de son annulation (24 h), pour « Annuler l'utilisation » après un rechargement ;
+            // null pour une ligne écrite avant l'ajout
+            + ($forTeam && $e->getType() === 'used' ? ['occurrenceId' => $e->getOccurrenceId(),
+                'undoUntil' => $e->getOccurrenceId() !== null ? $this->at($e->getAt()->modify('+' . self::UNDO_HOURS . ' hours')) : null] : []), $rows);
     }
 
     /**
@@ -242,7 +246,7 @@ class AboRightsService
                     throw new AboException(409, 'BALANCE_EMPTY', 'Plus aucun droit disponible pour cette prestation.', 'benefitId');
                 }
             }
-            $em->persist(new SubscriptionAboEvent($subscription, 'used', $benefitId, 1, $note, $by));
+            $em->persist((new SubscriptionAboEvent($subscription, 'used', $benefitId, 1, $note, $by))->setOccurrenceId($id));
             $em->flush();
 
             return ['occurrenceId' => $id, 'benefitId' => $benefitId, 'undoUntil' => (string) $this->at((new \DateTimeImmutable())->modify('+' . self::UNDO_HOURS . ' hours'))];
