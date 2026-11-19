@@ -171,7 +171,8 @@ occurrences par incident : date, version, empreinte du compte, identifiant de re
     filtrée, contexte, actions (état, corrigé dans, lien externe, note). Aucun changement du menu (compteur après le lot G-1).
 - **Courriel du jour** : `app:platform:incidents-digest` (minuteur `ops/systemd/platform-incidents-digest.timer`, 07:00 UTC, **à installer
   par le propriétaire**) : incidents nouveaux des dernières 24 heures et incidents revenus, à l'adresse de la plateforme (variable
-  `POS_ALERT_PLATFORM_EMAIL`, la même que les alertes de la caisse, posée hors dépôt ; sans elle, rien ne part) ; aucun courriel sans
+  `POS_ALERT_PLATFORM_EMAIL`, la même que les alertes de la caisse, posée hors dépôt ; sans elle, rien ne part ; depuis le 19/11/2026 :
+  d'abord le réglage « Adresse qui reçoit les alertes de la plateforme » de la page Plateforme, `PlatformAlertRecipient`) ; aucun courriel sans
   incident ; `--dry-run` compte sans envoyer. Puis **purge** : occurrences de plus de 90 jours, incidents corrigés ou ignorés depuis plus
   d'un an.
 - Essais : `tests/Functional/Incident/PlatformIncidentTest.php` (masquage et garde-fou, regroupement, site de la requête, limites,

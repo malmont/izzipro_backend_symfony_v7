@@ -70,6 +70,7 @@ class PosStripeLiveApiTest extends WebTestCase
     {
         self::env('STRIPE_LIVE_SECRET_KEY', null);
         self::env('POS_ALERT_PLATFORM_EMAIL', null);
+        static::getContainer()->get(\App\Services\TenantConnectionManager::class)->getPdoMaster()->exec("DELETE FROM platform_settings WHERE key = 'platform_alert_email'");
         parent::tearDown();
     }
 
@@ -214,6 +215,20 @@ class PosStripeLiveApiTest extends WebTestCase
         $log = json_decode((string) $this->db->fetchOne("SELECT payload FROM pos_audit_log WHERE type = 'HEALTH_ALERT_SENT' ORDER BY id DESC LIMIT 1"), true);
         $this->assertSame(2, $log['data']['recipients'] ?? $log['recipients'] ?? null, 'contact du site et administrateur de la plateforme');
         $this->assertSame([], $health()->alert($health()->report(false)), 'même situation : pas de renvoi avant 6 heures');
+        // l'adresse réglée sur la page Plateforme suffit sans la variable du serveur (19/11/2026) ; sans l'une ni l'autre, seul le site reçoit
+        $recipients = function () use ($health): ?int {
+            $this->db->executeStatement('DELETE FROM pos_health_alert');
+            static::getContainer()->get(TenantEntityManagerProvider::class)->getEntityManager()->clear(); // alertes effacées en SQL : relues
+            $health()->alert($health()->report(false));
+            $log = json_decode((string) $this->db->fetchOne("SELECT payload FROM pos_audit_log WHERE type = 'HEALTH_ALERT_SENT' ORDER BY id DESC LIMIT 1"), true);
+
+            return $log['data']['recipients'] ?? $log['recipients'] ?? null;
+        };
+        self::env('POS_ALERT_PLATFORM_EMAIL', null);
+        $this->assertSame(1, $recipients(), 'ni réglage ni variable : le contact du site seul');
+        static::getContainer()->get(\App\Services\Platform\PlatformAlertRecipient::class)->set('plateforme-reglage@example.invalid', 'test');
+        $this->assertSame(2, $recipients(), 'le réglage de la page Plateforme : le site et la plateforme');
+        static::getContainer()->get(\App\Services\Platform\PlatformAlertRecipient::class)->set('', 'test');
         // Situation résolue : état marqué résolu
         $this->db->executeStatement("UPDATE caisse SET created_at = NOW() WHERE is_open = true AND cash_register_id = ?", [$this->register]);
         $health()->alert($health()->report(false));

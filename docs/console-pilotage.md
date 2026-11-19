@@ -532,6 +532,19 @@ pose des droits d'une formule branchée n'était que journalisé. Tout vaut pour
   « Rejouer » (`POST /admin/plateforme/offres/reprise/{id}`, super administrateur, jeton CSRF), et les 50 derniers événements.
 - Essais : `tests/Functional/Platform/OfferPaymentsTest.php`.
 
+## Adresse qui reçoit les alertes de la plateforme (19/11/2026, demande du propriétaire)
+
+- **Réglage** de la page Plateforme (super administrateur, section « Alertes de la plateforme ») : `platform_settings.platform_alert_email`
+  de la base maître ; format vérifié (180 caractères au plus) ; vide = réglage retiré. `POST /admin/plateforme/alertes`, jeton CSRF.
+- **Lecture**, un seul point (`App\Services\Platform\PlatformAlertRecipient::get`) : le réglage d'abord, puis la variable
+  `POS_ALERT_PLATFORM_EMAIL` du serveur en secours, sinon aucun envoi. Usages : courriel du jour des incidents
+  (`app:platform:incidents:digest`) et copie des alertes de la caisse (`PosHealthService`).
+- **Courriel d'essai** (`POST /admin/plateforme/alertes/essai`) : 3 par heure au plus, à l'adresse en vigueur.
+- **Discrétion** : l'adresse n'est écrite dans aucun journal ni aucun incident ; un changement et un essai sont journalisés sous une forme
+  masquée (« a***@domaine »). Volet IA : rien pour l'assistant du site ; l'assistant de la plateforme (IA-C) pourra la lire masquée.
+- Essais : `tests/Functional/Platform/PlatformAlertRecipientTest.php`, et les deux usages dans `PlatformIncidentTest` et
+  `PosStripeLiveApiTest`.
+
 ## Domaine propre d'un site (05/11/2026)
 
 `Services/Platform/CustomDomainService` : l'administrateur enregistre son domaine (acheté chez un registraire) depuis Mon site

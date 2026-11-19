@@ -1931,7 +1931,8 @@ details}], alerts {siteEnabled, siteRecipient (masqué), platformRecipient}}`.
 **Alertes par courriel** (fin de chaque réconciliation, sites ayant déjà ouvert une session de caisse ; compte Stripe relu seulement en
 mode réel) : contrôles `warning` et `critical`, au **contact du site** si activé (fiche Entreprise, panneau « Paiements de caisse et
 surveillance (caisse) » : alertes activées, défaut non ; adresse facultative, sinon courriel de l'entreprise) et à l'**administrateur de
-la plateforme** (`POS_ALERT_PLATFORM_EMAIL`, facultative). Envoi par le serveur de la plateforme (`MAILER_DSN`). Même situation : pas de
+la plateforme** (réglage « Adresse qui reçoit les alertes de la plateforme » de la page Plateforme, sinon `POS_ALERT_PLATFORM_EMAIL`
+en secours, facultative ; `PlatformAlertRecipient`, 19/11/2026). Envoi par le serveur de la plateforme (`MAILER_DSN`). Même situation : pas de
 nouvel envoi avant 6 heures (une heure si elle s'aggrave) ; situation disparue : marquée résolue (table `pos_health_alert`). Journal
 `HEALTH_ALERT_SENT {codes, recipients, sent, status}`. **Aucune donnée de carte.**
 

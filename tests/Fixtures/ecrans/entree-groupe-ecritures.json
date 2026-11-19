@@ -289,6 +289,8 @@
     "POST /admin/plateforme/agences/1/rattacher": "platform",
     "POST /admin/plateforme/agences/1/role": "accounts",
     "POST /admin/plateforme/agences/creer": "platform",
+    "POST /admin/plateforme/alertes": "platform",
+    "POST /admin/plateforme/alertes/essai": "platform",
     "POST /admin/plateforme/boutique": "platform",
     "POST /admin/plateforme/demande/1/1": "platform",
     "POST /admin/plateforme/droit/1/1": "platform",

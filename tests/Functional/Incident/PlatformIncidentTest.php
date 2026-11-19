@@ -49,6 +49,7 @@ class PlatformIncidentTest extends WebTestCase
     protected function tearDown(): void
     {
         $this->master->exec('DELETE FROM platform_incident');
+        $this->master->exec("DELETE FROM platform_settings WHERE key = 'platform_alert_email'");
         unset($_ENV['POS_ALERT_PLATFORM_EMAIL'], $_SERVER['POS_ALERT_PLATFORM_EMAIL']);
         [$_ENV['MAILER_DSN'], $_SERVER['MAILER_DSN']] = $this->mailer;
         parent::tearDown();
@@ -217,16 +218,32 @@ class PlatformIncidentTest extends WebTestCase
         $this->master->exec("INSERT INTO platform_incident_event (incident_id, occurred_at) VALUES ($id, NOW() - INTERVAL '100 days')");
         $command = new CommandTester((new Application(static::$kernel))->find('app:platform:incidents-digest'));
         $command->execute(['--dry-run' => true]);
-        $this->assertStringContainsString('Adresse de la plateforme absente', $command->getDisplay());
+        $this->assertStringContainsString('Adresse des alertes de la plateforme absente', $command->getDisplay());
         $_ENV['POS_ALERT_PLATFORM_EMAIL'] = $_SERVER['POS_ALERT_PLATFORM_EMAIL'] = 'plateforme@example.invalid';
         $command->execute([]);
         $this->assertStringContainsString('Courriel envoyé : 1 nouveaux, 0 revenus, 0 signalements en attente.', $command->getDisplay(), $command->getDisplay());
+        $this->assertSame('plateforme@example.invalid', $this->lastRecipient(), 'la variable du serveur en secours');
         $this->assertStringContainsString('Purge : 1 occurrences, 1 incidents, 0 captures.', $command->getDisplay());
         $this->assertNull($this->row($old));
         $this->assertNotNull($this->row($id));
+        // le réglage de la page Plateforme passe avant la variable du serveur (19/11/2026)
+        static::getContainer()->get(\App\Services\Platform\PlatformAlertRecipient::class)->set('alertes-reglage@example.invalid', 'test');
+        $command->execute(['--dry-run' => true]);
+        $this->assertStringContainsString('À envoyer : 1 nouveaux', $command->getDisplay());
+        $this->master->exec("UPDATE platform_incident SET status = 'new'");
+        $command->execute(['--dry-run' => false]);
+        $this->assertSame('alertes-reglage@example.invalid', $this->lastRecipient(), 'le réglage d\'abord');
         $this->master->exec('DELETE FROM platform_incident');
         $command->execute([]);
         $this->assertStringContainsString('Aucun incident nouveau ni revenu, aucun signalement en attente : aucun courriel.', $command->getDisplay());
+    }
+
+    private function lastRecipient(): ?string
+    {
+        $messages = $this->getMailerMessages();
+        $last = end($messages);
+
+        return $last instanceof \Symfony\Component\Mime\Email ? ($last->getTo()[0] ?? null)?->getAddress() : null;
     }
 
     /** @return array<string, mixed>|null */

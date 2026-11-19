@@ -38,7 +38,8 @@ class PosHealthService
         private readonly PosAuditService $audit,
         #[Autowire('%kernel.project_dir%')] private readonly string $projectDir,
         #[Autowire('%kernel.environment%')] private readonly string $environment = 'dev',
-        private readonly ?\App\Services\Notification\NotificationGate $gate = null, // lot NOTIF-1 : niveau des courriels du destinataire du site
+        private readonly ?\App\Services\Notification\NotificationGate $gate = null, // lot NOTIF-1 : niveau des courriels du destinataire du site,
+        private readonly ?\App\Services\Platform\PlatformAlertRecipient $platformAlerts = null, // adresse des alertes de la plateforme (19/11/2026)
     ) {
     }
 
@@ -229,12 +230,10 @@ class PosHealthService
         return is_string($email) && filter_var($email, FILTER_VALIDATE_EMAIL) ? $email : null;
     }
 
-    /** Administrateur de la plateforme (variable d'environnement facultative, jamais modifiable par un administrateur de site) */
+    /** Adresse des alertes de la plateforme (`PlatformAlertRecipient` : réglage du super administrateur, sinon variable du serveur), jamais modifiable par un administrateur de site */
     private function platformRecipient(): ?string
     {
-        $email = $_ENV['POS_ALERT_PLATFORM_EMAIL'] ?? $_SERVER['POS_ALERT_PLATFORM_EMAIL'] ?? getenv('POS_ALERT_PLATFORM_EMAIL');
-
-        return is_string($email) && filter_var(trim($email), FILTER_VALIDATE_EMAIL) ? trim($email) : null;
+        return $this->platformAlerts?->get();
     }
 
     private static function check(string $code, string $level, string $message, int $count = 1, array $details = []): array

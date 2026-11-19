@@ -230,6 +230,25 @@
         </tbody>
     </table>
 
+    {# Adresse qui reçoit les alertes de la plateforme (19/11/2026) : courriel du jour des incidents, alertes de la caisse #}
+    <h2 class="h5 mt-4" id="alertes-plateforme">Alertes de la plateforme</h2>
+    {% if alertRecipient %}
+    <p class="small text-muted">Reçoit le courriel du jour des incidents et la copie des alertes de la caisse. Sans adresse réglée ici, la variable du serveur sert de secours ; sans l'une ni l'autre, rien ne part.
+        {% if alertRecipient.source == 'setting' %}En vigueur : ce réglage{% if alertRecipient.updatedAt %}, modifié le {{ alertRecipient.updatedAt|slice(0, 16) }} (UTC){% if alertRecipient.updatedBy %} par {{ alertRecipient.updatedBy }}{% endif %}{% endif %}.
+        {% elseif alertRecipient.source == 'env' %}En vigueur : la variable du serveur ({{ alertRecipient.masked }}).
+        {% else %}<strong>Aucune adresse : aucune alerte ne part.</strong>{% endif %}</p>
+    <form method="post" action="{{ path('admin_plateforme_alert_email') }}" class="row g-2 align-items-end mb-2">
+        <input type="hidden" name="_token" value="{{ csrf_token(csrf_id) }}">
+        <div class="col-md-6"><label class="form-label small" for="platform-alert-email">Adresse qui reçoit les alertes de la plateforme</label>
+            <input id="platform-alert-email" type="email" name="email" maxlength="180" class="form-control form-control-sm" value="{{ alertRecipient.email ?? '' }}" placeholder="vide = la variable du serveur"></div>
+        <div class="col-auto"><button class="btn btn-sm" style="background:#1e3a8a;color:#ffffff;border:1px solid #1e3a8a;font-weight:600">Enregistrer</button></div>
+    </form>
+    <form method="post" action="{{ path('admin_plateforme_alert_email_test') }}" class="mb-3">
+        <input type="hidden" name="_token" value="{{ csrf_token(csrf_id) }}">
+        <button class="btn btn-sm btn-outline-secondary" {{ alertRecipient.source is null ? 'disabled' }}>Envoyer un courriel d'essai</button> <span class="small text-muted">3 par heure au plus.</span>
+    </form>
+    {% endif %}
+
     {# Lot PROVISION-3 (18/11/2026) : journal des événements Stripe des abonnements et file de reprise des droits vendus (docs/console-pilotage.md) #}
     <h2 class="h5 mt-4" id="paiements-offres">Paiements des offres{% if offerRetries is not empty %} <span class="badge bg-danger">{{ offerRetries|length }}</span>{% endif %}</h2>
     <p class="text-muted small">File de reprise : abonnements dont les droits n'ont pas pu être posés ; ils sont rejoués toutes les 15 minutes (5 min, 15 min, 1 h, 3 h, puis 6 h), avec un incident de la plateforme au 5e échec. Chaque nuit, la réconciliation compare tous les abonnements branchés à Stripe et à leurs droits. Heures en UTC.</p>
