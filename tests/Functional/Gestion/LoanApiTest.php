@@ -93,6 +93,13 @@ class LoanApiTest extends WebTestCase
             $sum += C::chargesBetween($ins, $si, $from->format('Y-m-d'), $from->modify('+6 day')->format('Y-m-d'))['insurance'];
         }
         $this->assertSame($si['totals']['insurance'], $sum, 'semaine par semaine, aucun cent perdu');
+        // jour par jour sur la première échéance (50,00 $ d'intérêts sur 31 jours : 1,6129 $ par jour) : la somme redonne 50,00 $ exactement
+        $sum = 0;
+        for ($day = 0; $day < 31; ++$day) {
+            $one = (new \DateTimeImmutable('2049-01-15'))->modify("+$day day")->format('Y-m-d');
+            $sum += C::chargesBetween(self::BASE, $a, $one, $one)['interest'];
+        }
+        $this->assertSame(5000, $sum, 'au jour près, aucun cent perdu');
         $this->assertSame(['interest' => 5000, 'insurance' => 0, 'fees' => 15000, 'total' => 20000], C::chargesBetween(['fees' => 15000] + self::BASE, $a, '2049-01-15', '2049-02-14'), 'frais de dossier le jour du déblocage');
         $this->assertSame(['2049-02-28', '2052-02-29', '2049-06-30'], [C::addMonths('2049-01-31', 1), C::addMonths('2052-01-31', 1), C::addMonths('2049-03-31', 3)]);
         $this->assertSame([0, 83333, 83337], [$s(['ratePpm' => 0])['totals']['creditCost'], $s(['ratePpm' => 0])['instalments'][0]['total'], end($s(['ratePpm' => 0])['instalments'])['total']]);
