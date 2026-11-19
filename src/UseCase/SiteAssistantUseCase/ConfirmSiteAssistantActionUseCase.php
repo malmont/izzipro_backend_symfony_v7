@@ -34,6 +34,7 @@ class ConfirmSiteAssistantActionUseCase
         private readonly ?\App\Services\Group\AllShops\GroupDirector $groupDirector = null,
         private readonly ?\App\Services\Group\GroupService $groupService = null,
         private readonly ?\App\Services\Group\Copy\GroupCatalogCopyService $groupCopies = null,
+        private readonly ?\Psr\Log\LoggerInterface $logger = null,
     ) {
     }
 
@@ -218,11 +219,14 @@ class ConfirmSiteAssistantActionUseCase
 
                         try {
                             return $this->groupCopies->confirm($actor, (int) $copy['id'], array_intersect_key($input, array_flip(['withCost', 'visibility', 'pos'])));
-                        } catch (\Throwable $e) {
-                            // relecture IA-G : un aperçu laissé ouvert bloquerait tout import de la cible (409 IMPORT_ALREADY_ACTIVE) ; il est annulé
+                        } catch (\App\Services\Group\GroupException $e) {
+                            // relecture IA-G : un aperçu laissé ouvert bloquerait tout import de la cible (409 IMPORT_ALREADY_ACTIVE) ; il est annulé.
+                            // Seulement sur un REFUS de la copie (GroupException : levé avant la mise en file) ; jamais sur une panne imprévue, qui
+                            // peut survenir après la mise en file (annuler retirerait alors des articles déjà copiés)
                             try {
                                 $this->groupCopies->cancel($actor, (int) $copy['id']);
-                            } catch (\Throwable) {
+                            } catch (\Throwable $cancel) {
+                                $this->logger?->warning('[SiteAssistant] aperçu de copie non annulé après un refus', ['copy' => (int) $copy['id'], 'error' => $cancel::class]);
                             }
                             throw $e;
                         }

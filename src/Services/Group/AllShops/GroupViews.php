@@ -94,12 +94,14 @@ class GroupViews
         return $this->read($group, 'gestion_statistiques_annee', ['query' => [], 'locale' => $locale], fn (): array => ['data' => $this->years->overview([], $locale)], AllShopsListMerger::year(...));
     }
 
-    /** Le résultat sur des dates (Y-m-d, validées par l'appelant), période NON enregistrée, dans la transaction READ ONLY */
     /** Plus longue plage du résultat du groupe (jours), comme les statistiques */
     public const RESULT_MAX_DAYS = 366;
 
-    /** Lot IA-G : la plage du résultat du groupe, la MÊME pour l'écran et pour l'assistant (relecture IA-G, passe 1) */
-    /** @return array{0: string, 1: string} jours du magasin Y-m-d ; 422 sinon */
+    /**
+     * Lot IA-G : la plage du résultat du groupe, la MÊME pour l'écran et pour l'assistant (relecture IA-G, passe 1).
+     *
+     * @return array{0: string, 1: string} jours du magasin Y-m-d ; 422 sinon
+     */
     public static function resultRange(mixed $from, mixed $to): array
     {
         $day = static fn (mixed $v): string|false|null => $v === null || $v === '' ? null
@@ -120,6 +122,7 @@ class GroupViews
         return [$f, $t];
     }
 
+    /** Le résultat sur des dates (Y-m-d, validées par `resultRange`), période NON enregistrée, dans la transaction READ ONLY */
     public function result(array $group, string $from, string $to): array
     {
         return $this->read($group, 'gestion_groupe_resultat', ['from' => $from, 'to' => $to], function () use ($from, $to): array {

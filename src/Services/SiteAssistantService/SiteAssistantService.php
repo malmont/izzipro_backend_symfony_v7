@@ -639,7 +639,9 @@ TXT;
                     // les conditions D'ABORD, les noms (données des commerçants, longueur libre) ensuite : la coupe à 200 caractères ne retire jamais une condition
                     sprintf('Copier %s (%s, %s) du catalogue de « %s » vers « %s »', $articles === null ? 'tous les articles' : (count($articles) === 1 ? '1 article' : count($articles) . ' articles'),
                         ($options['withCost'] ?? ($source === $group['head_tenant_code'])) ? 'avec le coût d\'achat' : 'sans le coût d\'achat',
-                        ($options['visibility'] ?? 'hidden') === 'as_source' ? 'visibilité de la source' : (($options['pos'] ?? false) ? 'masqués en ligne, en caisse' : 'masqués'), (string) $shops[$source], (string) $shops[$target]));
+                        ($options['visibility'] ?? 'hidden') === 'as_source' ? 'visibilité en ligne de la source' . (($options['pos'] ?? false) ? ', en caisse' : ', pas en caisse') : (($options['pos'] ?? false) ? 'masqués en ligne, en caisse' : 'masqués'),
+                        // chaque nom borné (60) et suivi du code : la cible reste lisible sous la coupe de 200 caractères
+                        mb_substr((string) $shops[$source], 0, 60) . ' [' . $source . ']', mb_substr((string) $shops[$target], 0, 60) . ' [' . $target . ']'));
 
                 return [$proposed($action, ['note' => 'Proposé au directeur ; à la confirmation, l\'aperçu puis la copie partent (stock jamais copié), et la boutique cible est prévenue.']), $action, $linkTo('groupe')];
         }

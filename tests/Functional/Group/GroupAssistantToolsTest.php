@@ -62,6 +62,7 @@ class GroupAssistantToolsTest extends WebTestCase
         $this->answer([['get_group', []]]);
         $this->chat($shopAdmin, MV_TEST_TENANT2_HOST);
         $this->assertNotContains('get_group', array_column(FakeLandingAiClient::$requests[0]['tools'], 'name'), 'l\'administrateur d\'une boutique n\'est pas le directeur');
+        $this->assertStringContainsString('directeur', (string) json_decode(FakeLandingAiClient::$requests[1]['messages'][2]['content'][0]['content'], true)['error'], 'inventé par lui : refusé');
 
         // le directeur : les outils lui sont donnés, et une consigne dans ses données reste une donnée
         $pdo = $this->pdo(MV_TEST_TENANT2_DB);
@@ -78,6 +79,8 @@ class GroupAssistantToolsTest extends WebTestCase
         $state = json_decode($results[0]['content'], true);
         $this->assertSame([MV_TEST_TENANT_CODE, MV_TEST_TENANT2_CODE], array_column($state['shops'], 'code'));
         $this->assertContains('quitter ou dissoudre le groupe', $state['refusedToAssistant']);
+        $movements = json_decode($results[1]['content'], true);
+        $this->assertSame('ok', array_column($movements['shops'], 'status', 'code')[MV_TEST_TENANT2_CODE] ?? null, 'la boutique au mouvement est bien lue');
         $this->assertStringNotContainsString('Jeanne', $results[1]['content'], 'le libellé d\'un mouvement (texte libre) n\'atteint jamais le modèle');
         $this->assertStringContainsString('"rent"', $results[1]['content'], 'la catégorie et le montant, oui');
         $this->assertSame('group', json_decode($results[2]['content'], true)['scope']);
@@ -134,6 +137,31 @@ class GroupAssistantToolsTest extends WebTestCase
         $confirmed = $this->request('POST', '/api/site/assistant/actions/' . $body['actions'][0]['id'] . '/confirm', $director, MV_TEST_TENANT_HOST, []);
         $this->assertNotSame(200, $confirmed->getStatusCode(), (string) $confirmed->getContent());
         $this->assertSame(0, $jobs());
+    }
+
+    /** Relecture IA-G, passe 2 : une confirmation REFUSÉE après l'aperçu annule l'aperçu (sinon tout import de la cible resterait bloqué) */
+    public function testARefusedConfirmationCancelsThePreviewItMade(): void
+    {
+        $this->group();
+        $director = $this->account(MV_TEST_TENANT_DB, MV_TEST_TENANT_CODE, 'directeur', ['ROLE_ADMIN']);
+        $pid = $this->product();
+        $this->answer([['propose_group_copy', ['target' => MV_TEST_TENANT2_CODE, 'articles' => [$pid]]]]);
+        $body = $this->chat($director);
+        $this->assertCount(1, $body['actions']);
+        // l'import devient indisponible chez la cible (type de mouvement « Import » absent) : la confirmation est refusée APRÈS l'aperçu
+        $target = $this->pdo(MV_TEST_TENANT2_DB);
+        $target->exec("UPDATE movement_type SET name = 'Import-iag-{$this->tag}' WHERE name = 'Import'");
+        try {
+            $confirmed = $this->request('POST', '/api/site/assistant/actions/' . $body['actions'][0]['id'] . '/confirm', $director, MV_TEST_TENANT_HOST, []);
+        } finally {
+            $target->exec("UPDATE movement_type SET name = 'Import' WHERE name = 'Import-iag-{$this->tag}'");
+        }
+        $this->assertNotSame(200, $confirmed->getStatusCode());
+        $this->assertStringContainsString('IMPORT_NOT_AVAILABLE', (string) $confirmed->getContent());
+        $copy = $this->master->query("SELECT target_job_id, confirmed_at, cancelled_at FROM shop_group_copies WHERE target_tenant_code = '" . MV_TEST_TENANT2_CODE . "' ORDER BY id DESC LIMIT 1")->fetch(\PDO::FETCH_ASSOC);
+        $this->assertNotNull($copy['cancelled_at'], 'la copie est annulée');
+        $this->assertNull($copy['confirmed_at']);
+        $this->assertNotSame('analysed', $target->query('SELECT status FROM import_job WHERE id = ' . (int) $copy['target_job_id'])->fetchColumn(), 'l\'aperçu ne bloque plus les imports de la cible');
     }
 
     /** @param list<array{0: string, 1: array<string, mixed>}> $uses */
