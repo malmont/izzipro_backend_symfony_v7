@@ -48,7 +48,8 @@ en cours, sinon 422 `INVALID_YEAR` ; `pricePercent` de 1 à 30, 5 par défaut, s
   − frais fixes (l'addition se refait).
 - `periods[]` : périodes de gestion qui recoupent l'exercice, `{ id, name, start, end, status, started, revenue, grossMargin, net, netAfterFixed,
   otherRevenue, frozen, partial, overlapDays, days }` lues dans le résultat P2 (instantané d'une période fermée, sans rien écrire). `net` et
-  `netAfterFixed` sont ceux de P2, **sans** les autres revenus ; `otherRevenue` est donné à côté.
+  `netAfterFixed` sont ceux de P2, **sans** les autres revenus ; `otherRevenue` est donné à côté. Lot FIS-1 : `financialCharges` (charges
+  financières des prêts de la période) et `netAfterCharges`, `null` pour une période figée avant le lot (`docs/prets-gestion.md`).
 - `totals` : exercice écoulé (jusqu'à aujourd'hui), mêmes champs qu'un mois, plus `from`, `to`.
 
 ## 3. Rentabilité

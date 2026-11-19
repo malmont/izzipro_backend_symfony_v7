@@ -602,3 +602,25 @@ excluded, heldBack, notice, pricesHash }`.
 **Guide des séquences** : `price.set` est préparable et se refait (`again`).
 
 Tests : `InvoicePricingConversationTest`, `PriceSetActionApiTest`, `SimilarArticlesAnalysisTest`, `ActionCatalogScopeTest`.
+
+## 14. Prêts (lot FIS-1, 19/11/2026)
+
+Deux actions de plus au catalogue, même fil, mêmes routes ; elles écrivent par `GestionLoanService` (`docs/prets-gestion.md`), avec les
+mêmes contrôles que l'écran des prêts. Ni le prêteur ni les notes ne sont demandés : ils se saisissent sur l'écran.
+
+| Clé | Paramètres (questions) | Écrit par | Annulation, et ses refus |
+|---|---|---|---|
+| `loan.create` | `label`, `amount` (cents, > 0), `rate` (taux annuel en %, `input: { type: number, min: 0, max: 30, unit: percent }`), `durationMonths` (entier, 1 à 600), `frequencyMonths` (`1` proposé, `3`), `disbursedOn`, `firstDueOn` (refus `BEFORE_START`), `type` (`annuity` proposé, `constant_capital`), `fees` (facultatif, 0 admis), `insuranceAmount` (facultatif : assurance fixe par échéance) | `GestionLoanService::create` ; une fiche refusée par le service (durée non multiple du rythme…) devient un point à corriger (`issues[]`, code du service) sur la question en cause | retirer le prêt, s'il n'a pas changé depuis ; sinon `LOAN_CHANGED` |
+| `loan.prepayment` | `loanId` (choix : les prêts par leur libellé, jamais le prêteur ; `LOAN_NOT_FOUND`), `date`, `amount` (cents, > 0), `fees` (facultatif) | `GestionLoanService::addPrepayment` ; un remboursement refusé (avant le déblocage, plus que le montant) devient un point à corriger (`LOAN_PREPAYMENT_INVALID`) | retirer CE remboursement, si la fiche n'a pas changé depuis ; sinon `LOAN_CHANGED` |
+
+**Aperçus.**
+- `loan.create` : `{ label, amount, currency, rate, durationMonths, frequencyMonths, disbursedOn, firstDueOn, type, fees, insuranceAmount,
+  instalments, firstInstalment: { date, total }, lastInstalment: { date, total }, totals, overlap }`. `totals.creditCost` est le coût
+  total du crédit ; `overlap` (texte ou `null`) prévient quand un mouvement prévu « prêt » existe déjà dans la trésorerie. `result` :
+  `{ loanId }`.
+- `loan.prepayment` : `{ loanId, label, currency, date, amount, fees, remainingBefore, instalmentBefore, instalmentAfter,
+  creditCostBefore, creditCostAfter, saved }`. La date de fin ne change pas : ce sont les échéances qui baissent (`instalmentAfter`,
+  l'échéance qui suit le remboursement). `saved` = charges économisées, calculées par le serveur. `result` : `{ loanId }`.
+
+Ni le guide des séquences ni une étape ne les ouvrent encore : la console peut les proposer, l'application peut les ouvrir
+(`POST /api/gestion/conversations { action: "loan.create" }`). Faites : `again` vrai (« Ajouter un autre prêt »).

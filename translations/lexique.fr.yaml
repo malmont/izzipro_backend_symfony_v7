@@ -446,3 +446,15 @@ exercice-pertes:
     term: 'Exercice (prévention des pertes)'
     definition: 'Un constat fictif que vous lancez vous-même pour voir à quoi ressemble un constat et comment y répondre. Il est marqué « Exercice », ne touche pas à la caisse, ne concerne aucune personne réelle et n''entre dans aucun chiffre. Vous l''effacez quand vous voulez.'
     synonyms: 'mode exercice, constat d''exercice'
+capital-restant-du:
+    term: 'Capital restant dû'
+    definition: 'Ce qu''il vous reste à rembourser sur le montant emprunté, après les échéances déjà payées et les remboursements anticipés. Il baisse à chaque échéance de la part de capital qu''elle contient.'
+    synonyms: 'reste à rembourser, encours'
+cout-du-credit:
+    term: 'Coût total du crédit'
+    definition: 'Ce que le prêt vous coûte en plus de l''argent emprunté : les intérêts, l''assurance et les frais de dossier, du premier au dernier jour. Le capital remboursé n''en fait pas partie.'
+    synonyms: 'coût du crédit, coût du prêt'
+charges-financieres:
+    term: 'Charges financières'
+    definition: 'Les intérêts, l''assurance et les frais de vos prêts, comptés dans le résultat au prorata des jours de chaque période. Le capital remboursé, lui, ne touche que la trésorerie.'
+    synonyms: 'frais financiers'

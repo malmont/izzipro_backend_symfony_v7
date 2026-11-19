@@ -156,7 +156,10 @@ final class AllShopsListMerger
             $gross = (int) $sum['result']['gross'];
             $sum['result'] = ['gross' => $gross, 'net' => (int) $sum['result']['net'], 'tauxMarge' => $rate($gross, (int) $sum['cogs']['amount']),
                 'tauxMarque' => $rate($gross, $effective), 'netRate' => $rate((int) $sum['result']['net'], $effective),
-                'netAfterFixed' => (int) $sum['result']['netAfterFixed'], 'netAfterFixedRate' => $rate((int) $sum['result']['netAfterFixed'], $effective)];
+                'netAfterFixed' => (int) $sum['result']['netAfterFixed'], 'netAfterFixedRate' => $rate((int) $sum['result']['netAfterFixed'], $effective),
+                // lot FIS-1 : résultat après les charges financières des prêts (sommées par devise dans `charges`)
+                'netAfterCharges' => (int) ($sum['result']['netAfterCharges'] ?? $sum['result']['netAfterFixed']),
+                'netAfterChargesRate' => $rate((int) ($sum['result']['netAfterCharges'] ?? $sum['result']['netAfterFixed']), $effective)];
             $totals[] = ['currency' => $currency, 'shops' => array_map(static fn (array $p): string => $p['site'], $parts)] + $sum;
         }
 

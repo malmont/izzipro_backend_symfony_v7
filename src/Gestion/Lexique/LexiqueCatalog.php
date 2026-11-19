@@ -90,6 +90,10 @@ final class LexiqueCatalog
         'preuve' => ['related' => ['constat', 'decision-constat'], 'analysis' => null, 'quiz' => []],
         'decision-constat' => ['related' => ['constat', 'preuve'], 'analysis' => null, 'quiz' => ['q1' => 'c']],
         'exercice-pertes' => ['related' => ['constat', 'decision-constat'], 'analysis' => null, 'quiz' => []], // mode exercice (lot EX-1)
+        // prêts de la gestion (lot FIS-1, 19/11/2026)
+        'capital-restant-du' => ['related' => ['cout-du-credit', 'tresorerie'], 'analysis' => ['key' => 'loans.overview', 'params' => [], 'figures' => ['remainingCapital', 'loansCount']], 'quiz' => []],
+        'cout-du-credit' => ['related' => ['capital-restant-du', 'charges-financieres'], 'analysis' => ['key' => 'loans.overview', 'params' => [], 'figures' => ['creditCost', 'chargesToDate', 'chargesLeft']], 'quiz' => []],
+        'charges-financieres' => ['related' => ['cout-du-credit', 'resultat'], 'analysis' => null, 'quiz' => []],
     ];
 
     /**
@@ -110,6 +114,7 @@ final class LexiqueCatalog
         'planned' => 'prevu', 'actual' => 'reel', 'remaining' => 'reste', 'budgetStatus' => 'budget',
         'missingCostItems' => 'cout-d-achat', 'cost' => 'cout-d-achat', 'coefficient' => 'coefficient', 'proposedCoefficient' => 'coefficient',
         'verdict' => 'verdict', 'similarCount' => 'semblables',
+        'remainingCapital' => 'capital-restant-du', 'creditCost' => 'cout-du-credit', // lot FIS-1
     ];
 
     public static function has(mixed $key): bool

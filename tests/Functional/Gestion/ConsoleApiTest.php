@@ -184,7 +184,7 @@ class ConsoleApiTest extends WebTestCase
         $first = json_decode(FakeLandingAiClient::$requests[0]['messages'][0]['content'][0]['text'], true);
         // Lot W2-b : l'écran est traduit par le serveur (titre, thème, analyses par défaut avec les paramètres de l'écran)
         $this->assertSame(['Fais le bilan de mes nouveaux articles', ['code' => 'articles', 'titre' => 'Articles', 'theme' => 'Achats et stock', 'params' => ['periodId' => $period],
-            'analysesParDefaut' => [['key' => 'articles.missing_cost'], ['key' => 'articles.new', 'periodId' => $period]]], [], 12], [$first['question'], $first['ecran'], $first['echange'], count($first['analyses'])]);
+            'analysesParDefaut' => [['key' => 'articles.missing_cost'], ['key' => 'articles.new', 'periodId' => $period]]], [], 13], [$first['question'], $first['ecran'], $first['echange'], count($first['analyses'])]);
         $this->assertSame(['titre' => 'Articles', 'theme' => 'Achats et stock'], $second['ecran'], 'l\'appel 2 peut nommer l\'écran');
         $this->assertContains($period, array_column($first['periodes'], 'id'));
         $this->assertSame(['claude-sonnet-5-5', 'claude-sonnet-5-5'], array_column(FakeLandingAiClient::$requests, 'model'));
@@ -430,7 +430,7 @@ class ConsoleApiTest extends WebTestCase
         $expected = ['period.result' => ['revenue', 'orders', 'cogs', 'expenses', 'grossMargin', 'netResult'], 'sales.overview' => ['revenue', 'grossMargin', 'orders', 'stockValue'],
             'year.overview' => ['sales', 'grossMargin', 'netResult'], 'cash.projection' => ['cashStatus'], 'budget.status' => ['planned', 'actual', 'remaining', 'budgetStatus'],
             'stock.overview' => ['stockSaleValue', 'stockCostValue', 'lowStockItems'], 'articles.missing_cost' => ['missingCostItems'], 'articles.vs_similar' => ['articleName', 'cost', 'price', 'coefficient', 'proposedCoefficient', 'verdict'],
-            'articles.new' => ['newItems', 'verdictKeep', 'verdictRaise', 'verdictLower', 'keepUnder'], 'advice.current' => ['adviceCount'], 'lexique.term' => ['grossMargin', 'revenue']];
+            'articles.new' => ['newItems', 'verdictKeep', 'verdictRaise', 'verdictLower', 'keepUnder'], 'advice.current' => ['adviceCount'], 'lexique.term' => ['grossMargin', 'revenue'], 'loans.overview' => ['loansCount']];
         foreach ($expected as $key => $ids) {
             $got = array_column($catalog->run($key, $catalog->accept($key, $given($key)), 'fr')['figures'], 'id');
             $this->assertSame([], array_values(array_diff($ids, $got)), "$key : chiffres manquants (rendus : " . implode(', ', $got) . ')');

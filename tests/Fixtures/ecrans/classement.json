@@ -1158,6 +1158,17 @@
         "POST /api/gestion/preparation/simulation",
         "POST /api/gestion/preparation/valider"
     ],
+    "prets": [
+        "DELETE /api/gestion/prets/{id}",
+        "DELETE /api/gestion/prets/{id}/remboursements/{index}",
+        "GET /api/gestion/prets",
+        "GET /api/gestion/prets/exercice",
+        "GET /api/gestion/prets/{id}",
+        "PATCH /api/gestion/prets/{id}",
+        "POST /api/gestion/prets",
+        "POST /api/gestion/prets/apercu",
+        "POST /api/gestion/prets/{id}/remboursements"
+    ],
     "prix": [
         "GET /api/gestion/prix/lots",
         "GET /api/gestion/prix/lots/{id}",

@@ -690,3 +690,22 @@ pertes_impressions:
             label: 'Simulated printer'
             text: 'In practice mode, the simulated box has its printer: it plays its scenarios with no hardware.'
     next: 'Choose the pieces to label, then start the job.'
+prets:
+    purpose: 'Your loans: each borrowing with its computed schedule, the principal you still owe and what the credit costs you. Instalments go into the cash position, interest into the result.'
+    points:
+        capital-restant:
+            label: 'Outstanding principal'
+            text: 'What you still have to repay today on the amount borrowed, after past instalments and early repayments.'
+        echeancier:
+            label: 'Schedule'
+            text: 'Each instalment, with its share of principal, interest and insurance. It is recomputed when you add an early repayment.'
+        cout-du-credit:
+            label: 'Total cost of credit'
+            text: 'Interest, insurance and arrangement fees, from the first to the last day of the loan. Principal repaid is not part of it: it is the borrowed money you give back.'
+        dans-le-resultat:
+            label: 'In the result'
+            text: 'Only the loan charges (interest, insurance, fees) reduce the result, prorated over the days of each period. Arrangement fees count on the day the loan is paid out.'
+        dans-la-tresorerie:
+            label: 'In the cash position'
+            text: 'The payout comes into the account; each whole instalment goes out, principal included. If you had entered the instalments as a planned movement, remove it so they are not counted twice.'
+    next: 'Add your loans with the figures of the bank offer, then check the schedule against its amortisation table.'

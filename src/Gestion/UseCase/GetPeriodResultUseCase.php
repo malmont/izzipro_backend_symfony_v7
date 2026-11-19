@@ -37,7 +37,16 @@ class GetPeriodResultUseCase
         if ($closed) {
             $frozen = $em->getRepository(PeriodResult::class)->findLatestByCollection($collection);
             if ($frozen !== null) {
-                return $frozen->getPayload();
+                $payload = $frozen->getPayload();
+                // lot FIS-1 : une période figée avant le lot garde son instantané ; ses charges financières ne sont pas connues
+                if (!array_key_exists('charges', $payload)) {
+                    $payload['charges'] = null;
+                    $payload['chargesNote'] = 'CLOSED_BEFORE_LOANS';
+                    $payload['result']['netAfterCharges'] = null; // la forme stable : la clé existe, sa valeur n'est pas connue
+                    $payload['result']['netAfterChargesRate'] = null;
+                }
+
+                return $payload;
             }
         }
         $payload = $this->calculator->compute($collection, $closed ? $this->costCutoff($collection) : null);

@@ -512,6 +512,9 @@ class GestionYearService
                 'status' => $this->calendar->status($p), 'started' => $p->getStartDateCollection()->format('Y-m-d') <= $today,
                 'revenue' => (int) ($payload['sales']['revenue'] ?? 0), 'grossMargin' => (int) ($payload['result']['gross'] ?? 0),
                 'net' => (int) ($payload['result']['net'] ?? 0), 'netAfterFixed' => isset($payload['result']['netAfterFixed']) ? (int) $payload['result']['netAfterFixed'] : null,
+                // lot FIS-1 : charges financières des prêts et résultat après charges (null pour une période figée avant le lot)
+                'financialCharges' => isset($payload['charges']['financial']['total']) ? (int) $payload['charges']['financial']['total'] : null,
+                'netAfterCharges' => isset($payload['result']['netAfterCharges']) ? (int) $payload['result']['netAfterCharges'] : null,
                 'otherRevenue' => (int) ($payload['otherRevenue']['total'] ?? 0), 'frozen' => $frozen,
                 // exercice non aligné sur les périodes (EX2) : une période à cheval garde son résultat P2 entier
                 'partial' => $ps < $jan || $pe > $dec, 'overlapDays' => $len(max($ps, $jan), min($pe, $dec)), 'days' => $len($ps, $pe),

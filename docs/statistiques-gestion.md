@@ -96,7 +96,7 @@ par les mouvements. Schéma : Version20261217100000, `scripts/migrate_all_v2_ges
 Décision du propriétaire du 14/11/2026 : les 5 anciens écrans de statistiques de l'application (Caisse, Paiements, Stock, Frais, Total
 frais) sont remplacés par des volets de l'écran unifié. Un ancien écran n'est retiré que quand toute son information utile a une place ici.
 
-`sections=payments,expenses,stock,shipping,taxes` (une ou plusieurs, séparées par des virgules ; casse et espaces tolérés ; ordre de la
+`sections=payments,expenses,stock,shipping,taxes,charges` (une ou plusieurs, séparées par des virgules ; casse et espaces tolérés ; ordre de la
 réponse fixe, celui de cette liste). La
 réponse gagne `sections { <nom>: section }`. Chaque section suit la plage, la plage précédente, l'an dernier et la langue de la demande ;
 ses indicateurs ont la forme de ceux de S1 (`value`, `unit`, `previous`, `lastYear`, `changeVsPrevious`, `changeVsLastYear`,
@@ -233,6 +233,13 @@ Un nombre rond sort en entier dans le JSON (`100`, pas `100.0`), comme dans S1.
 - `breakdown` : par taxe (code, libellé, juridiction, taux en millionièmes), du plus gros au plus petit ; `base` = base taxable
   enregistrée, `null` si elle ne l'a pas été ; une ligne d'avant les codes (PAYS-1) prend le code et le nom de sa taxe.
 - Remarque fixe `TAXES_NOT_A_RETURN` : ces chiffres aident à préparer une déclaration, ils n'en sont pas une.
+
+### `charges` : les charges financières des prêts (lot FIS-1, 19/11/2026)
+
+`charges: { financial: { interest, insurance, fees, total, loans }, previous, lastYear, capitalRepaid }` : intérêts, assurance et frais
+des prêts dans la devise du site, au prorata des jours de la plage (même calcul que le bloc `charges` du résultat de période) ; `previous`
+vaut `null` sans plage précédente. `capitalRepaid` = capital remboursé sur la plage (échéances et remboursements anticipés) : de la
+trésorerie, **jamais une charge**, à montrer à part. Fiche : `docs/prets-gestion.md`.
 
 ### Routes anciennes : gardées telles quelles
 

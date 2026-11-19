@@ -34,6 +34,7 @@ Test : `tests/Functional/Gestion/FixedCostApiTest.php`.
 
 - En ajout, le résultat actuel ne change pas : `fixedCosts { total, byCategory [{ category, label, amount }], days, caveats }` et
   `result.netAfterFixed` = `net` − `fixedCosts.total`, `result.netAfterFixedRate` = netAfterFixed ÷ ventes au coût connu × 100 (null si nul).
+  Lot FIS-1 : `result.netAfterCharges` = `netAfterFixed` − charges financières des prêts (bloc `charges`, `docs/prets-gestion.md`).
 - **Prorata** : équivalent mensuel × 12 ÷ 365 par jour, pour chaque jour de la période situé entre le début et la fin du mouvement, quelle que
   soit la date de paiement réelle (`FIXED_COSTS_PRORATED`). La trésorerie, elle, suit les échéances.
 - `FIXED_COSTS_MAY_OVERLAP_NOTES` : une note de frais de la période dont le nom ou la description évoque un frais fixe (loyer, salaire, paie,

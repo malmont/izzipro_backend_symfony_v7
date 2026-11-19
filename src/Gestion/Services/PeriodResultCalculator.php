@@ -40,6 +40,7 @@ class PeriodResultCalculator
         private readonly PeriodCalendar $calendar,
         private readonly ?TenantCurrencyProvider $currency = null,
         private readonly ?GestionFixedCostService $fixedCosts = null, // lot FF1
+        private readonly ?\App\Gestion\Loan\GestionLoanService $loans = null, // lot FIS-1 : charges financières des prêts
     ) {
     }
 
@@ -80,6 +81,11 @@ class PeriodResultCalculator
         $fixed = $this->fixedCosts?->between($period->getStartDateCollection()->format('Y-m-d'), $period->getEndDateCollection()->format('Y-m-d'))
             ?? ['total' => 0, 'byCategory' => [], 'days' => 0, 'caveats' => []];
         $netAfterFixed = $net - $fixed['total'];
+        // lot FIS-1 : charges financières des prêts (intérêts, assurance, frais) AU PRORATA, en ajout comme les frais fixes : net et
+        // netAfterFixed inchangés ; le capital remboursé n'est jamais une charge (il ne touche que la trésorerie)
+        $financial = $this->loans?->chargesBetween($period->getStartDateCollection()->format('Y-m-d'), $period->getEndDateCollection()->format('Y-m-d'))
+            ?? ['interest' => 0, 'insurance' => 0, 'fees' => 0, 'total' => 0, 'loans' => 0];
+        $netAfterCharges = $netAfterFixed - $financial['total'];
         $investmentPurchases = (int) ($purchases['purchaseCost'] ?? 0);
 
         return [
@@ -102,8 +108,13 @@ class PeriodResultCalculator
                 'estimatedItems' => (int) ($row['estimated_items'] ?? 0), 'estimatedAmount' => $c($row['estimated_amount'] ?? 0)], // part estimée (reprise d'historique, lot P3), déjà comprise dans amount
             'expenses' => ['shipping' => $shipping, 'notes' => $notes, 'other' => $other, 'total' => $expensesTotal], // other : publicité (lot A1), extensible
             'result' => ['gross' => $gross, 'net' => $net, 'tauxMarge' => $rate($gross, $cogs), 'tauxMarque' => $rate($gross, $effective), 'netRate' => $rate($net, $effective),
-                'netAfterFixed' => $netAfterFixed, 'netAfterFixedRate' => $rate($netAfterFixed, $effective)],
+                'netAfterFixed' => $netAfterFixed, 'netAfterFixedRate' => $rate($netAfterFixed, $effective),
+                'netAfterCharges' => $netAfterCharges, 'netAfterChargesRate' => $rate($netAfterCharges, $effective)],
             'fixedCosts' => $fixed,
+            // lot FIS-1 ; FIS-2 à FIS-5 y ajouteront aides, salaires, impôts. Remarque de double comptage : un mouvement prévu « prêt » saisi à la
+            // main (éventuellement compté en frais fixe) à côté d'un prêt : rien n'est retiré, le gérant choisit lequel garder
+            'charges' => ['financial' => $financial, 'total' => $financial['total'],
+                'caveats' => ($this->loans?->mayOverlapMovements() ?? false) ? [['code' => 'LOAN_MAY_OVERLAP_MOVEMENTS']] : []],
             'investment' => ['purchases' => $investmentPurchases, 'shipping' => $shipping, 'total' => $investmentPurchases + $shipping],
         ];
     }
