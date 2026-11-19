@@ -126,6 +126,8 @@ $master->exec(file_get_contents(__DIR__ . '/../ops/sql/groups_master.sql'));
 $master->exec(file_get_contents(__DIR__ . '/../ops/sql/group_copies_master.sql'));
 // Lien « même entreprise » d'une boutique associée (lot G-1d, 19/11/2026) : état sur le lien, demandes du directeur (ops/sql/group_company_master.sql)
 $master->exec(file_get_contents(__DIR__ . '/../ops/sql/group_company_master.sql'));
+// Transferts entre boutiques d'un groupe (lot G-5, 19/11/2026) : état, lignes, journal (ops/sql/group_transfers_master.sql)
+$master->exec(file_get_contents(__DIR__ . '/../ops/sql/group_transfers_master.sql'));
 // Incidents de la plateforme (lot INC-1a, 18/11/2026) : erreurs des applications et pannes du serveur (ops/sql/platform_incident_master.sql)
 $master->exec(file_get_contents(__DIR__ . '/../ops/sql/platform_incident_master.sql'));
 // Signalements de la plateforme (lot INC-3, 18/11/2026) : après les incidents, qu'ils référencent (ops/sql/platform_bug_report_master.sql)
@@ -174,6 +176,11 @@ foreach ([MV_TEST_TENANT_DB, MV_TEST_TENANT2_DB] as $db) {
     // PROVISOIRE, lot ABO-1 (19/11/2026) : la migration Version20270201500000, de la même façon (après celle d'ABO-0)
     require_once dirname(__DIR__) . '/migrations/Version20270201500000.php';
     foreach (\DoctrineMigrations\Version20270201500000::STATEMENTS as $sql) {
+        $tenantDb->exec($sql);
+    }
+    // PROVISOIRE, lot G-5 (19/11/2026) : la migration Version20270202000000 (type « Transfert », marques), de la même façon
+    require_once dirname(__DIR__) . '/migrations/Version20270202000000.php';
+    foreach (\DoctrineMigrations\Version20270202000000::STATEMENTS as $sql) {
         $tenantDb->exec($sql);
     }
     $tenantDb = null;

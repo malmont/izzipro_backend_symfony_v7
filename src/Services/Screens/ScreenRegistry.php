@@ -297,7 +297,7 @@ final class ScreenRegistry
         ['#^/api/site/assistant(/|$)#', 'site.assistant'],
         ['#^/api/site/essai(/|$)#', 'site.essai'],
         ['#^/api/site/taxes(/|$)#', 'site.taxes'],
-        ['#^/api/(group|site/group-invitations|site/group-same-company)(/|$)#', 'groupe'], // lot G-1d : le lien « même entreprise »
+        ['#^/api/(group|site/group-invitations|site/group-same-company|site/group-transfers)(/|$)#', 'groupe'], // lot G-1d : le lien « même entreprise » ; lot G-5 : les transferts à envoyer
         ['#^/api/site/domain(/|$)#', 'site.domaine'],
         ['#^/api/site/features(/|$)#', 'site.modules'],
         ['#^/api/site/help(/|$)#', 'site.aide'],

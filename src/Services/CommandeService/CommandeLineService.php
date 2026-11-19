@@ -83,6 +83,7 @@ class CommandeLineService
     /** @param array{quantity?: int, unitCost?: ?int, variant?: ?ProductVariant} $fields */
     public function update(CommandeLine $line, array $fields): CommandeLine
     {
+        self::assertNotTransfer($line);
         if (array_key_exists('quantity', $fields)) {
             $received = $line->getQuantityReceived() === $line->getQuantityOrdered() ? $fields['quantity'] : min($line->getQuantityReceived(), $fields['quantity']);
             $line->setQuantityOrdered($fields['quantity'])->setQuantityReceived($received);
@@ -102,6 +103,7 @@ class CommandeLineService
 
     public function delete(CommandeLine $line): void
     {
+        self::assertNotTransfer($line);
         $em = $this->emProvider->getEntityManager();
         $product = $line->getProduct();
         $em->remove($line);
@@ -117,12 +119,23 @@ class CommandeLineService
         $repo = $em->getRepository(CommandeLine::class);
         $lines = $repo->forCommandeAndProduct($commande, $product);
         foreach ($lines as $line) {
+            self::assertNotTransfer($line);
+        }
+        foreach ($lines as $line) {
             $em->remove($line);
         }
         $em->flush();
         $this->refreshShortcuts($product);
 
         return count($lines);
+    }
+
+    /** Lot G-5 : une ligne d'un transfert entre boutiques ne se change ni ne se supprime (elle se reçoit) */
+    private static function assertNotTransfer(CommandeLine $line): void
+    {
+        if ($line->getSource() === CommandeLine::SOURCE_TRANSFER) {
+            throw new \App\Gestion\Services\GestionConflictException('TRANSFER_ORDER_LOCKED', 'Ligne d\'un transfert entre boutiques : elle se reçoit, elle ne se modifie pas. Le directeur du groupe peut annuler le transfert.');
+        }
     }
 
     /** Raccourcis du produit sur sa dernière ligne (ou NULL) ; écrits en SQL : rien d'autre du produit ne bouge */

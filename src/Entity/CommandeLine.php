@@ -20,6 +20,8 @@ class CommandeLine
     public const SOURCE_REPRISE = 'reprise';
     public const SOURCE_DOCUMENT = 'document';
     public const SOURCE_MIGRATION = 'migration';
+    /** Lot G-5 : la commande d'arrivée d'un transfert entre boutiques d'un groupe */
+    public const SOURCE_TRANSFER = 'transfer';
 
     #[ORM\Id]
     #[ORM\GeneratedValue]

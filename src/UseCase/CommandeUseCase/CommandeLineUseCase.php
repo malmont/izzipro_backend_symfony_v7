@@ -91,7 +91,7 @@ class CommandeLineUseCase
         $this->emProvider->getEntityManager()->refresh($commande);
         $lines = $this->list($commande);
 
-        return $result + ['lines' => $lines, 'commande' => ['id' => $commande->getId(), 'remaining' => array_sum(array_column($lines, 'remaining')), 'receptionStatus' => $commande->receptionStatus()]];
+        return $result + ['lines' => $lines, 'commande' => ['id' => $commande->getId(), 'remaining' => array_sum(array_column($lines, 'remaining')), 'receptionStatus' => $commande->receptionStatus(), 'groupTransfer' => $commande->isGroupTransfer()]];
     }
 
     /** Annulation d'une réception (lot R1) : POST /api/commandes/{id}/lignes/{lineId}/reception/annuler { quantity? } */

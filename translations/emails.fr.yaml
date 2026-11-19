@@ -396,6 +396,29 @@ group_same_company:
         validity: 'La boutique peut retirer ce lien à tout moment ; vous en serez prévenu.'
         ignore: 'Ce message suit l''acceptation de votre invitation par la boutique.'
 
+group_transfer:
+    requested:
+        subject: '%site% : un transfert vers %target% attend votre envoi'
+        title: 'Transfert à envoyer'
+        greeting: 'Bonjour,'
+        message: 'Le directeur du groupe « %group% » demande que votre boutique %site% envoie %count% ligne(s) d''articles à la boutique %target%. Préparez la marchandise, puis confirmez l''envoi dans votre espace d''administration : le stock ne sort qu''à ce moment.'
+        validity: 'Le directeur peut annuler la demande tant qu''elle n''est pas reçue.'
+        ignore: 'Rien ne bouge dans votre stock sans votre confirmation d''envoi.'
+    sent:
+        subject: '%site% : un transfert de %source% est en route'
+        title: 'Transfert en route'
+        greeting: 'Bonjour,'
+        message: 'La boutique %source% (groupe « %group% ») vous a envoyé %count% ligne(s) d''articles. Une commande fournisseur « Transfert depuis %source% » est en route dans votre gestion : réceptionnez-la comme d''habitude à l''arrivée de la marchandise.'
+        validity: 'Le stock n''entre chez vous qu''à la réception.'
+        ignore: 'Ce message suit un transfert décidé par le directeur du groupe.'
+    send_failed:
+        subject: 'Groupe %group% : l''envoi d''un transfert de %site% n''a pas abouti'
+        title: 'Envoi de transfert en échec'
+        greeting: 'Bonjour,'
+        message: 'L''envoi du transfert de la boutique %site% vers %target% n''a pas pu aboutir : la boutique de destination n''a pas accepté la commande. Le stock est revenu chez %site%. L''administrateur de %site% peut renvoyer, ou vous pouvez annuler le transfert.'
+        validity: 'L''équipe technique de la plateforme est prévenue.'
+        ignore: 'Aucune marchandise n''a été sortie du stock.'
+
 bug_report_answer:
     subject: 'Votre signalement n° %id% : %status%'
     title: 'Votre signalement'

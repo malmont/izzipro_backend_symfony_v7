@@ -31,6 +31,27 @@ class CommandeCrudController extends BaseTenantCrudController
         return Commande::class;
     }
 
+    /** Lot G-5 : la commande d'un transfert entre boutiques ne se modifie ni ne se supprime ici (elle se reçoit ; le directeur annule le transfert) */
+    public function updateEntity(\Doctrine\ORM\EntityManagerInterface $entityManager, $entityInstance): void
+    {
+        if ($entityInstance instanceof Commande && $entityInstance->isGroupTransfer()) {
+            $this->addFlash('danger', 'Commande d\'un transfert entre boutiques : elle se reçoit, elle ne se modifie pas.');
+
+            return;
+        }
+        parent::updateEntity($entityManager, $entityInstance);
+    }
+
+    public function deleteEntity(\Doctrine\ORM\EntityManagerInterface $entityManager, $entityInstance): void
+    {
+        if ($entityInstance instanceof Commande && $entityInstance->isGroupTransfer()) {
+            $this->addFlash('danger', 'Commande d\'un transfert entre boutiques : elle ne se supprime pas. Le directeur du groupe peut annuler le transfert.');
+
+            return;
+        }
+        parent::deleteEntity($entityManager, $entityInstance);
+    }
+
 
     public function configureFields(string $pageName): iterable
     {

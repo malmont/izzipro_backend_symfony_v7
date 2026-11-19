@@ -795,12 +795,17 @@
         "GET /api/gestion/groupe/copies",
         "GET /api/gestion/groupe/copies/{id}",
         "GET /api/gestion/groupe/resultat",
+        "GET /api/gestion/groupe/transferts",
+        "GET /api/gestion/groupe/transferts/{id}",
         "GET /api/group",
         "GET /api/site/group-invitations",
         "GET /api/site/group-same-company",
+        "GET /api/site/group-transfers",
         "POST /api/gestion/groupe/copies",
         "POST /api/gestion/groupe/copies/{id}/cancel",
         "POST /api/gestion/groupe/copies/{id}/confirm",
+        "POST /api/gestion/groupe/transferts",
+        "POST /api/gestion/groupe/transferts/{id}/cancel",
         "POST /api/group",
         "POST /api/group/invitations",
         "POST /api/group/leave",
@@ -808,7 +813,8 @@
         "POST /api/site/group-invitations/{id}/accept",
         "POST /api/site/group-invitations/{id}/refuse",
         "POST /api/site/group-same-company/{id}/confirm",
-        "POST /api/site/group-same-company/{id}/refuse"
+        "POST /api/site/group-same-company/{id}/refuse",
+        "POST /api/site/group-transfers/{id}/send"
     ],
     "imports": [
         "GET /api/site/imports",

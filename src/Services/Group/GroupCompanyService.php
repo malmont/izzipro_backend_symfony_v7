@@ -32,6 +32,7 @@ class GroupCompanyService
         private readonly TenantDatabaseConnector $databases,
         private readonly GroupCompanyMailer $mailer,
         private readonly LoggerInterface $logger,
+        private readonly ?\App\Services\Group\Transfer\GroupTransferLinkGuard $transfers = null, // lot G-5
     ) {
     }
 
@@ -200,8 +201,12 @@ class GroupCompanyService
     /** @param array<string, mixed> $group */
     private function removed(array $group, string $shop, string $side, User $by, string $language): void
     {
-        // l'événement que lira le transfert (G-5) : nouveaux transferts refusés, transferts seulement demandés annulés
+        // lot G-5 : nouveaux transferts refusés (règle relue à chaque geste), transferts seulement DEMANDÉS annulés, envoyés terminés
         $this->trace((int) $group['id'], 'same_company_removed', $shop, $side, $by);
+        $cancelled = $this->transfers?->onSameCompanyRemoved((int) $group['id'], $shop) ?? 0;
+        if ($cancelled > 0) {
+            $this->groups->event((int) $group['id'], 'transfers_cancelled', $shop, ['count' => $cancelled, 'reason' => 'same_company_removed'], self::who($by));
+        }
         $params = ['%group%' => (string) $group['name'], '%site%' => $this->name($shop)];
         $this->mailer->send($this->dbname($side === 'shop' ? (string) $group['head_tenant_code'] : $shop), $side === 'shop' ? 'removed_by_shop' : 'removed_by_head', $params, $language);
     }

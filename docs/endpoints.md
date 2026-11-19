@@ -261,7 +261,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (706)
+## Boutique et commun (712)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -465,6 +465,10 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/api/gestion/groupe/copies` | ROLE_ADMIN | `Gestion\Controller\GestionGroupCopyController::list` |
 | POST | `/api/gestion/groupe/copies` | ROLE_ADMIN | `Gestion\Controller\GestionGroupCopyController::create` |
 | GET | `/api/gestion/groupe/resultat` | ROLE_ADMIN | `Gestion\Controller\GestionGroupResultController::result` |
+| POST | `/api/gestion/groupe/transferts/{id}/cancel` | ROLE_ADMIN | `Gestion\Controller\GestionGroupTransferController::cancel` |
+| GET | `/api/gestion/groupe/transferts/{id}` | ROLE_ADMIN | `Gestion\Controller\GestionGroupTransferController::show` |
+| GET | `/api/gestion/groupe/transferts` | ROLE_ADMIN | `Gestion\Controller\GestionGroupTransferController::list` |
+| POST | `/api/gestion/groupe/transferts` | ROLE_ADMIN | `Gestion\Controller\GestionGroupTransferController::create` |
 | GET | `/api/gestion/ia` | ROLE_ADMIN | `Gestion\Controller\GestionAiController::usage` |
 | GET | `/api/gestion/journee` | ROLE_ADMIN | `Gestion\Controller\GestionDayController::overview` |
 | POST | `/api/gestion/lexique/{key}/quiz/{question}` | ROLE_ADMIN | `Gestion\Controller\GestionLexiqueController::answer` |
@@ -874,6 +878,8 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | POST | `/api/site/group-same-company/{id}/refuse` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\SiteFeaturesController\SiteGroupSameCompanyController::refuse` |
 | DELETE | `/api/site/group-same-company` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\SiteFeaturesController\SiteGroupSameCompanyController::remove` |
 | GET | `/api/site/group-same-company` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\SiteFeaturesController\SiteGroupSameCompanyController::show` |
+| POST | `/api/site/group-transfers/{id}/send` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\SiteFeaturesController\SiteGroupTransferController::send` |
+| GET | `/api/site/group-transfers` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\SiteFeaturesController\SiteGroupTransferController::list` |
 | GET | `/api/site/help/{key}` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\HelpController\HelpController::page` |
 | GET | `/api/site/help` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\HelpController\HelpController::list` |
 | GET | `/api/site/imports/archive/orders` | ROLE_ADMIN | `Import\Controller\SiteImportController::archiveOrders` |

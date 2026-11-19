@@ -391,6 +391,29 @@ group_same_company:
         validity: 'The shop can remove this link at any time; you will be told.'
         ignore: 'This message follows the acceptance of your invitation by the shop.'
 
+group_transfer:
+    requested:
+        subject: '%site%: a transfer to %target% is waiting for your shipment'
+        title: 'Transfer to send'
+        greeting: 'Hello,'
+        message: 'The director of the group "%group%" asks your shop %site% to send %count% line(s) of items to the shop %target%. Prepare the goods, then confirm the shipment in your administration space: stock leaves only at that moment.'
+        validity: 'The director can cancel the request as long as it is not received.'
+        ignore: 'Nothing moves in your stock without your shipment confirmation.'
+    sent:
+        subject: '%site%: a transfer from %source% is on its way'
+        title: 'Transfer on its way'
+        greeting: 'Hello,'
+        message: 'The shop %source% (group "%group%") sent you %count% line(s) of items. A purchase order "Transfert depuis %source%" is on its way in your management app: receive it as usual when the goods arrive.'
+        validity: 'Stock enters your shop only at reception.'
+        ignore: 'This message follows a transfer decided by the director of the group.'
+    send_failed:
+        subject: 'Group %group%: the shipment of a transfer from %site% failed'
+        title: 'Transfer shipment failed'
+        greeting: 'Hello,'
+        message: 'The shipment of the transfer from the shop %site% to %target% could not complete: the destination shop did not accept the order. The stock went back to %site%. The administrator of %site% can send again, or you can cancel the transfer.'
+        validity: 'The platform technical team is told.'
+        ignore: 'No goods left the stock.'
+
 bug_report_answer:
     subject: 'Your report no. %id%: %status%'
     title: 'Your report'
