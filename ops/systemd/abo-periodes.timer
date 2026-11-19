@@ -1,0 +1,11 @@
+[Unit]
+Description=Arkanoa : droits d'abonnement (réémission, report, perte), chaque heure
+
+[Timer]
+# chaque heure (relecture neuve d'ABO-1) : un droit échu attend au plus une heure son report ou sa perte
+OnCalendar=*-*-* *:25:00 UTC
+Persistent=true
+RandomizedDelaySec=120
+
+[Install]
+WantedBy=timers.target

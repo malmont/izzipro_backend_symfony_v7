@@ -41,6 +41,9 @@ class GroupWritesClassificationTest extends KernelTestCase
         'propose_benefit' => 'catalogue', 'propose_plan' => 'catalogue', 'set_plan_benefits' => 'catalogue',
         // lot IA-G : outils du directeur au SIÈGE, avec son compte (jamais dans une boutique où il est entré : l'assistant y est fermé)
         'propose_group_invitation' => 'groupe', 'propose_group_copy' => 'catalogue', 'propose_group_same_company' => 'groupe', 'get_group' => 'lecture', 'get_group_view' => 'lecture',
+        // lot ABO-1 : gestes du quotidien sur un abonnement
+        'get_expiring_rights' => 'lecture', 'propose_use' => 'commande', 'propose_gift' => 'commande', 'propose_pause' => 'commande', 'propose_resume' => 'commande',
+        'propose_cancel_subscription' => 'argent',
     ];
 
     public function testEveryWriteEveryScreenAndEveryAssistantToolIsClassifiedForTheDirector(): void

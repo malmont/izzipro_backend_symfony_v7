@@ -89,7 +89,10 @@ class SubscriptionController extends AbstractController
     #[IsGranted('ROLE_USER_INTERNET')]
     public function pause(int $id, Request $request): JsonResponse
     {
-        return $this->handle(fn () => $this->json($this->subscriptions->pause($id, $this->customer(), $this->locale($request), $request->getSchemeAndHttpHost())));
+        $body = json_decode((string) $request->getContent(), true);
+        $until = is_array($body) && is_string($body['until'] ?? null) ? $body['until'] : null; // lot ABO-1 : pause datée
+
+        return $this->handle(fn () => $this->json($this->subscriptions->pause($id, $this->customer(), $this->locale($request), $request->getSchemeAndHttpHost(), $until)));
     }
 
     #[Route('/api/subscriptions/{id}/change-plan', name: 'api_subscriptions_change_plan', methods: ['POST'], requirements: ['id' => '\d+'])]

@@ -24,7 +24,8 @@ final class AdminSubscriptionUseCase
         private readonly SubscriptionService $service,
         private readonly SubscriptionMailer $mailer,
         private readonly LoggerInterface $logger,
-        private readonly Security $security
+        private readonly Security $security,
+        private readonly ?\App\Abo\Services\AboRightsService $rights = null, // lot ABO-1
     ) {
     }
 
@@ -46,7 +47,16 @@ final class AdminSubscriptionUseCase
     /** @throws SubscriptionException */
     public function pause(Subscription $subscription, string $host): void
     {
-        $this->service->pause($subscription);
+        if ($this->rights !== null) {
+            // lot ABO-1 (relecture neuve) : les règles de la formule (durée maximale, pauses par an) et les droits prolongés, comme partout
+            try {
+                $this->rights->pause($subscription, null, $this->security->getUser()?->getUserIdentifier());
+            } catch (\App\Abo\Services\AboException $e) {
+                throw new SubscriptionException($e->status, $e->getMessage(), [], [], $e->errorCode, $e);
+            }
+        } else {
+            $this->service->pause($subscription);
+        }
         $this->mailer->notify($subscription, 'paused', self::LOCALE, $host);
         $this->trace('pause', $subscription);
     }

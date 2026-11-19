@@ -103,6 +103,39 @@ class OfferPaymentsRepository
         return $stmt->fetchColumn() !== false;
     }
 
+    /**
+     * Lot ABO-1 : nombre de périodes PAYÉES d'un abonnement, pour l'engagement minimal : création et cycles, et un changement de formule qui
+     * ouvre une période (période notée) ; jamais un prorata pur ni une facture à zéro (essai gratuit). Seules les périodes notées depuis
+     * PROVISION-3 sont comptées (simplification dite dans la fiche).
+     */
+    public function paidPeriodsCount(string $tenantCode, int $subscriptionId): int
+    {
+        $stmt = $this->pdo()->prepare("SELECT COUNT(*) FROM subscription_period_paid WHERE tenant_code = ? AND subscription_id = ? AND amount_paid > 0
+            AND (COALESCE(billing_reason, 'subscription_cycle') IN ('subscription_create', 'subscription_cycle') OR (billing_reason = 'subscription_update' AND period_start IS NOT NULL))");
+        $stmt->execute([$tenantCode, $subscriptionId]);
+
+        return (int) $stmt->fetchColumn();
+    }
+
+    /**
+     * Lot ABO-1 : les périodes payées d'un site que leurs écouteurs n'ont pas traitées (écouteur en échec, processus tombé), notées depuis
+     * plus de 10 minutes (le webhook en cours n'est pas doublé), à réémettre par le passage quotidien.
+     *
+     * @return list<array{invoice_id: string, subscription_id: int, period_start: ?string, period_end: ?string, amount_paid: int, billing_reason: ?string}>
+     */
+    public function undispatchedPeriods(string $tenantCode, int $limit = 500): array
+    {
+        $stmt = $this->pdo()->prepare('SELECT invoice_id, subscription_id, period_start, period_end, amount_paid, billing_reason FROM subscription_period_paid
+            WHERE tenant_code = ? AND dispatched_at IS NULL AND recorded_at < ? ORDER BY recorded_at LIMIT ?');
+        $stmt->bindValue(1, $tenantCode);
+        $stmt->bindValue(2, gmdate('Y-m-d H:i:s', time() - 600));
+        $stmt->bindValue(3, max(1, $limit), \PDO::PARAM_INT);
+        $stmt->execute();
+
+        return array_map(static fn (array $r) => ['invoice_id' => (string) $r['invoice_id'], 'subscription_id' => (int) $r['subscription_id'], 'period_start' => $r['period_start'],
+            'period_end' => $r['period_end'], 'amount_paid' => (int) $r['amount_paid'], 'billing_reason' => $r['billing_reason']], $stmt->fetchAll(\PDO::FETCH_ASSOC));
+    }
+
     /** L'événement « période payée » a été traité par ses écouteurs (une période notée sans cette date reste à réémettre, lot ABO-1) */
     public function markPeriodDispatched(string $tenantCode, string $invoiceId): void
     {

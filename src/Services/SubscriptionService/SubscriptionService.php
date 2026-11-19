@@ -208,7 +208,7 @@ final class SubscriptionService
         // l'essai reste celui de la plateforme (« Demander », une fois par site)
         $state = $this->stripe->create($customerId, $priceId, $quantity, $plan->hasFulfillment() ? 0 : $plan->getTrialDays(), [
             'tenant_code' => (string) $this->tenantProvider->getTenantCode(), 'subscription_id' => (string) $subscription->getId(), 'user_id' => (string) $user->getId(),
-        ], $taxRateIds, $automaticTax, $shippingPriceId);
+        ], $taxRateIds, $automaticTax, $shippingPriceId, $plan->isSinglePeriod()); // lot ABO-1 : carte de séances, fin posée à la création
         $subscription->setStripeSubscriptionId($state['id']);
         $this->applyFreshState($subscription, $state);
         $em->flush();
@@ -234,9 +234,37 @@ final class SubscriptionService
             fn () => $this->cancelLocked($subscription, $atPeriodEnd));
     }
 
+    /**
+     * Lot ABO-1 : résiliation programmée à une date (fin d'engagement minimal), décidée par le client pendant son engagement ; sans prorata.
+     *
+     * @throws SubscriptionException
+     */
+    public function cancelAt(Subscription $subscription, \DateTimeImmutable $at): Subscription
+    {
+        return SubscriptionLock::run($this->emProvider->getEntityManager()->getConnection(), SubscriptionLock::key((string) $this->tenantProvider->getTenantCode(), $subscription->getStripeSubscriptionId(), $subscription->getId()),
+            function () use ($subscription, $at) {
+                $this->requireStripe($subscription);
+                if ($subscription->getStatus() === Subscription::STATUS_CANCELED) {
+                    throw new SubscriptionException(409, 'Abonnement déjà résilié.', [], [], 'SUBSCRIPTION_CANCELED');
+                }
+                $this->applyFreshState($subscription, $this->stripe->cancelAt($subscription->getStripeSubscriptionId(), $at->getTimestamp()));
+                $this->emProvider->getEntityManager()->flush();
+
+                return $subscription;
+            });
+    }
+
     private function cancelLocked(Subscription $subscription, bool $atPeriodEnd): Subscription
     {
         $this->requireStripe($subscription);
+        if ($atPeriodEnd && $subscription->getCancelAt() !== null && $subscription->getCurrentPeriodEnd() !== null) {
+            // lot ABO-1 : une fin déjà programmée à une date (engagement) est avancée à la fin de période par la même voie (`cancel_at`),
+            // jamais avec `cancel_at_period_end` dans la même requête
+            $this->applyFreshState($subscription, $this->stripe->cancelAt($subscription->getStripeSubscriptionId(), $subscription->getCurrentPeriodEnd()->getTimestamp()));
+            $this->emProvider->getEntityManager()->flush();
+
+            return $subscription;
+        }
         $this->applyFreshState($subscription, $this->stripe->cancel($subscription->getStripeSubscriptionId(), $atPeriodEnd));
         if (!$atPeriodEnd) {
             $subscription->setStatus(Subscription::STATUS_CANCELED)->setCanceledAt(new \DateTimeImmutable());
@@ -246,40 +274,42 @@ final class SubscriptionService
         return $subscription;
     }
 
-    public function resume(Subscription $subscription): Subscription
+    /** `$liftCancellation` (lot ABO-1) : null = lever aussi une résiliation programmée, sauf pour une carte de séances (payée une fois) */
+    public function resume(Subscription $subscription, ?bool $liftCancellation = null): Subscription
     {
         // lot PROVISION-3 : un geste local et un webhook du même abonnement ne se croisent jamais
         return SubscriptionLock::run($this->emProvider->getEntityManager()->getConnection(), SubscriptionLock::key((string) $this->tenantProvider->getTenantCode(), $subscription->getStripeSubscriptionId(), $subscription->getId()),
-            fn () => $this->resumeLocked($subscription));
+            fn () => $this->resumeLocked($subscription, $liftCancellation ?? !($subscription->getPlan()?->isSinglePeriod() ?? false)));
     }
 
-    private function resumeLocked(Subscription $subscription): Subscription
+    private function resumeLocked(Subscription $subscription, bool $liftCancellation = true): Subscription
     {
         $this->requireStripe($subscription);
         if ($subscription->getStatus() === Subscription::STATUS_CANCELED) {
             throw new SubscriptionException(409, 'Abonnement déjà résilié : souscrivez de nouveau.', [], [], 'SUBSCRIPTION_CANCELED');
         }
-        $this->applyFreshState($subscription, $this->stripe->resume($subscription->getStripeSubscriptionId()));
+        $this->applyFreshState($subscription, $this->stripe->resume($subscription->getStripeSubscriptionId(), $liftCancellation, $subscription->getCancelAt() !== null));
         $subscription->setPausedAt(null);
         $this->emProvider->getEntityManager()->flush();
 
         return $subscription;
     }
 
-    public function pause(Subscription $subscription): Subscription
+    /** `$until` (lot ABO-1) : Stripe reprend seul la facturation à cette date ; les limites de la formule sont dans AboRightsService */
+    public function pause(Subscription $subscription, ?\DateTimeImmutable $until = null): Subscription
     {
         // lot PROVISION-3 : un geste local et un webhook du même abonnement ne se croisent jamais
         return SubscriptionLock::run($this->emProvider->getEntityManager()->getConnection(), SubscriptionLock::key((string) $this->tenantProvider->getTenantCode(), $subscription->getStripeSubscriptionId(), $subscription->getId()),
-            fn () => $this->pauseLocked($subscription));
+            fn () => $this->pauseLocked($subscription, $until));
     }
 
-    private function pauseLocked(Subscription $subscription): Subscription
+    private function pauseLocked(Subscription $subscription, ?\DateTimeImmutable $until = null): Subscription
     {
         $this->requireStripe($subscription);
         if (!in_array($subscription->getStatus(), [Subscription::STATUS_ACTIVE, Subscription::STATUS_TRIALING], true)) {
             throw new SubscriptionException(409, 'Seul un abonnement actif peut être mis en pause.', [], [], 'SUBSCRIPTION_NOT_ACTIVE');
         }
-        $this->applyFreshState($subscription, $this->stripe->pause($subscription->getStripeSubscriptionId()));
+        $this->applyFreshState($subscription, $this->stripe->pause($subscription->getStripeSubscriptionId(), $until?->getTimestamp()));
         $subscription->setStatus(Subscription::STATUS_PAUSED)->setPausedAt(new \DateTimeImmutable());
         $this->emProvider->getEntityManager()->flush();
 
@@ -395,6 +425,9 @@ final class SubscriptionService
         }
         if (array_key_exists('cancelAtPeriodEnd', $state)) {
             $subscription->setCancelAtPeriodEnd((bool) $state['cancelAtPeriodEnd']);
+        }
+        if (array_key_exists('cancelAt', $state)) {
+            $subscription->setCancelAt($state['cancelAt'] !== null ? (new \DateTimeImmutable())->setTimestamp((int) $state['cancelAt']) : null);
         }
         if (($state['hasPaymentMethod'] ?? null) !== null) {
             $subscription->setHasPaymentMethod((bool) $state['hasPaymentMethod']);

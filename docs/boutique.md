@@ -911,7 +911,7 @@ retire les droits d'usage du site cible (`Services/Platform/OfferFulfillmentServ
 | `POST …/{id}/cancel { atPeriodEnd?: true }` | client | fin de période par défaut (`cancelAtPeriodEnd`), ou immédiate (`canceled`, courriel) |
 | `POST …/{id}/resume`, `…/{id}/pause` | client | reprise (annulation programmée levée, collecte reprise) ; pause (`pause_collection: void`, courriel) ; 409 si résilié ou pas actif |
 | `POST …/{id}/change-plan { planId }` | client | formule du même produit, prorata Stripe |
-| `POST /api/subscriptions/portal-session { returnUrl? }` | client | `{ url }` du portail client Stripe (carte, factures) |
+| `POST /api/subscriptions/portal-session { returnUrl? }` | client | `{ url }` du portail client Stripe (carte, factures ; sans annulation depuis ABO-1 : configuration de la plateforme) |
 
 - Statuts : `incomplete`, `trialing`, `active`, `past_due`, `paused`, `canceled` (recopiés de Stripe :
   `SubscriptionService::applyStripeState`).
@@ -1015,7 +1015,7 @@ Socle de l'abonnement universel : une formule livre des **prestations** ; aucun 
     attemptCount, maxAttempts, nextPaymentAttempt } | null, customer: { id, firstname, lastname, email } }], total, page, limit }` ;
     jamais le lien de paiement ; 404 PLAN_NOT_FOUND, 422 STATUS_INVALID ;
   - `GET /api/site/abonnements/{id}` → la ligne ci-dessus + `plan`, `benefits[]`, `canceledAt`, `fulfillmentTarget`, `orders` (commandes
-    d'échéance : id, référence, date, total en centimes), et `todo`, `history`, `balance` présents et vides jusqu'à ABO-1 ; 404
+    d'échéance : id, référence, date, total en centimes), et `todo`, `history`, `balance` (remplis depuis ABO-1, ci-dessous) ; 404
     SUBSCRIPTION_NOT_FOUND.
 - **Assistant du site (IA-A)**, outils donnés seulement avec le module Boutique : lectures `get_subscription_plans` (avec les produits
   porteurs possibles), `get_benefits`, `get_plan_subscribers`, `get_subscription`, **sans aucune identité** (un abonné = son numéro,
@@ -1023,6 +1023,78 @@ Socle de l'abonnement universel : une formule livre des **prestations** ; aucun 
   EXISTANT dont l'abonnement est activé, sinon PRODUCT_NOT_SUBSCRIBABLE et renvoi à l'écran Produits), `set_plan_benefits`, appliquées par
   le service de l'écran (mêmes refus) et tracées au journal du site. Textes lus = données (essai d'injection).
 - Essais : `tests/Functional/Abo/AboBenefitsTest.php`.
+
+### Droits par période, solde, report et pause (lot ABO-1, 19/11/2026, `docs/plan-abo-universel.md` § 3, § 4, § 7)
+
+Les prestations à quantité deviennent des **droits** que l'abonné consomme ; la facturation ne change pas.
+
+- **Tables de site** (migration `Version20270201500000`, script `scripts/migrate_all_v2_abo_rights.sh`) :
+  - `benefit_occurrence` : un droit par ligne (abonnement, ligne de formule et prestation, facture d'origine, rang, `origin` `period` ou
+    `gift`, `status` `available` / `done` / `expired`, début et fin de période, `valid_until` UTC, `carried`, `trial`, qui et quand pour
+    un droit utilisé, note, motif d'un droit offert) ; unicité (abonnement, ligne de formule, facture, rang) ;
+  - `subscription_abo_event` : le journal du suivi (`born`, `used`, `use_undone`, `gift`, `carried`, `expired`, `pause`, `resume`,
+    `cancel`, `trial_without_rights`) ;
+  - `subscription_plan.single_period` (carte de séances), `max_pause_days` (90), `pauses_per_year` (1) ; `subscription.pauses` (JSON) ;
+    `subscription.cancel_at` (résiliation programmée à une date : fin d'engagement).
+- **Naissance** (`AboRightsService::birth`, à l'écoute de « période payée » de PROVISION-3, une fois par facture) : quantité de la formule
+  × quantité de l'abonnement, valables jusqu'à la fin de la période. Une prestation sans limite ne crée aucune ligne (`unlimited`).
+  La période est celle de la **ligne d'abonnement hors prorata** de la facture (jamais une ligne de prorata au passé ; une fin déjà
+  passée est remplacée par la fin de période de l'abonnement). Changement de formule (`subscription_update`) : un **prorata pur**
+  (aucune ligne hors prorata) ne donne aucun droit et n'est pas une période payée ; un changement qui **ouvre une période** (passage du
+  mois à l'année : cycle remis à zéro, période payée) donne ses droits. **Essai gratuit** : ses droits une fois par client et par
+  formule, jamais reportés ; un second essai gratuit ne donne rien (événement `trial_without_rights`). Rejouer une facture ne crée rien
+  (unicité).
+- **Passage horaire** `app:abo:periodes` (`--site` possible ; minuteur `ops/systemd/abo-periodes.timer`, chaque heure à :25 UTC) : réémet les
+  « périodes payées » restées sans suite depuis 10 minutes, puis, pour chaque droit arrivé à `valid_until`, le reporte UNE fois d'une
+  période (dans la limite du report de la ligne PAR PLACE, × quantité de l'abonnement ; si l'abonnement continue, ni en fin programmée,
+  ni carte ; jamais un droit d'essai) ou le perd. Sous le verrou de l'abonnement. Simplification : une période réémise relit la formule
+  et la quantité du moment.
+- **Prestation retirée de la formule** : ses droits déjà payés restent au solde et utilisables jusqu'à leur échéance, puis sont perdus
+  (sans report). Une prestation qui porte des droits ne se supprime pas (409 `BENEFIT_IN_USE`) : elle se désactive.
+- **Suivi** (`GET /api/site/abonnements/{id}`, gestion web et MAUI) : `balance[]` par prestation `{ benefitId, name, kind, available,
+  used, carried, unlimited, nextExpiry }`, `todo[]` (droits qui expirent sous 7 jours), `history[]` (50 derniers événements, `by` et
+  `note` pour l'équipe), `pauses`.
+- **Gestes** (`ROLE_ADMIN`, module Boutique, sous le verrou de l'abonnement ; la fiche est relue une fois le verrou pris, et chaque contrôle
+  refait : deux gestes simultanés ne prolongent ni ne comptent jamais deux fois ; un abonnement tenu trop longtemps par un autre traitement
+  rend 409 `SUBSCRIPTION_BUSY`, à refaire) :
+  - `POST /api/site/abonnements/{id}/utilisations { benefitId, note? }` (201) : marque utilisé le droit qui expire le premier ; deux gestes
+    simultanés ne prennent jamais le même droit. 409 `BALANCE_EMPTY`, 422 `BENEFIT_NOT_IN_PLAN`. Annulable 24 h :
+    `DELETE …/utilisations/{occurrenceId}` (404 `OCCURRENCE_NOT_FOUND`, 409 `USE_UNDO_EXPIRED`) ;
+  - `POST /api/site/abonnements/{id}/droits { benefitId, quantity (1 à 10), reason }` (201) : droits offerts jusqu'à la fin de la
+    période en cours ; motif obligatoire (`GIFT_INVALID`, `REASON_REQUIRED`) ; écrit au journal du site ;
+  - `POST /api/site/abonnements/{id}/pause { until }` (date du magasin) : 90 jours au plus et une pause par an glissant, réglables par
+    formule (422 `PAUSE_DATE_INVALID`, `PAUSE_TOO_LONG`, `PAUSE_LIMIT_REACHED` ; 409 `SUBSCRIPTION_NOT_ACTIVE`) ; Stripe
+    `pause_collection` avec `resumes_at` ; les droits disponibles sont prolongés de la durée de la pause (aussi depuis EasyAdmin, qui
+    applique les mêmes limites) ;
+  - `POST /api/site/abonnements/{id}/reprise` : reprend une PAUSE seulement (409 `SUBSCRIPTION_NOT_PAUSED`) ; une résiliation
+    programmée (carte de séances, motif de l'équipe) reste programmée ; reprise avant la date prévue : la prolongation non consommée est
+    retirée aux droits ;
+  - `POST /api/site/abonnements/{id}/resiliation { atPeriodEnd: true, reason? }` : en fin de période seulement
+    (`CANCEL_AT_PERIOD_END_ONLY`) ; pendant l'engagement minimal, l'équipe résilie quand même, motif obligatoire (422 `REASON_REQUIRED`),
+    écrit au journal du site.
+- **Côté client** : `GET /api/subscriptions` et `/{id}` rendent `balance[]` (nombres et échéances seulement, aucun motif ni note) et
+  `cancellation: { allowed, cancellableFrom, scheduledAt }` ; `POST /api/subscriptions/{id}/pause` accepte `until` (sans `until` : la
+  durée maximale de la formule), mêmes limites ; `…/resume` garde son sens (lève aussi une résiliation programmée), sauf pour une carte
+  de séances.
+- **Résiliation simple** (décision du chef du 19/11/2026 ; règles de résiliation en ligne facile : France, « click to cancel » de
+  certains États américains) : « Résilier » visible dans la fiche de l'abonnement, en deux gestes (bouton, puis confirmation qui affiche
+  la date). `POST /api/subscriptions/{id}/cancel` : sans engagement en cours, comme avant ; PENDANT l'engagement minimal, la résiliation
+  est PROGRAMMÉE à `cancellableFrom` (Stripe `cancel_at`, sans prorata), réponse 200 avec `cancellation.scheduledAt`, jamais refusée ;
+  courriel de confirmation avec la date (`cancel_at_term_end`). L'engagement compte les périodes PAYÉES (une facture à 0, l'essai, ne
+  compte pas ; simplification : seules les périodes notées depuis PROVISION-3). Le code `SUBSCRIPTION_MINIMUM_TERM` ne sert plus qu'à
+  l'équipe et à l'assistant.
+- **Portail Stripe du client** : la plateforme utilise SA configuration du portail sur le compte connecté (métadonnée `izzi_platform=1`,
+  créée ou mise à jour, passée à la session), où l'annulation est coupée : le client résilie par nos écrans, qui appliquent
+  l'engagement. Une configuration créée par le commerçant n'est jamais lue ni modifiée.
+- **Carte de séances** (`single_period`) : la fin est posée à la création de l'abonnement Stripe (`cancel_at_period_end`), payée une
+  fois, droits jamais reportés.
+- **Simplification** : pause et reprise appellent Stripe avant l'écriture locale ; une écriture locale en échec après un Stripe réussi
+  laisse l'abonnement en pause chez Stripe sans prolongation (rare, visible au journal).
+- **Assistant du site (IA-A)**, sans aucune identité : lectures `get_subscription` (solde, à faire, historique sans « par qui ») et
+  `get_expiring_rights` ; propositions confirmées `propose_use`, `propose_gift`, `propose_pause`, `propose_resume`,
+  `propose_cancel_subscription` (fin de période seulement, en rouge), appliquées par le même service. Absents : résilier tout de suite,
+  rembourser, retirer des droits payés. Une note ou un motif porteur d'une consigne n'entraîne rien (essai d'injection).
+- Essais : `tests/Functional/Abo/AboRightsTest.php`.
 
 ### Codes des refus des abonnements (04/11/2026, application e-commerce mobile)
 

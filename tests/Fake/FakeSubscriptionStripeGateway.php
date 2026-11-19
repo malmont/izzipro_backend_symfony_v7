@@ -66,12 +66,12 @@ final class FakeSubscriptionStripeGateway implements SubscriptionStripeGatewayIn
         return sprintf('price_test_shipping_%d_%d', $carrier->getId(), $amount);
     }
 
-    public function create(string $customerId, string $priceId, int $quantity, int $trialDays, array $metadata, array $taxRateIds, bool $automaticTax, ?string $shippingPriceId = null): array
+    public function create(string $customerId, string $priceId, int $quantity, int $trialDays, array $metadata, array $taxRateIds, bool $automaticTax, ?string $shippingPriceId = null, bool $cancelAtPeriodEnd = false): array
     {
         $id = 'sub_test_' . bin2hex(random_bytes(4)); // unique d'un test à l'autre (la base de test persiste)
         self::$subscriptions[$id] = [
             'id' => $id, 'status' => $trialDays > 0 ? 'trialing' : 'incomplete', 'currentPeriodEnd' => (new \DateTimeImmutable('+1 month'))->getTimestamp(),
-            'cancelAtPeriodEnd' => false, 'paused' => false, 'clientSecret' => ($trialDays > 0 ? 'seti_test_secret_' : 'pi_test_secret_') . $id,
+            'cancelAtPeriodEnd' => $cancelAtPeriodEnd, 'cancelAt' => null, 'paused' => false, 'clientSecret' => ($trialDays > 0 ? 'seti_test_secret_' : 'pi_test_secret_') . $id,
             'intentType' => $trialDays > 0 ? 'setup' : 'payment', 'hasPaymentMethod' => false, 'itemId' => "si_test_{$id}", 'canceledAt' => null,
             'priceId' => $priceId, 'quantity' => $quantity, 'customerId' => $customerId, 'metadata' => $metadata, 'taxRateIds' => $taxRateIds, 'automaticTax' => $automaticTax, 'shippingPriceId' => $shippingPriceId,
         ];
@@ -82,6 +82,14 @@ final class FakeSubscriptionStripeGateway implements SubscriptionStripeGatewayIn
 
     public function retrieve(string $subscriptionId): array
     {
+        return self::$subscriptions[$subscriptionId];
+    }
+
+    public function cancelAt(string $subscriptionId, int $timestamp): array
+    {
+        self::$calls[] = ['cancelAt', $subscriptionId, $timestamp];
+        self::$subscriptions[$subscriptionId]['cancelAt'] = $timestamp;
+
         return self::$subscriptions[$subscriptionId];
     }
 
@@ -98,19 +106,22 @@ final class FakeSubscriptionStripeGateway implements SubscriptionStripeGatewayIn
         return self::$subscriptions[$subscriptionId];
     }
 
-    public function resume(string $subscriptionId): array
+    public function resume(string $subscriptionId, bool $liftCancellation = true, bool $scheduledAt = false): array
     {
-        self::$calls[] = ['resume', $subscriptionId];
-        self::$subscriptions[$subscriptionId]['cancelAtPeriodEnd'] = false;
+        self::$calls[] = ['resume', $subscriptionId] + ($liftCancellation ? [] : [2 => 'keep-cancellation']);
+        if ($liftCancellation) {
+            self::$subscriptions[$subscriptionId]['cancelAtPeriodEnd'] = false;
+            self::$subscriptions[$subscriptionId]['cancelAt'] = null;
+        }
         self::$subscriptions[$subscriptionId]['paused'] = false;
         self::$subscriptions[$subscriptionId]['status'] = 'active';
 
         return self::$subscriptions[$subscriptionId];
     }
 
-    public function pause(string $subscriptionId): array
+    public function pause(string $subscriptionId, ?int $resumesAt = null): array
     {
-        self::$calls[] = ['pause', $subscriptionId];
+        self::$calls[] = ['pause', $subscriptionId, $resumesAt];
         self::$subscriptions[$subscriptionId]['paused'] = true;
 
         return self::$subscriptions[$subscriptionId];

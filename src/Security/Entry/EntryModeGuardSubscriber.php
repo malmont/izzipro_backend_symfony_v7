@@ -82,6 +82,9 @@ class EntryModeGuardSubscriber implements EventSubscriberInterface
         ['#^/api/pos/rentals/deposits/[^/]+/return(/|$)#', [], 'refund'],
         // les cartes-cadeaux : un remboursement en espèces, une annulation ou un ajustement rendent ou changent de l'argent
         ['#^/api/pos/gift-cards/[^/]+/(cash-out|cancel|adjust)(/|$)#', [], 'refund'],
+        // lot ABO-1 : la pause, la reprise et la résiliation d'un abonnement passent par Stripe ; des droits offerts donnent de la valeur
+        // sans paiement. « Utiliser » un droit (et son annulation) reste un geste ordinaire de la boutique.
+        ['#^/api/site/abonnements/[^/]+/(pause|reprise|resiliation|droits)(/|$)#', [], 'payment'],
         ['#^/api/site/features/.+/(request|trial|enable|disable)(/|$)#', [], 'modules'],
         ['#^/api/site/features/?$#', ['PUT', 'PATCH', 'POST'], 'modules'],
         // les mêmes gestes de module dans EasyAdmin (« Mon site »)

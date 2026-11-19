@@ -410,9 +410,15 @@
         "GET /api/commandes/lignes/a-recevoir"
     ],
     "abonnements": [
+        "DELETE /api/site/abonnements/{id}/utilisations/{occurrenceId}",
         "GET /api/site/abonnements/formules",
         "GET /api/site/abonnements/formules/{id}/abonnes",
-        "GET /api/site/abonnements/{id}"
+        "GET /api/site/abonnements/{id}",
+        "POST /api/site/abonnements/{id}/droits",
+        "POST /api/site/abonnements/{id}/pause",
+        "POST /api/site/abonnements/{id}/reprise",
+        "POST /api/site/abonnements/{id}/resiliation",
+        "POST /api/site/abonnements/{id}/utilisations"
     ],
     "admin.accueil": [
         "GET|POST|PUT|PATCH|DELETE /admin"

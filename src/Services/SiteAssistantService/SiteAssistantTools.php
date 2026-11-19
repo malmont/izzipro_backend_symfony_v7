@@ -48,6 +48,9 @@ final class SiteAssistantTools
         // lot ABO-0 (18/11/2026) : abonnements universels, outils donnés seulement avec le module Boutique
         'get_subscription_plans' => ['boutique'], 'get_benefits' => ['boutique'], 'get_plan_subscribers' => ['boutique'], 'get_subscription' => ['boutique'],
         'propose_benefit' => ['boutique'], 'propose_plan' => ['boutique'], 'set_plan_benefits' => ['boutique'],
+        // lot ABO-1 : droits par période
+        'get_expiring_rights' => ['boutique'], 'propose_use' => ['boutique'], 'propose_gift' => ['boutique'], 'propose_pause' => ['boutique'],
+        'propose_resume' => ['boutique'], 'propose_cancel_subscription' => ['boutique'],
     ];
     /** Lot IA-A : nombre d'articles au plus par action (aperçu nommé), et codes-barres au plus par action (décision du chef) */
     public const MAX_VARIANTS = 50;
@@ -61,12 +64,13 @@ final class SiteAssistantTools
         // lot IA-A : lectures
         'get_storefront_checklist', 'get_modules', 'get_missing_barcodes', 'get_loss_health', 'get_loss_finding',
         // lot ABO-0 : lectures des abonnements
-        'get_subscription_plans', 'get_benefits', 'get_plan_subscribers', 'get_subscription',
+        'get_subscription_plans', 'get_benefits', 'get_plan_subscribers', 'get_subscription', 'get_expiring_rights',
         // lot IA-G : lectures du groupe (directeur seulement)
         'get_group', 'get_group_view'];
     /** Lot IA-A : propositions des fonctions ajoutées, appliquées après confirmation (ConfirmSiteAssistantActionUseCase) et tracées « par l'assistant » */
     public const IAA_ACTIONS = ['add_default_variant', 'start_loss_exercise', 'start_loss_count', 'toggle_module', 'start_module_trial', 'generate_missing_barcodes', 'request_agency_assistance',
         'propose_benefit', 'propose_plan', 'set_plan_benefits', // lot ABO-0
+        'propose_use', 'propose_gift', 'propose_pause', 'propose_resume', 'propose_cancel_subscription', // lot ABO-1
         'propose_group_invitation', 'propose_group_copy', 'propose_group_same_company']; // lot IA-G, G-1d
 
     /** Champs de la fiche Entreprise que l'assistant peut proposer de remplir (cheminement complet, 07/11/2026) ; les textes légaux peuvent être rédigés par l'IA */

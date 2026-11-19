@@ -103,6 +103,21 @@ class Subscription
     #[ORM\Column(length: 50, nullable: true)]
     private ?string $fulfillmentTarget = null;
 
+    /** Lot ABO-1 : pauses datées ({from, until, resumedAt?, by}), pour la limite par an glissant */
+    #[ORM\Column(type: Types::JSON, nullable: true)]
+    private ?array $pauses = null;
+
+    /** Lot ABO-1 : résiliation programmée à une date précise (fin d'engagement), en plus de `cancelAtPeriodEnd` */
+    #[ORM\Column(name: 'cancel_at', type: Types::DATETIME_IMMUTABLE, nullable: true)]
+    private ?\DateTimeImmutable $cancelAt = null;
+
+    public function getCancelAt(): ?\DateTimeImmutable { return $this->cancelAt; }
+    public function setCancelAt(?\DateTimeImmutable $cancelAt): static { $this->cancelAt = $cancelAt; return $this; }
+
+    /** @return list<array{from: string, until: string, resumedAt?: ?string, by?: ?string}> */
+    public function getPauses(): array { return $this->pauses ?? []; }
+    public function setPauses(?array $pauses): static { $this->pauses = $pauses !== [] ? $pauses : null; return $this; }
+
     /** Lot PROVISION-3 : date chez Stripe du dernier événement appliqué (ou de la dernière relecture chez Stripe) ; un événement plus ancien est ignoré */
     #[ORM\Column(name: 'stripe_event_at', type: Types::DATETIME_IMMUTABLE, nullable: true)]
     private ?\DateTimeImmutable $stripeEventAt = null;

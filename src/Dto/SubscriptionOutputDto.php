@@ -30,8 +30,30 @@ final class SubscriptionOutputDto
         public readonly array $orders,
         public readonly ?array $latestInvoice = null,
         /** Carte enregistrée chez Stripe pour l'abonnement (25/10/2026) ; null : inconnu, abonnement pas encore relu */
-        public readonly ?bool $hasPaymentMethod = null
+        public readonly ?bool $hasPaymentMethod = null,
+        /** @var list<array<string, mixed>> lot ABO-1 : solde par prestation (nombres et échéances seulement, jamais de motif ni de note de l'équipe) */
+        public readonly array $balance = [],
+        /** @var array{allowed: bool, cancellableFrom: ?string, scheduledAt: ?string}|null lot ABO-1 : résiliation simple (fin d'engagement, date programmée) */
+        public readonly ?array $cancellation = null,
     ) {
+    }
+
+    /** @param array{allowed: bool, cancellableFrom: ?string, scheduledAt: ?string} $cancellation */
+    public function withCancellation(array $cancellation): self
+    {
+        $args = get_object_vars($this);
+        $args['cancellation'] = $cancellation;
+
+        return new self(...$args);
+    }
+
+    /** @param list<array<string, mixed>> $balance */
+    public function withBalance(array $balance): self
+    {
+        $args = get_object_vars($this);
+        $args['balance'] = array_map(fn (array $b) => array_intersect_key($b, array_flip(['benefitId', 'name', 'kind', 'available', 'used', 'carried', 'unlimited', 'nextExpiry'])), $balance);
+
+        return new self(...$args);
     }
 
     /** @param list<Order> $orders */
