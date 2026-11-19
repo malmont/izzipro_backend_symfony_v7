@@ -1,4 +1,4 @@
-# Contrat web : le multi-boutiques (G-1 à G-4, et G-1d à venir)
+# Contrat web : le multi-boutiques (G-1 à G-4, G-1d ; G-5 à venir)
 
 Pour la session « appli de gestion web » (application de gestion web, Next.js), puis le sélecteur de sites du mobile (MAUI). Écrit le
 19/11/2026 par « appli degestion backend », d'après le code en production (étape 114, `ad04df28`) et les essais
@@ -203,10 +203,9 @@ Refus :
 - le bilan PDF du groupe (G-8) ;
 - la création d'une boutique par le groupe (§ 2).
 
-## 9. « Même entreprise » (lot G-1d : contrat VALIDÉ le 19/11/2026, PAS ENCORE EN PRODUCTION)
+## 9. « Même entreprise » (lot G-1d : EN PRODUCTION depuis le 19/11/2026, étape 116)
 
-À coder par le backend avant le transfert (G-5). Les routes ci-dessous n'existent pas encore : l'écran peut se préparer, il ne doit pas
-s'afficher avant l'annonce « LIVRÉ : G-1d ».
+Livré : étape 116 (`84978ede`).
 
 **Le principe.** Une boutique ASSOCIÉE (entreprise invitée) peut être déclarée « de la même entreprise que le siège ». Elle est alors
 traitée comme une boutique créée par le groupe pour deux gestes seulement : le transfert de stock (G-5) et la copie du coût d'achat (§ 7).
@@ -266,3 +265,71 @@ avec le coût est relu à la confirmation : si le lien a disparu entre-temps, la
 
 Toutes les routes du § 9 refusent une entrée dans la boutique : le directeur entré ne peut jamais confirmer à la place de la boutique.
 Chaque pose, confirmation, refus et retrait est tracé au journal des deux sites (« Accès extérieurs ») et à celui du groupe.
+
+## 10. Transferts de stock entre boutiques (lot G-5 : contrat VALIDÉ le 19/11/2026, PAS ENCORE EN PRODUCTION)
+
+L'écran peut se préparer ; il ne s'affiche qu'après l'annonce « LIVRÉ : G-5 ».
+
+**Qui fait quoi.**
+- Le DIRECTEUR, au siège, demande un transfert d'une boutique source vers une boutique destination. Il le lit, et peut l'annuler tant
+  qu'il n'est pas reçu.
+- L'administrateur de la boutique SOURCE l'envoie depuis son site : c'est lui qui voit partir la marchandise. Le stock sort de chez lui à
+  ce moment-là.
+- La DESTINATION reçoit une commande fournisseur « Transfert depuis <source> » et la réceptionne comme d'habitude. Le stock entre chez
+  elle à la réception. Cette commande ne se modifie ni ne se supprime (409 `TRANSFER_ORDER_LOCKED`).
+- Seules les boutiques de la même entreprise que le siège : le siège, les boutiques créées par le groupe, et les associées avec le lien
+  « même entreprise » (§ 9). Sinon 422 `TRANSFER_ASSOCIATED_SHOP`.
+- Chaque article doit avoir été copié dans la destination (§ 7), sinon 422 `TRANSFER_ITEM_NOT_IN_TARGET` (liste des lignes en cause).
+
+### 10.1 Directeur, au siège (sans l'en-tête X-Group-Scope)
+
+| Route | Effet |
+|---|---|
+| `POST /api/gestion/groupe/transferts { source, target, lines: [{ variantId, quantity }] }` → 201 | demande, état `requested` (1 à 200 lignes, `variantId` = la variante de la SOURCE) |
+| `GET /api/gestion/groupe/transferts` → `{ transfers: [...] }` | la liste, du plus récent au plus ancien (sans les lignes) |
+| `GET /api/gestion/groupe/transferts/{id}` | la fiche, avec ses lignes et le coût unitaire figé à l'envoi |
+| `POST /api/gestion/groupe/transferts/{id}/cancel` | annulation (voir 10.3) |
+
+Un transfert : `{ id, source, target, state, currency, requestedAt, sentAt, receivedAt, cancelledAt, partlyReceived, targetOrderId,
+lines: [{ line, sourceVariantId, targetVariantId, quantity, unitCostCents }] }`.
+États : `requested`, `sending` (envoi en cours), `sent`, `send_failed`, `received`, `cancelled`. L'état `received` se lit : il apparaît
+quand la commande de destination est toute reçue.
+
+### 10.2 Administrateur de la boutique SOURCE
+
+| Route | Effet |
+|---|---|
+| `GET /api/site/group-transfers` → `{ transfers: [...] }` | ce que la boutique doit envoyer (`requested`, `send_failed`, `sending`), lignes SANS coût |
+| `POST /api/site/group-transfers/{id}/send` → 200 | l'envoi : le stock sort, la commande de la destination est créée, état `sent` |
+
+Refus de l'envoi :
+- 409 `TRANSFER_STOCK_SHORT` (`lines: [{ variantId, requested, available }]`, rien n'est sorti), `TRANSFER_STOCK_BUSY` (réessayer),
+  `TRANSFER_ALREADY_SENDING`, `TRANSFER_ALREADY_SENT`, `TRANSFER_CANCELLED` ;
+- 422 `TRANSFER_ASSOCIATED_SHOP` ;
+- 404 `TRANSFER_NOT_FOUND`, `GROUP_SHOP_UNKNOWN` ;
+- 503 `TRANSFER_SEND_FAILED` : la destination a refusé ; le stock est revenu, on peut renvoyer ;
+- 503 `TRANSFER_SEND_PENDING` : vérification en cours ; l'envoi sera repris tout seul, ne pas renvoyer, relire plus tard.
+
+### 10.3 Annulation (directeur)
+
+- `requested` : simple fermeture.
+- `sent`, `send_failed`, ou envoi bloqué : la commande de destination est fermée et le stock revient chez la source.
+- Refus :
+  - 409 `TRANSFER_PARTLY_RECEIVED` (une réception a commencé), `TRANSFER_RECEIVED`, `TRANSFER_SENDING` (un envoi est en cours) ;
+  - 409 `TRANSFER_ORDER_CHANGED` (la commande de destination a disparu) ;
+  - 403 `GROUP_TRANSFER_FORBIDDEN` (pas le directeur, ou entré dans une boutique).
+
+### 10.4 Avis (courriels)
+
+- La demande : à la source.
+- L'envoi : à la destination.
+- Un envoi en échec : au siège.
+- Le retrait du lien « même entreprise » annule les transferts seulement demandés avec cette boutique.
+
+### 10.5 Qui peut quoi
+
+| Geste | Directeur | Admin de la source | Admin de la destination | Directeur entré, agence, plateforme, assistant IA |
+|---|---|---|---|---|
+| Demander, annuler | oui | non | non | l'assistant PROPOSE la demande, le directeur confirme |
+| Envoyer | non | oui | non | **non** |
+| Recevoir (réception de la commande) | non | non | oui | **non** |
