@@ -231,7 +231,7 @@ class ConfirmSiteAssistantActionUseCase
                             throw $e;
                         }
                     } catch (\App\Services\Group\GroupException $e) {
-                        throw new \InvalidArgumentException($e->getMessage() . ' (' . $e->errorCode . ')');
+                        throw new \InvalidArgumentException($e->getMessage() . ' (' . $e->errorCode . ')', 0, $e);
                     }
                 case 'request_agency_assistance':
                     // seul un administrateur DU site : ni le compte de la plateforme, ni une entrée par jeton

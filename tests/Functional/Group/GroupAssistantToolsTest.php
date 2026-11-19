@@ -80,7 +80,7 @@ class GroupAssistantToolsTest extends WebTestCase
         $this->assertSame([MV_TEST_TENANT_CODE, MV_TEST_TENANT2_CODE], array_column($state['shops'], 'code'));
         $this->assertContains('quitter ou dissoudre le groupe', $state['refusedToAssistant']);
         $movements = json_decode($results[1]['content'], true);
-        $this->assertSame('ok', array_column($movements['shops'], 'status', 'code')[MV_TEST_TENANT2_CODE] ?? null, 'la boutique au mouvement est bien lue');
+        $this->assertSame('ok', array_column($movements['shops'], 'status', 'site')[MV_TEST_TENANT2_CODE] ?? null, 'la boutique au mouvement est bien lue');
         $this->assertStringNotContainsString('Jeanne', $results[1]['content'], 'le libellé d\'un mouvement (texte libre) n\'atteint jamais le modèle');
         $this->assertStringContainsString('"rent"', $results[1]['content'], 'la catégorie et le montant, oui');
         $this->assertSame('group', json_decode($results[2]['content'], true)['scope']);
