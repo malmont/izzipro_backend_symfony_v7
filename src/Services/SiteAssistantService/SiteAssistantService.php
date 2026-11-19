@@ -231,7 +231,9 @@ class SiteAssistantService
         if (array_key_exists($name, SiteAssistantTools::MODULE_OF) || in_array($name, ['get_storefront_checklist', 'get_modules', ...SiteAssistantTools::IAA_ACTIONS, ...SiteAssistantTools::GROUP_READS], true)) {
             // lot IA-A : un outil dont le module n'est pas actif est refusé, même si le modèle l'invente (il ne lui a pas été donné)
             if (!$this->available($name)) {
-                return [['error' => 'outil indisponible : le module de cette fonction n\'est pas actif sur ce site'], null, null];
+                return [['error' => in_array($name, [...SiteAssistantTools::GROUP_READS, ...SiteAssistantTools::GROUP_ACTIONS], true)
+                    ? 'outil réservé au directeur du groupe, sur le site du siège'
+                    : 'outil indisponible : le module de cette fonction n\'est pas actif sur ce site'], null, null];
             }
 
             return $this->runAddedTool($name, $input, $registry, $tenantCode);

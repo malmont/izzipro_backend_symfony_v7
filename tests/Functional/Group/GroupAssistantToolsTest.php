@@ -56,6 +56,9 @@ class GroupAssistantToolsTest extends WebTestCase
 
         $this->group();
         $shopAdmin = $this->account(MV_TEST_TENANT2_DB, MV_TEST_TENANT2_CODE, 'boutique', ['ROLE_ADMIN']);
+        // l'IA complète sur la boutique, le temps de l'essai (retirée par clean()) : sans elle, l'assistant serait refusé avant les outils
+        $this->master->prepare("INSERT INTO tenant_entitlements (tenant_code, feature_key, source, status, granted_by, note) VALUES (?, 'ai.full', 'manual', 'active', 'iag-test', 'essai IA-G')")->execute([MV_TEST_TENANT2_CODE]);
+        static::getContainer()->get(TenantCacheService::class)->invalidateSite(MV_TEST_TENANT2_CODE, MV_TEST_TENANT2_DB);
         $this->answer([['get_group', []]]);
         $this->chat($shopAdmin, MV_TEST_TENANT2_HOST);
         $this->assertNotContains('get_group', array_column(FakeLandingAiClient::$requests[0]['tools'], 'name'), 'l\'administrateur d\'une boutique n\'est pas le directeur');
@@ -182,6 +185,7 @@ class GroupAssistantToolsTest extends WebTestCase
 
     private function clean(): void
     {
+        $this->master->prepare("DELETE FROM tenant_entitlements WHERE tenant_code = ? AND granted_by = 'iag-test'")->execute([MV_TEST_TENANT2_CODE]);
         foreach ([MV_TEST_TENANT_DB, MV_TEST_TENANT2_DB] as $db) {
             $pdo = $this->pdo($db);
             $ids = array_map('intval', $pdo->query("SELECT id FROM product WHERE name LIKE 'Copie iag %'")->fetchAll(\PDO::FETCH_COLUMN));

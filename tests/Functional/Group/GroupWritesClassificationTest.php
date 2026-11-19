@@ -36,6 +36,8 @@ class GroupWritesClassificationTest extends KernelTestCase
         'get_settings' => 'lecture', 'get_readiness' => 'lecture', 'open_screen' => 'lecture', 'get_domain_status' => 'lecture', 'get_help' => 'lecture',
         'get_configuration_paths' => 'lecture', 'get_controls' => 'lecture', 'get_loss_finding' => 'lecture', 'get_loss_health' => 'lecture',
         'get_missing_barcodes' => 'lecture', 'get_modules' => 'lecture', 'get_order' => 'lecture', 'get_orders_todo' => 'lecture', 'get_storefront_checklist' => 'lecture',
+        // lot IA-G : outils du directeur au SIÈGE, avec son compte (jamais dans une boutique où il est entré : l'assistant y est fermé)
+        'propose_group_invitation' => 'groupe', 'propose_group_copy' => 'catalogue', 'get_group' => 'lecture', 'get_group_view' => 'lecture',
     ];
 
     public function testEveryWriteEveryScreenAndEveryAssistantToolIsClassifiedForTheDirector(): void
