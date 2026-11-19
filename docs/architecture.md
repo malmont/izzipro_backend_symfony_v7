@@ -638,6 +638,13 @@ Dans `.env` (non versionné ; **ne jamais écrire de valeur dans la doc**). Un `
 | Stockage | `STORAGE_PUBLIC_URL`, `STORAGE_ESG_ADAPTER`, `STORAGE_ESG_DIR` |
 | Landing Page (synchronisation) | `FRONTEND_CONFIG_URL`, `DEPLOY_SYNC_TOKEN` |
 
+**Aucun secret dans le dépôt** (balayage du 19/11/2026, arbre et historique) : le commentaire de `config/packages/doctrine.yaml` qui portait
+un mot de passe de base de données est retiré (la valeur reste dans l'historique : son changement revient au propriétaire) ; le client
+HTTP `gemsuite.client` (mTLS vers `localhost:8443`, `config/packages/http_client.yaml`), qui n'était plus appelé nulle part (code,
+workers, minuteurs, journaux des 30 derniers jours), est retiré avec ses clés et certificats versionnés de `config/secrets/test/`
+(`iizipro_client.key`, `ca.key` et leurs `.crt`, `ca.srl`). Reste `config/secrets/test/gemsuite_jwt_public.pem`, une clé publique
+qu'aucun code ne lit.
+
 Une variable **déjà présente** à la création d'un conteneur garde son ancienne valeur tant que le conteneur n'est pas
 recréé (`docker compose up -d --no-deps --force-recreate <service>`) ; une variable **nouvelle** est lue dans `.env` à
 chaque requête.
