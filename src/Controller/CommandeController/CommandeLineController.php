@@ -16,7 +16,7 @@ use Symfony\Component\Routing\Attribute\Route;
  */
 class CommandeLineController extends AbstractController
 {
-    public function __construct(private readonly CommandeLineUseCase $useCase, private readonly ?\App\Services\Group\AllShops\AllShopsReader $allShops = null)
+    public function __construct(private readonly CommandeLineUseCase $useCase, private readonly ?\App\Services\Group\AllShops\GroupViews $groupViews = null)
     {
     }
 
@@ -27,16 +27,11 @@ class CommandeLineController extends AbstractController
         $page = max(1, (int) $request->query->get('page', 1));
         $limit = max(1, min(200, (int) $request->query->get('limit', 50)));
         // lot G-3 : « Toutes les boutiques » : les page × limite premières lignes de chaque boutique (500 au plus, garde), réunies et retriées
-        $group = $this->allShops?->forRequest($request, 'commande_lines_to_receive', ['page' => $page, 'limit' => $limit], function () use ($page, $limit): array {
-            [$rows, $total] = $this->useCase->toReceive(1, $page * $limit);
-
-            return ['data' => ['rows' => $rows, 'total' => $total]];
-        }, static fn (array $shops): array => []);
-        if ($group !== null) {
-            $merged = \App\Services\Group\AllShops\AllShopsListMerger::toReceive($group['shops'], $page, $limit);
-            $group['shops'] = array_map(static fn (array $s): array => isset($s['data']) ? array_diff_key($s, ['data' => 1]) + ['total' => $s['data']['total']] : $s, $group['shops']);
-            $response = $this->json($group + ['page' => $page, 'limit' => $limit] + $merged);
-            $response->headers->set('X-Total-Count', (string) $merged['total']);
+        $group = $request->attributes->get(\App\Services\Group\AllShops\GroupScope::ATTRIBUTE);
+        if (is_array($group) && $this->groupViews !== null) {
+            $all = $this->groupViews->toReceive($group, $page, $limit);
+            $response = $this->json($all);
+            $response->headers->set('X-Total-Count', (string) $all['total']);
             $response->headers->set('X-Page', (string) $page);
             $response->headers->set('X-Limit', (string) $limit);
 

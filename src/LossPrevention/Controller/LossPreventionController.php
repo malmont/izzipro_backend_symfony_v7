@@ -22,7 +22,7 @@ use Symfony\Component\Routing\Attribute\Route;
 class LossPreventionController extends AbstractController
 {
     public function __construct(private readonly LossPreventionUseCase $useCase, private readonly ?EmailLocale $siteLocale = null,
-        private readonly ?\App\Services\Group\AllShops\AllShopsReader $allShops = null)
+        private readonly ?\App\Services\Group\AllShops\GroupViews $groupViews = null)
     {
     }
 
@@ -31,12 +31,9 @@ class LossPreventionController extends AbstractController
     {
         // lot G-2 : « Toutes les boutiques » (en-tête X-Group-Scope) : jamais d'analyse lancée ; par poste et par jour, jamais par personne
         $locale = $this->locale($request);
-        $query = ['analyse' => '0'] + $request->query->all();
-        $query['analyse'] = '0';
-        $group = $this->allShops?->forRequest($request, 'gestion_pertes', [], fn (): array => ['data' => \App\Services\Group\AllShops\AllShopsMerger::lossPart($this->useCase->summary($query, $locale))],
-            \App\Services\Group\AllShops\AllShopsMerger::losses(...));
-        if ($group !== null) {
-            return $this->json($group);
+        $group = $request->attributes->get(\App\Services\Group\AllShops\GroupScope::ATTRIBUTE);
+        if (is_array($group) && $this->groupViews !== null) {
+            return $this->json($this->groupViews->losses($group, $request->query->all(), $locale));
         }
 
         return $this->json($this->useCase->summary($request->query->all(), $locale));

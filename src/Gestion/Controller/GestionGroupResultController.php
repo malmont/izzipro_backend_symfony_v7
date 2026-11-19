@@ -2,11 +2,7 @@
 
 namespace App\Gestion\Controller;
 
-use App\Entity\Collections;
 use App\Gestion\Services\GestionValidationException;
-use App\Gestion\Services\PeriodResultCalculator;
-use App\Services\Group\AllShops\AllShopsListMerger;
-use App\Services\Group\AllShops\AllShopsReader;
 use App\Services\Group\AllShops\GroupScope;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -25,7 +21,7 @@ class GestionGroupResultController extends AbstractController
     /** Plus longue plage (jours), comme les statistiques */
     public const MAX_DAYS = 366;
 
-    public function __construct(private readonly PeriodResultCalculator $calculator, private readonly AllShopsReader $allShops)
+    public function __construct(private readonly \App\Services\Group\AllShops\GroupViews $views)
     {
     }
 
@@ -36,23 +32,9 @@ class GestionGroupResultController extends AbstractController
             return $this->json(['error' => GroupScope::REQUIRED, 'code' => GroupScope::REQUIRED, 'message' => 'Route du groupe : envoyez l\'en-tête X-Group-Scope: all depuis le siège.'], 400);
         }
         [$from, $to] = self::range($request->query->get('from'), $request->query->get('to'));
-        $group = $this->allShops->forRequest($request, 'gestion_groupe_resultat', ['from' => $from, 'to' => $to], function () use ($from, $to): array {
-            $period = (new Collections())->setNomCollection($from . ' – ' . $to)
-                ->setStartDateCollection(new \DateTime($from))->setEndDateCollection(new \DateTime($to));
+        $group = $request->attributes->get(GroupScope::ATTRIBUTE);
 
-            $data = $this->calculator->compute($period, null);
-            // les remarques des frais fixes citent des notes de frais par leur nom (« Salaire … »), dans `notes` ET dans le texte : jamais au
-            // directeur ; il reçoit le code et le nombre de notes, sans texte
-            foreach ($data['fixedCosts']['caveats'] ?? [] as $i => $caveat) {
-                if (array_key_exists('notes', $caveat)) {
-                    $data['fixedCosts']['caveats'][$i] = ['code' => $caveat['code'] ?? null, 'text' => null, 'count' => count((array) $caveat['notes'])];
-                }
-            }
-
-            return ['data' => $data];
-        }, AllShopsListMerger::result(...));
-
-        return $this->json($group);
+        return $this->json($this->views->result($group, $from, $to));
     }
 
     /** @return array{0: string, 1: string} jours du magasin Y-m-d ; 422 sinon */

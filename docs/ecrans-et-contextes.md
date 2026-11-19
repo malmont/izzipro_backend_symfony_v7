@@ -704,6 +704,27 @@ du groupe vers une autre. Code : `src/Services/Group/Copy/` (`GroupCatalogCopySe
   donc aussi `GET /api/gestion/groupe/resultat` pour le directeur entré : 403 `MODE_FORBIDDEN` au lieu de 400),
   404 `GROUP_SHOP_UNKNOWN`, `COPY_NOT_FOUND`, 409 `COPY_NOT_READY`, 422 `VALIDATION_FAILED`, `COPY_TOO_MANY`.
 
+## 16. Lot IA-G : les outils du groupe dans l'assistant du site (19/11/2026, contrat validé par le chef)
+
+Règle permanente du propriétaire : chaque lot a son volet IA. Pour G-1 à G-4, l'assistant du site (IA-A) reçoit les outils du groupe,
+donnés au seul DIRECTEUR (`GroupDirector` : administrateur du siège, son compte, jamais entré dans une boutique, module Multi-boutiques ;
+relu à chaque appel et à la confirmation). Code : `SiteAssistantTools::GROUP_READS` / `GROUP_ACTIONS`, `SiteAssistantService::runGroupTool`,
+`ConfirmSiteAssistantActionUseCase` ; les lectures passent par `GroupViews`, que partagent les écrans (aucune lecture en double).
+
+- **Lectures** (palier « Aide IA » compris) : `get_group` (le groupe, ses boutiques, ce que l'assistant ne fait pas) ; `get_group_view`
+  (`statistics`, `day`, `losses`, `to_receive` première page, `cash_balances`, `cash_movements`, `year`, `result` sur from/to) : les mêmes
+  réponses que « Toutes les boutiques ». Le modèle ne reçoit que des nombres, des codes de boutique et des noms de catalogue : le libellé
+  d'un mouvement prévu (texte libre) et les notes sont retirés ; les salaires sont regroupés ; les noms de notes de frais sont retirés.
+- **Actions**, proposées puis confirmées par le directeur (« IA complète ») : `propose_group_invitation` (une boutique existante ; elle
+  accepte ou refuse elle-même) ; `propose_group_copy` (G-4 : aperçu puis copie à la confirmation, masquée par défaut, stock jamais copié,
+  coût seulement depuis le siège sauf `withCost`, boutique cible prévenue).
+- **Refusés au modèle, et dits** (`get_group.refusedToAssistant`) : quitter ou dissoudre le groupe (geste destructif qui coupe aussitôt les
+  entrées du directeur) ; entrer dans une boutique (geste de sécurité : jeton, session) ; créer une boutique (aucune route de création au
+  groupe à ce jour).
+- **Données des commerçants** : noms de boutiques, de catégories et d'articles sont envoyés au modèle comme DONNÉES (consigne du prompt) ;
+  essai d'injection (`GroupAssistantToolsTest` : un nom de boutique qui porte une consigne reste une donnée de l'aperçu, rien n'est écrit
+  avant la confirmation).
+
 ## Tenir cette fiche à jour
 
 À chaque écran, famille ou liste hors écran ajoutés ; à chaque champ sensible trouvé ; à chaque mode nouveau.

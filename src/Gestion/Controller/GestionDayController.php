@@ -14,7 +14,7 @@ use Symfony\Component\Routing\Attribute\Route;
  */
 class GestionDayController extends AbstractController
 {
-    public function __construct(private readonly GestionDayUseCase $useCase, private readonly ?\App\Services\Group\AllShops\AllShopsReader $allShops = null)
+    public function __construct(private readonly GestionDayUseCase $useCase, private readonly ?\App\Services\Group\AllShops\GroupViews $groupViews = null)
     {
     }
 
@@ -22,10 +22,9 @@ class GestionDayController extends AbstractController
     public function overview(\Symfony\Component\HttpFoundation\Request $request): JsonResponse
     {
         // lot G-2 : « Toutes les boutiques » (en-tête X-Group-Scope) : chaque boutique à son jour, puis les totaux par devise
-        $group = $this->allShops?->forRequest($request, 'gestion_journee', [], fn (): array => ['data' => $this->useCase->overview()],
-            \App\Services\Group\AllShops\AllShopsMerger::day(...));
-        if ($group !== null) {
-            return $this->json($group);
+        $group = $request->attributes->get(\App\Services\Group\AllShops\GroupScope::ATTRIBUTE);
+        if (is_array($group) && $this->groupViews !== null) {
+            return $this->json($this->groupViews->day($group));
         }
 
         return $this->json($this->useCase->overview());
