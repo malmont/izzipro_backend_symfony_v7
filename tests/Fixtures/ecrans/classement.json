@@ -409,6 +409,11 @@
     "a-recevoir": [
         "GET /api/commandes/lignes/a-recevoir"
     ],
+    "abonnements": [
+        "GET /api/site/abonnements/formules",
+        "GET /api/site/abonnements/formules/{id}/abonnes",
+        "GET /api/site/abonnements/{id}"
+    ],
     "admin.accueil": [
         "GET|POST|PUT|PATCH|DELETE /admin"
     ],

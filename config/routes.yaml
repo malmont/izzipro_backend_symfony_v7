@@ -34,3 +34,8 @@ import_controllers:
 incident_controllers:
     resource: ../src/Incident/Controller/
     type: attribute
+
+# Abonnement universel (lot ABO-0, 18/11/2026) : suivi des abonnements, contrôleurs regroupés dans src/Abo
+abo_controllers:
+    resource: ../src/Abo/Controller/
+    type: attribute

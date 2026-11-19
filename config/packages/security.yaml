@@ -139,6 +139,8 @@ security:
         - { path: ^/api/site/storefront/preview$, methods: [POST], roles: PUBLIC_ACCESS }
         - { path: ^/api/site/storefront(/|$), roles: ROLE_ADMIN }
         - { path: ^/api/site/(features|readiness|assistant|domain|shipping|imports)(/|$), roles: ROLE_ADMIN }
+        # lot ABO-0 (18/11/2026) : suivi des abonnements, gestion web et application de gestion mobile
+        - { path: ^/api/site/abonnements(/|$), roles: ROLE_ADMIN }
         # 🔹 Plateforme (console de pilotage, 04/11/2026) : mode demo | live, droits d'usage, offres : super administrateur seulement
         - { path: ^/api/platform(/|$), roles: ROLE_SUPER_ADMIN }
         # 🔹 Catalogue public des offres de la plateforme (console de pilotage, lot 3 bis, 04/11/2026)

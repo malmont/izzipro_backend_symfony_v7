@@ -24,8 +24,19 @@ final class SubscriptionPlanOutputDto
         public readonly bool $highlighted = false,
         public readonly ?string $badge = null,
         public readonly ?string $productName = null,
-        public readonly string $fulfillmentType = 'none'
+        public readonly string $fulfillmentType = 'none',
+        /** @var list<array<string, mixed>> lot ABO-0 : prestations livrées (BenefitService::view), [] pour une formule sans prestation */
+        public readonly array $benefits = [],
     ) {
+    }
+
+    /** @param list<array<string, mixed>> $benefits */
+    public function withBenefits(array $benefits): self
+    {
+        $args = get_object_vars($this);
+        $args['benefits'] = $benefits;
+
+        return new self(...$args);
     }
 
     public static function fromEntity(SubscriptionPlan $plan, string $locale): self

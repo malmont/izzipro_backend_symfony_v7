@@ -19,7 +19,7 @@ use Doctrine\ORM\EntityManagerInterface;
 /** Formules d'abonnement de la boutique réglable : le prix Stripe est créé à la première souscription */
 class SubscriptionPlanCrudController extends BaseTenantCrudController
 {
-    public function __construct(TenantEntityManagerProvider $emProvider)
+    public function __construct(TenantEntityManagerProvider $emProvider, private readonly ?\App\Abo\Services\BenefitService $benefits = null)
     {
         parent::__construct($emProvider);
     }
@@ -64,6 +64,9 @@ class SubscriptionPlanCrudController extends BaseTenantCrudController
         yield JsonTextField::new('badges', 'Texte du badge par langue (JSON)')->hideOnIndex()
             ->setHelp('Facultatif, pour la formule recommandée : {"fr": "Le plus choisi", "en": "Most popular"}. Sans texte, le site affiche « Recommandé ».');
         yield TextField::new('stripePriceId', 'Prix Stripe')->onlyOnDetail();
+        // lot ABO-0 : ce que la formule livre, avec la phrase « ce que verra l'abonné » (réglage dans « Prestations des formules »)
+        yield TextField::new('id', 'Prestations livrées')->onlyOnDetail()->formatValue(fn ($value, ?SubscriptionPlan $plan) => $plan !== null && $this->benefits !== null
+            ? (implode(' ', array_map(fn (array $b) => '• ' . $b['summary'], $this->benefits->viewsFor($plan, 'fr'))) ?: 'Aucune prestation : la formule livre son produit.') : '');
     }
 
     public function persistEntity(EntityManagerInterface $entityManager, $entityInstance): void

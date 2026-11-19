@@ -66,6 +66,7 @@ class SiteAssistantService
         private readonly ?\App\LossPrevention\Services\LossOpinionService $lossOpinion = null,
         private readonly ?\App\LossPrevention\Services\LossExerciseService $lossExercise = null,
         private readonly ?\App\Services\Agency\AgencyRepository $agencies = null,
+        private readonly ?\App\Abo\Services\AboAssistantTools $abo = null, // lot ABO-0 (18/11/2026) : abonnements, formules et prestations
     ) {
     }
 
@@ -579,6 +580,11 @@ TXT;
         if ($this->available('get_missing_barcodes')) {
             $lines[] = '- compter les codes-barres manquants (get_missing_barcodes) ;';
         }
+        if ($this->available('get_subscription_plans')) {
+            // lot ABO-0 : abonnements universels
+            $lines[] = '- abonnements : lire les formules, leurs prestations et leurs abonnés par statut (get_subscription_plans), les prestations (get_benefits), les abonnés d\'une formule (get_plan_subscribers, status past_due pour « qui est en impayé ? ») et la fiche d\'un abonnement (get_subscription). Un abonné est désigné par son NUMÉRO d\'abonnement : tu ne connais ni son nom ni son courriel, l\'écran lié (open_screen subscriptions) les montre à l\'administrateur ; ne les demande pas, ne les invente pas.'
+                . ($tier !== 'help' ? ' Proposer, toujours confirmé : une prestation (propose_benefit), une formule sur un produit porteur existant avec ses prestations (propose_plan : prix en centimes, période, quantité par période), ou les prestations d\'une formule (set_plan_benefits). Pour « crée-moi une formule yoga 2 séances par semaine », crée d\'abord la prestation si elle n\'existe pas, puis la formule.' : '') . ' ;';
+        }
         if ($tier !== 'help') {
             $lines[] = '- proposer, toujours confirmé par l\'administrateur : ajouter une variante aux articles en ligne non achetables (add_default_variant), lancer un exercice des pertes (start_loss_exercise)'
                 . ($this->available('start_loss_count') ? ' ou un comptage (start_loss_count)' : '') . ', allumer ou éteindre un module accordé (toggle_module), lancer l\'essai d\'un module (start_module_trial)'
@@ -722,6 +728,30 @@ TXT;
                     sprintf('Générer %d code(s)-barres (sur %d manquants) ; les codes seront définitifs. Premiers : %s', $batch, (int) $count['total'], implode(', ', $first)));
 
                 return [$proposed($action, ['missing' => $count, 'first' => $first, 'definitive' => true]), $action, $linkTo('codes_barres')];
+            // lot ABO-0 : lectures sans identité, propositions vérifiées sans écrire (AboAssistantTools)
+            case 'get_subscription_plans':
+            case 'get_benefits':
+            case 'get_plan_subscribers':
+            case 'get_subscription':
+                if ($this->abo === null) {
+                    return [['error' => 'abonnements indisponibles'], null, null];
+                }
+                [$result, $screen] = $this->abo->read($name, $input);
+
+                return [$result, null, $screen !== null ? $linkTo($screen) : null];
+            case 'propose_benefit':
+            case 'propose_plan':
+            case 'set_plan_benefits':
+                if ($this->abo === null) {
+                    return [['error' => 'abonnements indisponibles'], null, null];
+                }
+                [$aboInput, $summary, $error, $screen] = $this->abo->propose($name, $input);
+                if ($error !== null) {
+                    return [$error, null, null];
+                }
+                $action = $this->remember($tenantCode, $name, $aboInput, $summary);
+
+                return [$proposed($action), $action, $linkTo($screen)];
             case 'request_agency_assistance':
                 $section = (string) ($input['section'] ?? '');
                 $mode = (string) ($input['mode'] ?? 'read');

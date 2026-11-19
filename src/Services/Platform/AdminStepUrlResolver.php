@@ -29,7 +29,9 @@ class AdminStepUrlResolver
         'short_code' => ['route' => 'admin_short_code'],
         // lot IA-A (17/11/2026) : écrans des fonctions ajoutées que l'assistant du site cite (les pages des pertes sont dans la gestion web)
         'ouverture' => ['route' => 'admin_ouverture_site'], 'codes_barres' => ['route' => 'admin_barcode_management'],
-        'product_photo' => ['route' => 'admin_product_photo'], 'product_ai_bulk' => ['route' => 'admin_product_ai_bulk'], 'rental' => ['route' => 'admin_location'], 'rental_configurator' => ['route' => 'admin_location_configurer'], 'site_setup' => ['route' => 'admin_site_configurer'], 'bookings' => ['crud' => \App\Controller\Admin\BookingCrudController::class], 'controles' => ['route' => 'admin_controles'], 'aide' => ['route' => 'admin_aide'], 'pos' => ['route' => 'admin_caisse'], 'denominations' => ['crud' => \App\Controller\Admin\TypeCashCrudController::class], // cheminement Caisse (07/11/2026)
+        'product_photo' => ['route' => 'admin_product_photo'], 'product_ai_bulk' => ['route' => 'admin_product_ai_bulk'], 'rental' => ['route' => 'admin_location'], 'rental_configurator' => ['route' => 'admin_location_configurer'],
+        // lot ABO-0 (18/11/2026) : abonnements universels
+        'abo_benefits' => ['crud' => \App\Controller\Admin\BenefitCrudController::class], 'abo_plan_benefits' => ['crud' => \App\Controller\Admin\PlanBenefitCrudController::class], 'subscriptions' => ['crud' => \App\Controller\Admin\SubscriptionCrudController::class], 'site_setup' => ['route' => 'admin_site_configurer'], 'bookings' => ['crud' => \App\Controller\Admin\BookingCrudController::class], 'controles' => ['route' => 'admin_controles'], 'aide' => ['route' => 'admin_aide'], 'pos' => ['route' => 'admin_caisse'], 'denominations' => ['crud' => \App\Controller\Admin\TypeCashCrudController::class], // cheminement Caisse (07/11/2026)
     ];
 
     public function __construct(private readonly AdminUrlGenerator $urls, private readonly UrlGeneratorInterface $router)
