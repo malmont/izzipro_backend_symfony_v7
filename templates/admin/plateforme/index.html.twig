@@ -230,6 +230,35 @@
         </tbody>
     </table>
 
+    {# Lot PROVISION-3 (18/11/2026) : journal des événements Stripe des abonnements et file de reprise des droits vendus (docs/console-pilotage.md) #}
+    <h2 class="h5 mt-4" id="paiements-offres">Paiements des offres{% if offerRetries is not empty %} <span class="badge bg-danger">{{ offerRetries|length }}</span>{% endif %}</h2>
+    <p class="text-muted small">File de reprise : abonnements dont les droits n'ont pas pu être posés ; ils sont rejoués toutes les 15 minutes (5 min, 15 min, 1 h, 3 h, puis 6 h), avec un incident de la plateforme au 5e échec. Chaque nuit, la réconciliation compare tous les abonnements branchés à Stripe et à leurs droits. Heures en UTC.</p>
+    <table class="table table-sm datagrid">
+        <thead><tr><th>Site</th><th>Abonnement</th><th>Échecs</th><th>Prochaine reprise</th><th>Dernière erreur</th><th></th></tr></thead>
+        <tbody>
+        {% for r in offerRetries %}
+            <tr>
+                <td><code>{{ r.tenant_code }}</code></td><td>n° {{ r.subscription_id }}</td>
+                <td>{{ r.attempts }}{% if r.alerted %} <span class="badge bg-danger">incident</span>{% endif %}</td>
+                <td>{{ r.next_retry_at }}</td><td class="small"><code>{{ r.last_error_class ?? '—' }}</code></td>
+                <td><form method="post" action="{{ path('admin_plateforme_offer_retry', {id: r.id}) }}" class="d-inline"><input type="hidden" name="_token" value="{{ csrf_token(csrf_id) }}"><button class="btn btn-sm" style="background:#1e3a8a;color:#ffffff;border:1px solid #1e3a8a;font-weight:600">Rejouer</button></form></td>
+            </tr>
+        {% else %}<tr><td colspan="6" class="text-muted">File vide : tous les droits vendus sont posés.</td></tr>{% endfor %}
+        </tbody>
+    </table>
+    <details class="mb-3"><summary class="small">Derniers événements Stripe des abonnements ({{ offerEvents|length }})</summary>
+        <table class="table table-sm datagrid small">
+            <thead><tr><th>Reçu</th><th>Type</th><th>Site</th><th>Abonnement Stripe</th><th>État</th><th>Détail</th><th>Essais</th></tr></thead>
+            <tbody>
+            {% for e in offerEvents %}
+                <tr><td>{{ e.received_at }}</td><td><code>{{ e.type }}</code></td><td>{{ e.tenant_code ?? '—' }}</td><td><code>{{ e.object_id ?? '—' }}</code></td>
+                    <td><span class="badge {{ e.status == 'failed' ? 'bg-danger' : (e.status == 'processed' ? 'bg-success' : 'bg-secondary') }}">{{ e.status }}</span></td>
+                    <td>{{ e.detail ?? (e.last_error_class ?? '') }}</td><td>{{ e.attempts }}</td></tr>
+            {% else %}<tr><td colspan="7" class="text-muted">Aucun événement.</td></tr>{% endfor %}
+            </tbody>
+        </table>
+    </details>
+
     {# Lot L6-a (17/11/2026) : le matériel de la prévention des pertes, vendu dans la boutique de forfaits (docs/prevention-pertes.md § 19.4) #}
     <h2 class="h5 mt-4" id="materiel-pertes">Matériel de la prévention des pertes</h2>
     <p class="text-muted small">Prix et lien de la fiche dans la boutique de forfaits. Un article n'est montré aux sites (gamme de matériel, bouton « Acheter » du web) que mis en vente, avec un prix. Rien n'est en vente au départ. Le mobile ne montre ni prix ni lien d'achat.</p>

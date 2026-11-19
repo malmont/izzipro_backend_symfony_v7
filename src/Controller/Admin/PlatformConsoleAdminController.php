@@ -41,6 +41,8 @@ class PlatformConsoleAdminController extends AbstractController
         private readonly ?\Symfony\Component\Messenger\MessageBusInterface $bus = null, // lot MOD-1 : « Retirer et résilier »
         private readonly ?\App\LossPrevention\Master\LossHardwareProductRepository $hardware = null, // lot L6-a : matériel de la prévention des pertes
         private readonly ?\App\LossPrevention\UseCase\LossShipmentUseCase $lossShipments = null, // lot L6-b : boîtiers à expédier
+        private readonly ?\App\Services\Platform\OfferPayments\OfferPaymentsRepository $offerPayments = null, // lot PROVISION-3 : paiements des offres
+        private readonly ?\App\Services\Platform\OfferPayments\OfferReconciler $offerReconciler = null,
     ) {
     }
 
@@ -97,6 +99,16 @@ class PlatformConsoleAdminController extends AbstractController
         });
     }
 
+    /** Lot PROVISION-3 : « Rejouer » une ligne de la file de reprise des droits vendus, tout de suite */
+    #[Route('/admin/plateforme/offres/reprise/{id}', name: 'admin_plateforme_offer_retry', requirements: ['id' => '\d+'], methods: ['POST'])]
+    public function offerRetry(Request $request, int $id): Response
+    {
+        return $this->action($request, function () use ($id) {
+            $ok = $this->offerReconciler?->retryOne($id) ?? false;
+            $this->addFlash($ok ? 'success' : 'danger', $ok ? 'Droits posés : l\'abonnement a quitté la file de reprise.' : 'La reprise a échoué de nouveau (ou la ligne n\'existe plus) : voir la dernière erreur.');
+        });
+    }
+
     #[Route('/admin/plateforme', name: 'admin_plateforme', methods: ['GET'])]
     public function index(Request $request): Response
     {
@@ -122,6 +134,8 @@ class PlatformConsoleAdminController extends AbstractController
             // lot L6-b : l'aperçu d'une expédition, montré une fois après « Aperçu », avec le formulaire de confirmation
             'lossShipmentPreview' => $request->getSession()->getFlashBag()->get('loss_shipment_preview')[0] ?? null,
             'requests' => $this->requests->listPending(),
+            'offerRetries' => $this->offerPayments?->allRetries() ?? [],
+            'offerEvents' => $this->offerPayments?->recentEvents(50) ?? [],
             'events' => $this->repository->events($tenant !== '' ? $tenant : null, 50),
             'selected' => $tenant,
             'csrf_id' => self::CSRF_ID,

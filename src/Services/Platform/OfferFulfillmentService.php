@@ -30,7 +30,7 @@ class OfferFulfillmentService
      * @return array{event: string, features: list<string>, actions: list<string>} ce qui a été fait
      * @throws \InvalidArgumentException événement ou offre inconnus
      */
-    public function apply(string $event, string $tenantCode, string $offerCode, string $reference, ?\DateTimeImmutable $periodEnd, ?string $by): array
+    public function apply(string $event, string $tenantCode, string $offerCode, string $reference, ?\DateTimeImmutable $periodEnd, ?string $by, array $skipFeatures = []): array
     {
         if (!in_array($event, self::EVENTS, true)) {
             throw new \InvalidArgumentException('event : ' . implode(', ', self::EVENTS) . ' attendu');
@@ -48,6 +48,10 @@ class OfferFulfillmentService
             }
         }
         foreach ($offer['features'] as $feature) {
+            if (in_array($feature, $skipFeatures, true)) {
+                $actions[] = "$feature: covered"; // lot PROVISION-3 : un droit d'une autre origine couvre déjà la fonctionnalité
+                continue;
+            }
             $endsAt = $this->endsAt($feature, $periodEnd);
             $current = $byFeature[$feature] ?? null;
             switch ($event) {
@@ -137,6 +141,118 @@ class OfferFulfillmentService
             Subscription::STATUS_PAUSED => $e->statusChanged() ? 'paused' : null,
             Subscription::STATUS_CANCELED => $e->statusChanged() ? 'cancelled' : null,
             default => null,
+        };
+    }
+
+    /**
+     * Lot PROVISION-3 : les droits VOULUS d'un abonnement branché, recalculés depuis son état (file de reprise, réconciliation), sans
+     * rejouer d'événement ; sans danger à répéter. Ne touche que les droits de CET abonnement (référence `subscription:<site>:<id>`), jamais
+     * un droit d'une autre origine. Rend les actions faites (vide : abonnement non branché, ou rien à poser).
+     *
+     * @return list<string>
+     */
+    public function resync(Subscription $subscription, string $shopTenant): array
+    {
+        $plan = $subscription->getPlan();
+        if ($plan === null || $plan->getFulfillmentType() !== \App\Entity\SubscriptionPlan::FULFILLMENT_PLATFORM_OFFER || $plan->getFulfillmentRef() === null
+            || $subscription->getFulfillmentTarget() === null || $this->platform->shopTenant() !== $shopTenant) {
+            return [];
+        }
+        $reference = sprintf('subscription:%s:%d', $shopTenant, (int) $subscription->getId());
+        // accorder une fonctionnalité annule tout autre droit vivant de la même fonctionnalité (EntitlementService::grant) : une
+        // fonctionnalité déjà couverte par un droit d'une autre origine (manuel, essai, gratuit, agence, autre abonnement) n'est pas touchée
+        $offer = $this->offers->find($plan->getFulfillmentRef());
+        $covered = $offer !== null ? $this->coveredElsewhere($subscription->getFulfillmentTarget(), $offer['features'], $reference, $subscription->getCurrentPeriodEnd()) : [];
+        $actions = [];
+        foreach (self::wantedEvents($subscription->getStatus()) as $event) {
+            // la couverture ne vaut que pour ACCORDER : retirer, suspendre ou mettre en grâce ne touche que les droits de cet abonnement
+            $actions = [...$actions, ...$this->apply($event, $subscription->getFulfillmentTarget(), $plan->getFulfillmentRef(), $reference, $subscription->getCurrentPeriodEnd(), 'reprise de l\'abonnement n° ' . $subscription->getId(), $event === 'activated' ? $covered : [])['actions']];
+        }
+
+        return $actions;
+    }
+
+    /**
+     * Lot PROVISION-3 : les fonctionnalités dont le droit ne suit pas l'état de l'abonnement (réconciliation). Actif ou essai : un droit
+     * actif jusqu'à la fin de période au moins ; impayé : pas de droit encore « actif » (la grâce, ou expiré après elle) ; pause : pas de droit
+     * effectif ; résilié ou incomplet : aucun droit vivant.
+     *
+     * @return list<string>
+     */
+    public function drift(Subscription $subscription, string $shopTenant): array
+    {
+        $plan = $subscription->getPlan();
+        if ($plan === null || $plan->getFulfillmentType() !== \App\Entity\SubscriptionPlan::FULFILLMENT_PLATFORM_OFFER || $plan->getFulfillmentRef() === null
+            || $subscription->getFulfillmentTarget() === null || $this->platform->shopTenant() !== $shopTenant) {
+            return [];
+        }
+        $offer = $this->offers->find($plan->getFulfillmentRef());
+        if ($offer === null) {
+            return [];
+        }
+        $byFeature = [];
+        foreach ($this->repository->byReference(sprintf('subscription:%s:%d', $shopTenant, (int) $subscription->getId()), []) as $row) {
+            if (!in_array($row['status'], ['expired', 'cancelled'], true)) {
+                $byFeature[$row['feature_key']] = $row;
+            }
+        }
+        $periodEnd = $subscription->getCurrentPeriodEnd();
+        $live = in_array($subscription->getStatus(), [Subscription::STATUS_ACTIVE, Subscription::STATUS_TRIALING], true);
+        $covered = $live ? $this->coveredElsewhere($subscription->getFulfillmentTarget(), $offer['features'], sprintf('subscription:%s:%d', $shopTenant, (int) $subscription->getId()), $periodEnd) : [];
+        $off = [];
+        foreach ($offer['features'] as $feature) {
+            if (in_array($feature, $covered, true)) {
+                continue; // couverte par un droit d'une autre origine : rien à corriger, jamais retiré
+            }
+            $status = $byFeature[$feature]['status'] ?? null;
+            $wrong = match ($subscription->getStatus()) {
+                Subscription::STATUS_ACTIVE, Subscription::STATUS_TRIALING => $status !== 'active'
+                    || ($periodEnd !== null && $byFeature[$feature]['ends_at'] !== null && strtotime($byFeature[$feature]['ends_at'] . ' UTC') < $periodEnd->getTimestamp()),
+                Subscription::STATUS_PAST_DUE => $status === 'active',
+                Subscription::STATUS_PAUSED => in_array($status, ['active', 'grace'], true),
+                default => $status !== null,
+            };
+            if ($wrong) {
+                $off[] = $feature;
+            }
+        }
+
+        return $off;
+    }
+
+    /**
+     * Les fonctionnalités dont un droit VIVANT (actif ou en grâce) vient d'une autre référence que `$reference` et dure au moins autant que
+     * le droit voulu (sans fin, ou jusqu'à la fin de période + grâce) : un essai qui finit avant ne couvre pas, le client payant le garde.
+     *
+     * @param list<string> $features
+     * @return list<string>
+     */
+    private function coveredElsewhere(string $tenantCode, array $features, string $reference, ?\DateTimeImmutable $periodEnd): array
+    {
+        $covered = [];
+        foreach ($features as $feature) {
+            $wanted = $this->endsAt($feature, $periodEnd);
+            foreach ($this->repository->liveFor($tenantCode, $feature) as $row) {
+                $lasts = ($row['ends_at'] ?? null) === null || ($wanted !== null && strtotime($row['ends_at'] . ' UTC') >= $wanted->getTimestamp());
+                if (($row['reference'] ?? null) !== $reference && $lasts) {
+                    $covered[] = $feature;
+                    break;
+                }
+            }
+        }
+
+        return $covered;
+    }
+
+    /** @return list<string> les événements qui mènent aux droits voulus pour un statut */
+    public static function wantedEvents(string $status): array
+    {
+        return match ($status) {
+            Subscription::STATUS_ACTIVE, Subscription::STATUS_TRIALING => ['activated'],
+            Subscription::STATUS_PAST_DUE => ['unpaid'],
+            Subscription::STATUS_PAUSED => ['paused'],
+            Subscription::STATUS_CANCELED, Subscription::STATUS_INCOMPLETE, 'incomplete_expired' => ['cancelled'], // jamais payé : aucun droit
+            default => [],
         };
     }
 

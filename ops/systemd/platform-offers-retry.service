@@ -1,0 +1,10 @@
+# Paiements des offres (lot PROVISION-3, 18/11/2026) : file de reprise des droits vendus par la boutique de la plateforme.
+# Installation : sudo cp ops/systemd/platform-offers-retry.{service,timer} /etc/systemd/system/ && sudo systemctl daemon-reload && sudo systemctl enable --now platform-offers-retry.timer
+[Unit]
+Description=Arkanoa : reprise des droits vendus (paiements des offres)
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/docker exec -w /var/www symfony_app_v2 php bin/console app:platform:offers:reconcile --no-interaction

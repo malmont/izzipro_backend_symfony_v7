@@ -327,6 +327,7 @@
     "platform POST /admin/plateforme/materiel/1",
     "platform POST /admin/plateforme/mode",
     "platform POST /admin/plateforme/offre/1",
+    "platform POST /admin/plateforme/offres/reprise/1",
     "platform POST /admin/plateforme/politique/1",
     "platform POST /admin/plateforme/signalements/1",
     "platform POST /admin/plateforme/signalements/conservation",
