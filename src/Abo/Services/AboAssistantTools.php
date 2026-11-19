@@ -95,7 +95,7 @@ class AboAssistantTools
                     if ($product === null || !$product->isSubscriptionEnabled()) {
                         throw new AboException(422, 'PRODUCT_NOT_SUBSCRIBABLE', 'Choisissez un produit porteur dont l\'abonnement est activé (Produits, « Modes de vente »).', 'productId');
                     }
-                    $names = is_array($input['names'] ?? null) ? $input['names'] : [];
+                    $names = is_array($input['names'] ?? null) ? array_map('strval', array_filter($input['names'], 'is_scalar')) : []; // un nom de forme inattendue est écarté, jamais converti de force
                     $price = (int) ($input['price'] ?? -1);
                     $interval = (string) ($input['interval'] ?? '');
                     if (trim((string) ($names['fr'] ?? reset($names) ?: '')) === '' || $price < 0 || !in_array($interval, SubscriptionPlan::INTERVALS, true)) {
@@ -141,7 +141,7 @@ class AboAssistantTools
                     throw new AboException(422, 'PRODUCT_NOT_SUBSCRIBABLE', 'Le produit porteur n\'accepte plus l\'abonnement.', 'productId');
                 }
                 $rows = $this->benefitRows($input['benefits'] ?? []);
-                $plan = (new SubscriptionPlan())->setProduct($product)->setNames(array_map('strval', (array) ($input['names'] ?? [])))->setPrice((int) ($input['price'] ?? 0))
+                $plan = (new SubscriptionPlan())->setProduct($product)->setNames(array_map('strval', array_filter((array) ($input['names'] ?? []), 'is_scalar')))->setPrice((int) ($input['price'] ?? 0))
                     ->setInterval((string) ($input['interval'] ?? 'month'))->setIntervalCount((int) ($input['intervalCount'] ?? 1))->setCurrency($this->currencyFor($product))->setActive(true);
                 $em->wrapInTransaction(function () use ($em, $plan, $rows) {
                     $em->persist($plan);

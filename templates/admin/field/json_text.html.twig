@@ -1,0 +1,11 @@
+{# Champ JsonTextField (colonne json éditée en texte) : le gabarit `crud/field/textarea` d'EasyAdmin écrit `title="{{ field.value }}"`,
+   et la valeur brute est un TABLEAU → « Array to string conversion », liste en 500 dès qu'une ligne existe (19/11/2026, formules
+   d'abonnement). Ici, le titre et le texte viennent de la valeur mise en forme ; une valeur mise en forme restée tableau (un formatValue
+   d'écran qui lit une clé de forme inattendue) est écrite en JSON, jamais convertie de force. #}
+{% set value = field.formattedValue %}
+{% set text = value is iterable ? value|json_encode(constant('JSON_UNESCAPED_UNICODE') b-or constant('JSON_UNESCAPED_SLASHES')) : (value is null ? '' : value) %}
+{% if ea().crud.currentAction == 'detail' %}
+    <span title="{{ text }}">{{ text|nl2br }}</span>
+{% else %}
+    <span title="{{ text|striptags }}">{{ text|striptags }}</span>
+{% endif %}

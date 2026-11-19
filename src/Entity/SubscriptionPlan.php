@@ -96,7 +96,13 @@ class SubscriptionPlan
     public function getNames(): array { return $this->names; }
     /** @param array<string, string> $names */
     public function setNames(array $names): static { $this->names = $names; return $this; }
-    public function getName(string $locale = 'fr'): string { return (string) ($this->names[$locale] ?? $this->names['fr'] ?? reset($this->names) ?: ''); }
+    /** Nom dans la langue demandée ; un nom de forme inattendue (un tableau saisi en JSON dans EasyAdmin) rend '' au lieu d'une erreur */
+    public function getName(string $locale = 'fr'): string
+    {
+        $name = $this->names[$locale] ?? $this->names['fr'] ?? reset($this->names);
+
+        return is_scalar($name) ? (string) $name : '';
+    }
     public function getInterval(): string { return $this->interval; }
     public function setInterval(string $interval): static { $this->interval = $interval; return $this; }
     public function getIntervalCount(): int { return $this->intervalCount; }
