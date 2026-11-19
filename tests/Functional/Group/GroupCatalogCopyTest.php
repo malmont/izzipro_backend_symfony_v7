@@ -33,6 +33,7 @@ class GroupCatalogCopyTest extends WebTestCase
     private KernelBrowser $client;
     private \PDO $master;
     private string $tag;
+    private int $single = 0;
     /** @var list<string> fichiers de photos posés par l'essai */
     private array $files = [];
 
@@ -69,8 +70,8 @@ class GroupCatalogCopyTest extends WebTestCase
         $this->assertSame([422, 'VALIDATION_FAILED'], $this->call('POST', '/api/gestion/groupe/copies', $director, MV_TEST_TENANT_HOST, ['target' => MV_TEST_TENANT2_CODE, 'articles' => ['1']]));
 
         // aperçu : rien n'est écrit dans le catalogue de la cible
-        $copy = $this->json('POST', '/api/gestion/groupe/copies', $director, MV_TEST_TENANT_HOST, ['target' => MV_TEST_TENANT2_CODE, 'articles' => [$pid]], 201);
-        $this->assertSame(['analysed', 1, MV_TEST_TENANT_CODE, MV_TEST_TENANT2_CODE], [$copy['import']['status'], $copy['import']['report']['products']['importable'], $copy['source'], $copy['target']]);
+        $copy = $this->json('POST', '/api/gestion/groupe/copies', $director, MV_TEST_TENANT_HOST, ['target' => MV_TEST_TENANT2_CODE, 'articles' => [$pid, $this->single]], 201);
+        $this->assertSame(['analysed', 2, MV_TEST_TENANT_CODE, MV_TEST_TENANT2_CODE], [$copy['import']['status'], $copy['import']['report']['products']['importable'], $copy['source'], $copy['target']]);
         $this->assertSame($before, $shopProducts(), 'l\'aperçu n\'écrit rien');
         $this->assertSame([409, 'IMPORT_ALREADY_ACTIVE'], $this->call('POST', '/api/gestion/groupe/copies', $director, MV_TEST_TENANT_HOST, ['target' => MV_TEST_TENANT2_CODE, 'articles' => [$pid]]));
         // la boutique cible ne confirme pas elle-même une copie du groupe (seul le directeur le fait)
@@ -84,8 +85,11 @@ class GroupCatalogCopyTest extends WebTestCase
         $this->assertSame(1, (int) $told, 'l\'administrateur de la cible est prévenu (ajout 3)');
         $this->runCopy($copy['import']['id'], MV_TEST_TENANT2_CODE);
 
-        $copied = $this->pdo(MV_TEST_TENANT2_DB)->query("SELECT id, name, is_web, is_pos, purchase_price, image FROM product WHERE name = 'Copie g4 {$this->tag}'")->fetch(\PDO::FETCH_ASSOC);
+        $copied = $this->pdo(MV_TEST_TENANT2_DB)->query("SELECT id, name, is_web, is_pos, purchase_price, image, barcode FROM product WHERE name = 'Copie g4 {$this->tag}'")->fetch(\PDO::FETCH_ASSOC);
         $this->assertNotFalse($copied, 'l\'article est copié');
+        $this->assertSame('G4P-' . strtoupper($this->tag), $copied['barcode'], 'le code-barres de l\'article est copié');
+        $alone = $this->pdo(MV_TEST_TENANT2_DB)->query("SELECT p.id, v.barcode, v.price FROM product p JOIN product_variant v ON v.product_id = p.id WHERE p.name = 'Copie g4 seul {$this->tag}'")->fetchAll(\PDO::FETCH_ASSOC);
+        $this->assertSame([['G4N-' . strtoupper($this->tag), 990]], array_map(static fn (array $r): array => [$r['barcode'], (int) $r['price']], $alone), 'article sans variante : une variante unique à son prix et à son code');
         $this->assertSame([false, false], [(bool) $copied['is_web'], (bool) $copied['is_pos']], 'masqué : ni en ligne ni en caisse (ajout 2)');
         $this->assertSame(1234.0, (float) $copied['purchase_price'], 'coût copié depuis le siège (ajout 1)');
         $this->assertStringStartsWith('imp-', (string) $copied['image']);
@@ -96,7 +100,7 @@ class GroupCatalogCopyTest extends WebTestCase
         $variants = $this->pdo(MV_TEST_TENANT2_DB)->query('SELECT id, stock_quantity, price FROM product_variant WHERE product_id = ' . (int) $copied['id'] . ' ORDER BY id')->fetchAll(\PDO::FETCH_ASSOC);
         $this->assertSame([[0, 2500], [0, 2700]], array_map(static fn (array $v): array => [(int) $v['stock_quantity'], (int) $v['price']], $variants), 'prix copiés, stock jamais');
         // correspondance dans la base maître
-        $links = $this->master->query("SELECT source_product_id, source_variant_id, target_product_id, target_variant_id FROM shop_group_item_links WHERE group_id = $groupId ORDER BY id")->fetchAll(\PDO::FETCH_ASSOC);
+        $links = $this->master->query("SELECT source_product_id, source_variant_id, target_product_id, target_variant_id FROM shop_group_item_links WHERE group_id = $groupId AND source_product_id = $pid ORDER BY id")->fetchAll(\PDO::FETCH_ASSOC);
         $this->assertSame([[$pid, null, (int) $copied['id'], null], [$pid, $variantIds[0], (int) $copied['id'], (int) $variants[0]['id']], [$pid, $variantIds[1], (int) $copied['id'], (int) $variants[1]['id']]],
             array_map(static fn (array $l): array => [(int) $l['source_product_id'], $l['source_variant_id'] === null ? null : (int) $l['source_variant_id'], (int) $l['target_product_id'], $l['target_variant_id'] === null ? null : (int) $l['target_variant_id']], $links));
 
@@ -113,14 +117,25 @@ class GroupCatalogCopyTest extends WebTestCase
         $this->assertNull($returned['purchase_price'], 'aucun coût d\'une boutique associée sans withCost');
         $this->files[] = (string) $returned['image'];
         $this->json('POST', '/api/gestion/groupe/copies/' . $back['id'] . '/cancel', $director, MV_TEST_TENANT_HOST, null, 200);
+        $this->assertStringNotContainsString('12.34', (string) json_encode($this->groupJson(MV_TEST_TENANT_DB)), 'le coût d\'une boutique associée n\'est jamais figé chez une autre');
+        // … sauf demande explicite : `withCost: true` relit le coût dans la source à la confirmation
+        $back2 = $this->json('POST', '/api/gestion/groupe/copies', $director, MV_TEST_TENANT_HOST, ['source' => MV_TEST_TENANT2_CODE, 'target' => MV_TEST_TENANT_CODE, 'articles' => [(int) $copied['id']]], 201);
+        $this->assertTrue($this->json('POST', '/api/gestion/groupe/copies/' . $back2['id'] . '/confirm', $director, MV_TEST_TENANT_HOST, ['withCost' => true], 202)['withCost']);
+        $this->runCopy($back2['import']['id'], MV_TEST_TENANT_CODE);
+        $returned2 = $this->pdo(MV_TEST_TENANT_DB)->query("SELECT purchase_price, image FROM product WHERE name = 'Copie g4 {$this->tag}' AND id <> $pid")->fetch(\PDO::FETCH_ASSOC);
+        $this->assertSame(1234.0, (float) $returned2['purchase_price']);
+        $this->files[] = (string) $returned2['image'];
+        $this->json('POST', '/api/gestion/groupe/copies/' . $back2['id'] . '/cancel', $director, MV_TEST_TENANT_HOST, null, 200);
 
         // annulation de la première copie : l'article et ses liens partent
-        $cancelled = $this->json('POST', '/api/gestion/groupe/copies/' . $copy['id'] . '/cancel', $director, MV_TEST_TENANT_HOST, null, 200);
-        $this->assertSame(1, $cancelled['import']['result']['cancel']['removed']);
+        // annulée par la boutique CIBLE elle-même, dans ses imports : articles et liens partent, et la copie le dit au directeur
+        $cancelled = $this->json('POST', '/api/site/imports/' . $copy['import']['id'] . '/cancel', $shopAdmin, MV_TEST_TENANT2_HOST, null, 200);
+        $this->assertSame(2, $cancelled['result']['cancel']['removed']);
+        $this->assertNotNull($this->json('GET', '/api/gestion/groupe/copies/' . $copy['id'], $director, MV_TEST_TENANT_HOST, null, 200)['cancelledAt']);
         $this->assertSame($before, $shopProducts());
         $this->assertSame(0, (int) $this->master->query("SELECT COUNT(*) FROM shop_group_item_links WHERE target_tenant_code = '" . MV_TEST_TENANT2_CODE . "'")->fetchColumn());
-        // la plus récente d'abord : le retour vers le siège, le rejeu, la première copie
-        $this->assertSame([MV_TEST_TENANT_CODE, MV_TEST_TENANT2_CODE, MV_TEST_TENANT2_CODE], array_column($this->json('GET', '/api/gestion/groupe/copies', $director, MV_TEST_TENANT_HOST, null, 200)['copies'], 'target'));
+        // la plus récente d'abord : les deux retours vers le siège, le rejeu, la première copie
+        $this->assertSame([MV_TEST_TENANT_CODE, MV_TEST_TENANT_CODE, MV_TEST_TENANT2_CODE, MV_TEST_TENANT2_CODE], array_column($this->json('GET', '/api/gestion/groupe/copies', $director, MV_TEST_TENANT_HOST, null, 200)['copies'], 'target'));
     }
 
     public function testDifferentCurrenciesAreRefusedAndAnEnteredDirectorIsNotTheDirector(): void
@@ -138,7 +153,28 @@ class GroupCatalogCopyTest extends WebTestCase
         }
         // le directeur entré dans une boutique : un opérateur, jamais l'outil de copie
         $entered = $this->json('POST', '/api/me/contexts/enter', $director, MV_TEST_TENANT_HOST, ['site' => MV_TEST_TENANT2_CODE], 200);
-        $this->assertSame(403, $this->call('POST', '/api/gestion/groupe/copies', (string) $entered['token'], MV_TEST_TENANT2_HOST, ['target' => MV_TEST_TENANT_CODE])[0]);
+        $refused = $this->request('POST', '/api/gestion/groupe/copies', (string) $entered['token'], MV_TEST_TENANT2_HOST, ['target' => MV_TEST_TENANT_CODE]);
+        $this->assertSame([403, 'rights'], [$refused->getStatusCode(), json_decode((string) $refused->getContent(), true)['reason'] ?? null], 'fermée par la garde du mode groupe');
+        // la copie d'un AUTRE groupe : introuvable pour ce directeur
+        $other = (int) $this->master->query("INSERT INTO shop_groups (code, name, head_tenant_code) VALUES ('autre-g4-{$this->tag}', 'Autre', 'autre-g4-{$this->tag}') RETURNING id")->fetchColumn();
+        $foreign = (int) $this->master->query("INSERT INTO shop_group_copies (group_id, source_tenant_code, target_tenant_code, target_job_id) VALUES ($other, 'autre-g4-{$this->tag}', '" . MV_TEST_TENANT2_CODE . "', 999999) RETURNING id")->fetchColumn();
+        foreach ([['GET', ''], ['POST', '/confirm'], ['POST', '/cancel']] as [$method, $suffix]) {
+            $this->assertSame([404, 'COPY_NOT_FOUND'], $this->call($method, "/api/gestion/groupe/copies/$foreign$suffix", $director, MV_TEST_TENANT_HOST, $method === 'POST' ? [] : null));
+        }
+    }
+
+    /** @return list<mixed> le catalogue figé des copies du groupe dans une base (tous les fichiers JSON de ses tâches `group`) */
+    private function groupJson(string $db): array
+    {
+        $code = $db === MV_TEST_TENANT_DB ? MV_TEST_TENANT_CODE : MV_TEST_TENANT2_CODE;
+        $dir = static::getContainer()->getParameter('kernel.project_dir') . '/var/storage/private_media/imports/' . $code;
+        $out = [];
+        foreach ($this->pdo($db)->query("SELECT stored_name FROM import_job WHERE source = 'group'")->fetchAll(\PDO::FETCH_COLUMN) as $name) {
+            $path = $dir . '/' . basename((string) $name);
+            $out[] = is_file($path) ? json_decode((string) file_get_contents($path), true) : null;
+        }
+
+        return $out;
     }
 
     private function runCopy(int $jobId, string $code): void
@@ -163,7 +199,8 @@ class GroupCatalogCopyTest extends WebTestCase
         $product = (new Product())->setName('Copie g4 ' . $this->tag)->setDescription('<p>Un article</p>')->setMoreinformations(null)->setPrice(2500.0)->setCode('G4-' . $this->tag)
             ->setSlug('copie-g4-' . $this->tag)->setTags(null)->setQuantity(5)->setIsWeb(true)->setIsPos(true)->setIsLandingPage(false)->setSaleEnabled(true)->setRentalEnabled(false)
             ->setSubscriptionEnabled(false)->setIsbestseller(false)->setIsnewarrival(false)->setIsfeatured(false)->setIsspecialoffer(false)->setIsPreOrder(false)->setIsAccessory(false)
-            ->setCustomizable(false)->setRequiresShipping(true)->setCreatedAt(new \DateTimeImmutable())->setPurchasePrice(1234.0)->setImage($photo);
+            ->setCustomizable(false)->setRequiresShipping(true)->setCreatedAt(new \DateTimeImmutable())->setPurchasePrice(1234.0)->setImage($photo)
+            ->setBarcode('G4P-' . strtoupper($this->tag));
         $product->addCategory($category);
         $product->addPicture((new ProductPicture())->setImageUrl($photo));
         $em->persist($product);
@@ -174,7 +211,14 @@ class GroupCatalogCopyTest extends WebTestCase
             $em->persist($variant);
             $variants[] = $variant;
         }
+        // un article SANS variante (permis par la fiche) : il est copié avec une variante unique, qui porte son code-barres
+        $single = (new Product())->setName('Copie g4 seul ' . $this->tag)->setDescription('')->setMoreinformations(null)->setPrice(990.0)->setCode('G4S-' . $this->tag)
+            ->setSlug('copie-g4-seul-' . $this->tag)->setTags(null)->setQuantity(0)->setIsWeb(true)->setIsPos(true)->setIsLandingPage(false)->setSaleEnabled(true)->setRentalEnabled(false)
+            ->setSubscriptionEnabled(false)->setIsbestseller(false)->setIsnewarrival(false)->setIsfeatured(false)->setIsspecialoffer(false)->setIsPreOrder(false)->setIsAccessory(false)
+            ->setCustomizable(false)->setRequiresShipping(true)->setCreatedAt(new \DateTimeImmutable())->setBarcode('G4N-' . strtoupper($this->tag));
+        $em->persist($single);
         $em->flush();
+        $this->single = (int) $single->getId();
         $ids = [(int) $product->getId(), array_map(static fn (ProductVariant $v): int => (int) $v->getId(), $variants), $photo];
         $em->clear();
         $provider->switchTenant(MV_TEST_TENANT_DB, MV_TEST_TENANT_CODE);

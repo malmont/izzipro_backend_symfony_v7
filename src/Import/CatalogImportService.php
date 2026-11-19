@@ -58,6 +58,28 @@ class CatalogImportService
     }
 
     /**
+     * Lot G-4 : pose le coût d'achat (première variante) dans le catalogue figé d'une copie encore analysée, quand le directeur le
+     * demande depuis une autre boutique que le siège (`withCost`) ; jamais pour une autre tâche.
+     *
+     * @param array<string, string> $costs référence de l'article → coût (« 12.34 »)
+     */
+    public function patchGroupCosts(int $id, array $costs): void
+    {
+        $job = $this->store->find($id);
+        if ($job === null || $job['source'] !== ImportJobStore::SOURCE_GROUP || $job['status'] !== ImportJobStore::ANALYSED) {
+            return;
+        }
+        $products = $this->groupProducts($id);
+        foreach ($products as $i => $product) {
+            $ref = mb_strtolower((string) $product['handle']);
+            if (isset($costs[$ref], $product['variants'][0])) {
+                $products[$i]['variants'][0]['costRaw'] = $costs[$ref];
+            }
+        }
+        file_put_contents($this->directory() . '/' . basename((string) $job['stored_name']), (string) json_encode($products, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR));
+    }
+
+    /**
      * Lot G-4 : le catalogue figé d'une copie de source `group` du site courant (vide pour toute autre tâche)
      *
      * @return list<array<string, mixed>>
@@ -380,6 +402,11 @@ class CatalogImportService
             $alive = $linked === [] ? [] : array_map('intval', $this->emProvider->getEntityManager()->getConnection()->fetchFirstColumn(
                 'SELECT id FROM product WHERE id = ANY(?::int[])', ['{' . implode(',', $linked) . '}']));
             $this->groupCopies->forgetTargetProducts($site, array_values(array_diff($linked, $alive)));
+            // relecture neuve : annulée par la boutique elle-même, la copie le dit aussi au directeur
+            $copy = $this->groupCopies->byJob($site, $id);
+            if ($copy !== null) {
+                $this->groupCopies->cancel((int) $copy['id']);
+            }
         }
 
         return $this->view($this->job($id));

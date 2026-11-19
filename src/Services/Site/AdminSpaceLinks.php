@@ -29,6 +29,8 @@ final class AdminSpaceLinks
     /** Code d'écran => `params` (nom => forme), `required` (paramètres sans lesquels le lien n'a pas de sens) */
     public const LINKS = [
         // Prévention des pertes (`docs/prevention-pertes.md`)
+        // Imports du site (lot G-4 : l'avis d'une copie du catalogue par le directeur du groupe y mène)
+        'imports' => [],
         'pertes.home' => [],
         'pertes.constats' => ['params' => ['isNew' => 'flag', 'status' => ['many' => self::FINDING_STATUSES], 'rule' => self::FINDING_RULES]],
         'pertes.constat' => ['params' => ['id' => 'id'], 'required' => ['id']],

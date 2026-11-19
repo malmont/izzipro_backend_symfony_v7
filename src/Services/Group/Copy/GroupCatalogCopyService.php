@@ -75,7 +75,8 @@ class GroupCatalogCopyService
         }
         $home = $this->home();
         try {
-            [$products, $currency, $inclusive] = $this->readSource($shops[$source], $source, $articles);
+            // relecture neuve : le coût d'un franchisé n'est jamais figé dans la boutique d'un autre ; il ne l'est que depuis le siège (ou à la confirmation, `withCost`)
+            [$products, $currency, $inclusive] = $this->readSource($shops[$source], $source, $articles, $source === $head);
             $this->emProvider->switchTenant((string) $shops[$target]['dbname'], $target);
             if ($this->currency->code(true) !== $currency) {
                 throw new GroupException('COPY_CURRENCY_DIFFERS', 409, 'Les deux boutiques n\'ont pas la même devise : aucune conversion n\'est faite.');
@@ -125,16 +126,29 @@ class GroupCatalogCopyService
             throw new GroupException('GROUP_SHOP_UNKNOWN', 404, 'Cette boutique n\'est plus dans votre groupe.');
         }
         $home = $this->home();
+        $queued = false;
         try {
+            // `withCost` demandé depuis une autre boutique que le siège : le coût, jamais figé à l'aperçu, est relu maintenant dans la source
+            $costs = $withCost && !$fromHead && isset($shops[(string) $copy['source_tenant_code']]) ? $this->sourceCosts($shops[(string) $copy['source_tenant_code']], (string) $copy['source_tenant_code'], $shops[$target], $target, (int) $copy['target_job_id']) : null;
             $this->emProvider->switchTenant((string) $shops[$target]['dbname'], $target);
+            if ($costs !== null) {
+                $this->imports->patchGroupCosts((int) $copy['target_job_id'], $costs);
+            }
+            $pos = (bool) ($body['pos'] ?? false);
             // ajout 2 du chef : masqués par défaut, ni en ligne (`hidden`) ni en caisse (`pos` faux)
-            $view = $this->imports->confirm((int) $copy['target_job_id'], ['visibility' => $visibility, 'pos' => (bool) ($body['pos'] ?? false),
+            $view = $this->imports->confirm((int) $copy['target_job_id'], ['visibility' => $visibility, 'pos' => $pos,
                 'pricesIncludeTax' => $copy['source_prices_include_tax']], $by->getUserIdentifier(), ['withoutCost' => !$withCost]);
-            // ajout 3 du chef : chaque administrateur de la cible est prévenu
-            $this->notifier->copied($copyId, (string) $group['name'], (int) ($view['report']['products']['importable'] ?? $copy['articles']));
+            $queued = true;
+            // ajout 3 du chef : chaque administrateur de la cible est prévenu (jamais une panne pour la copie déjà en file)
+            $this->notifier->copied($copyId, (string) $group['name'], (int) ($view['report']['products']['importable'] ?? $copy['articles']), $visibility === 'hidden' && !$pos);
         } catch (ImportException $e) {
             $this->copies->unconfirm($copyId);
             throw new GroupException($e->errorCode, $e->status, $e->getMessage(), $e->extra);
+        } catch (\Throwable $e) {
+            if (!$queued) {
+                $this->copies->unconfirm($copyId); // une panne imprévue avant la mise en file : la copie reste confirmable, jamais bloquée
+            }
+            throw $e;
         } finally {
             $this->restore($home);
         }
@@ -227,13 +241,52 @@ class GroupCatalogCopyService
     }
 
     /**
+     * Le coût d'achat des articles d'une copie, relu dans la source (READ ONLY), par référence de l'import (`<site>-<article>`).
+     *
+     * @param array<string, mixed> $source
+     * @param array<string, mixed> $target
+     * @return array<string, string> référence → coût (« 12.34 »), pour la première variante
+     */
+    private function sourceCosts(array $source, string $sourceCode, array $target, string $targetCode, int $jobId): array
+    {
+        $this->emProvider->switchTenant((string) $target['dbname'], $targetCode);
+        $prefix = mb_strtolower($sourceCode) . '-';
+        $ids = [];
+        foreach ($this->imports->groupProducts($jobId) as $product) {
+            $ref = mb_strtolower((string) $product['handle']);
+            if (str_starts_with($ref, $prefix) && ctype_digit(substr($ref, strlen($prefix)))) {
+                $ids[(int) substr($ref, strlen($prefix))] = $ref;
+            }
+        }
+        $this->emProvider->switchTenant((string) $source['dbname'], $sourceCode);
+        $conn = $this->emProvider->getEntityManager()->getConnection();
+        $conn->beginTransaction();
+        try {
+            $conn->executeStatement('SET TRANSACTION READ ONLY');
+            $rows = $ids === [] ? [] : $conn->fetchAllAssociative('SELECT id, purchase_price FROM product WHERE id = ANY(?::int[])', ['{' . implode(',', array_keys($ids)) . '}']);
+        } finally {
+            if ($conn->isTransactionActive()) {
+                $conn->rollBack();
+            }
+        }
+        $costs = [];
+        foreach ($rows as $row) {
+            if ($row['purchase_price'] !== null && isset($ids[(int) $row['id']])) {
+                $costs[$ids[(int) $row['id']]] = sprintf('%.2f', (float) $row['purchase_price'] / 100);
+            }
+        }
+
+        return $costs;
+    }
+
+    /**
      * Le catalogue de la source, lu dans une transaction READ ONLY, sous la forme d'une lecture de fichier Shopify (`ShopifyProductCsv`).
      *
      * @param array<string, mixed> $shop
      * @param list<int>|null $articles
      * @return array{0: list<array<string, mixed>>, 1: string, 2: bool} produits, devise, prix taxes comprises
      */
-    private function readSource(array $shop, string $code, ?array $articles): array
+    private function readSource(array $shop, string $code, ?array $articles, bool $withCost): array
     {
         $this->emProvider->switchTenant((string) $shop['dbname'], $code);
         $em = $this->emProvider->getEntityManager();
@@ -243,18 +296,20 @@ class GroupCatalogCopyService
             $conn->executeStatement('SET TRANSACTION READ ONLY');
             $currency = $this->currency->code(true);
             $inclusive = $this->taxes->pricesIncludeTax();
-            $criteria = $articles === null ? [] : ['id' => $articles];
+            // les articles du catalogue seuls (type de base : jamais un véhicule) ; la limite compte ces articles-là, par paquets de 200
+            $ids = array_map('intval', $conn->fetchFirstColumn("SELECT id FROM product WHERE product_type IN ('product', 'standard')"
+                . ($articles === null ? '' : ' AND id = ANY(?::int[])') . ' ORDER BY id LIMIT ' . (CatalogImportService::GROUP_MAX_PRODUCTS + 1),
+                $articles === null ? [] : ['{' . implode(',', array_map('intval', $articles)) . '}']));
+            if (count($ids) > CatalogImportService::GROUP_MAX_PRODUCTS) {
+                throw new GroupException('COPY_TOO_MANY', 422, sprintf('Au plus %d articles par copie : choisissez des articles.', CatalogImportService::GROUP_MAX_PRODUCTS));
+            }
             $products = [];
             $line = 1;
-            foreach ($em->getRepository(Product::class)->findBy($criteria, ['id' => 'ASC'], CatalogImportService::GROUP_MAX_PRODUCTS + 1) as $product) {
-                $class = $product instanceof \Doctrine\Persistence\Proxy ? get_parent_class($product) : $product::class;
-                if ($class !== Product::class) {
-                    continue; // une fiche d'un autre type (véhicule, location…) n'est pas un article du catalogue copiable
+            foreach (array_chunk($ids, 200) as $chunk) {
+                foreach ($em->getRepository(Product::class)->findBy(['id' => $chunk], ['id' => 'ASC']) as $product) {
+                    $products[] = $this->export($product, $code, ++$line, $withCost);
                 }
-                $products[] = $this->export($product, $code, ++$line);
-            }
-            if (count($products) > CatalogImportService::GROUP_MAX_PRODUCTS) {
-                throw new GroupException('COPY_TOO_MANY', 422, sprintf('Au plus %d articles par copie : choisissez des articles.', CatalogImportService::GROUP_MAX_PRODUCTS));
+                $em->clear();
             }
 
             return [$products, $currency, $inclusive];
@@ -267,7 +322,7 @@ class GroupCatalogCopyService
     }
 
     /** @return array<string, mixed> un article, sous la forme d'une lecture Shopify ; ses variantes en gardent l'identifiant source */
-    private function export(Product $product, string $code, int $line): array
+    private function export(Product $product, string $code, int $line, bool $withCost): array
     {
         $variants = array_values(array_filter($product->getVariants()->toArray(), static fn ($v) => $v instanceof ProductVariant));
         usort($variants, static fn (ProductVariant $a, ProductVariant $b): int => (int) $a->getId() <=> (int) $b->getId());
@@ -295,7 +350,14 @@ class GroupCatalogCopyService
                 };
             }
             $rows[] = ['line' => $line, 'options' => $values, 'sku' => $i === 0 ? (string) $product->getCode() : '', 'priceRaw' => $cents($v->getPrice() ?? $product->getPrice()),
-                'compareAtRaw' => '', 'costRaw' => $i === 0 ? $cents($product->getPurchasePrice()) : '', 'qtyRaw' => '0', 'barcode' => (string) $v->getBarcode(), 'image' => ''];
+                'compareAtRaw' => '', 'costRaw' => $i === 0 && $withCost ? $cents($product->getPurchasePrice()) : '', 'qtyRaw' => '0', 'barcode' => (string) $v->getBarcode(), 'image' => ''];
+        }
+        // un article sans variante (permis par la fiche) : une variante unique à son prix, qui porte son code-barres
+        $productBarcode = (string) $product->getBarcode();
+        if ($rows === []) {
+            $rows[] = ['line' => $line, 'options' => ['', '', ''], 'sku' => (string) $product->getCode(), 'priceRaw' => $cents($product->getPrice()), 'compareAtRaw' => '',
+                'costRaw' => $withCost ? $cents($product->getPurchasePrice()) : '', 'qtyRaw' => '0', 'barcode' => $productBarcode, 'image' => ''];
+            $productBarcode = '';
         }
         $images = [];
         foreach (array_merge([(string) $product->getImage()], array_map(static fn ($p) => (string) $p->getImageUrl(), $product->getPictures()->toArray())) as $file) {
@@ -309,7 +371,7 @@ class GroupCatalogCopyService
         return [
             'handle' => $code . '-' . $product->getId(), 'line' => $line, 'title' => (string) $product->getName(), 'body' => (string) $product->getDescription(), 'vendor' => '',
             'type' => $category ? (string) $category->getName() : '', 'category' => '', 'tags' => (string) $product->getTags(), 'published' => (bool) $product->isWeb(), 'status' => 'active',
-            'optionNames' => $names, 'variants' => $rows, 'images' => $images,
+            'optionNames' => $names, 'variants' => $rows, 'images' => $images, 'productBarcode' => $productBarcode,
             'sourceVariantIds' => array_map(static fn (ProductVariant $v): int => (int) $v->getId(), $variants),
         ];
     }

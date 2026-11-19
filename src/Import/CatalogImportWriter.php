@@ -77,6 +77,9 @@ class CatalogImportWriter
             if ($category !== null) {
                 $product->addCategory($category);
             }
+            if (($item['productBarcode'] ?? null) !== null) {
+                $product->setBarcode($item['productBarcode']); // lot G-4 : le code de l'article copié, libre dans la cible (vérifié par le plan)
+            }
             $product->addTranslation((new ProductTranslation())->setLocale($language)->setName($item['name'])->setDescription($description)->setMoreinformations(null)->setTags($item['tags'] !== '' ? $item['tags'] : null)->setSlug($slug));
             $em->persist($product);
             $movementType = $em->getRepository(MovementType::class)->findOneBy(['name' => self::MOVEMENT_TYPE])

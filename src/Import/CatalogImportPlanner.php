@@ -42,7 +42,7 @@ class CatalogImportPlanner
         // Codes-barres du fichier : un code porté par deux lignes n'est gardé par aucune (c'est au gérant de dire laquelle a raison)
         $seen = [];
         foreach ($products as $product) {
-            foreach ($product['variants'] as $variant) {
+            foreach ([...$product['variants'], ['barcode' => (string) ($product['productBarcode'] ?? '')]] as $variant) {
                 $code = $this->barcodes->normalize($variant['barcode'] !== '' ? $variant['barcode'] : null);
                 if ($code !== null) {
                     $seen[$code] = ($seen[$code] ?? 0) + 1;
@@ -55,7 +55,7 @@ class CatalogImportPlanner
             $handle = (string) $product['handle'];
             $item = ['ref' => mb_strtolower($handle), 'handle' => $handle, 'line' => (int) $product['line'], 'status' => 'ok', 'reason' => null, 'name' => mb_substr(trim((string) $product['title']), 0, 255),
                 'body' => (string) $product['body'], 'tags' => mb_substr(trim((string) $product['tags']), 0, 500), 'category' => $this->categoryName($product),
-                'visible' => (bool) $product['published'] && $product['status'] === 'active', 'variants' => [], 'images' => [], 'productId' => null];
+                'visible' => (bool) $product['published'] && $product['status'] === 'active', 'variants' => [], 'images' => [], 'productId' => null, 'productBarcode' => null];
             $refuse = function (string $code, int $line, string $detail = '') use (&$item, &$issues, $handle): void {
                 if ($item['status'] === 'ok') {
                     $item['status'] = 'refused';
@@ -120,6 +120,21 @@ class CatalogImportPlanner
                     }
                 }
                 $item['variants'][] = $variant;
+            }
+            // lot G-4 : le code-barres porté par l'article lui-même (un article à plusieurs variantes le garde sur sa fiche) : mêmes règles
+            if (($product['productBarcode'] ?? '') !== '') {
+                try {
+                    $code = $this->barcodes->validate((string) $product['productBarcode']);
+                    if ($code !== null && ($seen[$code] ?? 0) > 1) {
+                        $issues[] = ['line' => $item['line'], 'handle' => $handle, 'code' => self::BARCODE_DUPLICATE_IN_FILE, 'detail' => $code];
+                    } elseif ($code !== null && $this->barcodes->holder($code) !== null) {
+                        $issues[] = ['line' => $item['line'], 'handle' => $handle, 'code' => CatalogBarcodeService::ALREADY_USED, 'detail' => $code];
+                    } else {
+                        $item['productBarcode'] = $code;
+                    }
+                } catch (CatalogBarcodeException $e) {
+                    $issues[] = ['line' => $item['line'], 'handle' => $handle, 'code' => $e->errorCode, 'detail' => mb_substr((string) $product['productBarcode'], 0, 80)];
+                }
             }
             foreach ($product['images'] as $url) {
                 // lot G-4 : une copie entre boutiques du groupe ne porte que des photos locales, recopiées ; un fichier, jamais les deux

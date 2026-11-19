@@ -107,6 +107,9 @@ notifications:
     group_catalog_copied:
         title: 'Articles copiés dans votre catalogue'
         body: "Le directeur du groupe %group% a copié %count% article(s) dans votre catalogue, masqués. Vous décidez de les publier ; annulation possible 7 jours."
+    group_catalog_copied_visible:
+        title: 'Articles copiés dans votre catalogue'
+        body: "Le directeur du groupe %group% a copié %count% article(s) dans votre catalogue, publiés comme dans la boutique d'origine. Annulation possible 7 jours."
     loss_box_plugged:
         title: 'Votre boîtier est branché'
         body: 'Le boîtier %serial% est branché dans votre boutique. Confirmez « C''est bien mon boîtier » dans les 72 heures. Si vous n''avez rien branché, ne confirmez pas et contactez-nous.'

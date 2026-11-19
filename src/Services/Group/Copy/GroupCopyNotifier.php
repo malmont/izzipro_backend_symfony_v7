@@ -36,7 +36,19 @@ class GroupCopyNotifier
     }
 
     /** @return array{push: int, email: int} */
-    public function copied(int $copyId, string $groupName, int $count): array
+    public function copied(int $copyId, string $groupName, int $count, bool $hidden = true): array
+    {
+        try {
+            return $this->send($copyId, $groupName, $count, $hidden);
+        } catch (\Throwable $e) {
+            $this->logger->error('Groupe : avis de copie en échec (' . $e::class . ').'); // la copie est en file : jamais une panne pour elle
+
+            return ['push' => 0, 'email' => 0];
+        }
+    }
+
+    /** @return array{push: int, email: int} */
+    private function send(int $copyId, string $groupName, int $count, bool $hidden): array
     {
         $site = (string) $this->tenant->getTenantCode();
         $admins = $this->emProvider->getEntityManager()->getConnection()->fetchAllAssociative(
@@ -50,7 +62,7 @@ class GroupCopyNotifier
         foreach ($admins as $admin) {
             try {
                 $status = $this->notifications?->notify((int) $admin['id'], GestionNotificationService::GROUP_CATALOG_COPIED, ['%group%' => $groupName, '%count%' => (string) $count],
-                    ['screen' => 'imports', 'params' => new \stdClass()], ['type' => 'group_copy', 'id' => $copyId]);
+                    ['screen' => 'imports', 'params' => new \stdClass()], ['type' => 'group_copy', 'id' => $copyId], null, false, $hidden ? '' : 'visible');
                 $push += $status !== null ? 1 : 0;
             } catch (\Throwable $e) {
                 $this->logger->error('Groupe : notification de copie en échec (' . $e::class . ').');
@@ -61,7 +73,7 @@ class GroupCopyNotifier
             }
             try {
                 $email += $this->mailer->sendPlatformEmail($to, $t('subject'), self::TEMPLATE, [
-                    'title' => $t('title'), 'greeting' => $t('greeting'), 'message' => $t('message'), 'button' => $link !== null ? $t('button') : '',
+                    'title' => $t('title'), 'greeting' => $t('greeting'), 'message' => $t($hidden ? 'message' : 'message_visible'), 'button' => $link !== null ? $t('button') : '',
                     'link' => (string) $link, 'validity' => $t('validity'), 'ignore' => $t('ignore'), 'siteLine' => $params['%site%'],
                 ]) ? 1 : 0;
             } catch (\Throwable $e) {

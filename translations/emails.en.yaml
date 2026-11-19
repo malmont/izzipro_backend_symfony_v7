@@ -253,6 +253,7 @@ group_catalog_copied:
     title: 'Items copied into your catalogue'
     greeting: 'Hello,'
     message: 'The director of the group %group% copied %count% item(s) into your shop''s catalogue. They are hidden: neither online nor at the till until you publish them. Stock is not copied.'
+    message_visible: 'The director of the group %group% copied %count% item(s) into your shop''s catalogue and chose to publish them as in the original shop. Stock is not copied.'
     button: 'Open your imports'
     validity: 'You can cancel this copy for 7 days from your imports: items nothing uses are removed.'
     ignore: 'If you do not know this group, contact us.'
