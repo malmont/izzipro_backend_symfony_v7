@@ -1,4 +1,4 @@
-# Contrat web : le multi-boutiques (G-1 à G-4)
+# Contrat web : le multi-boutiques (G-1 à G-4, et G-1d à venir)
 
 Pour la session « appli de gestion web » (application de gestion web, Next.js), puis le sélecteur de sites du mobile (MAUI). Écrit le
 19/11/2026 par « appli degestion backend », d'après le code en production (étape 114, `ad04df28`) et les essais
@@ -168,6 +168,7 @@ Fin d'une entrée : 401 `ENTRY_ENDED`, le lien est fermé (boutique partie, rôl
 
 - Par défaut, les articles copiés sont masqués : ni en ligne, ni en caisse.
 - Le coût d'achat n'est copié que si la source est le siège ; depuis une autre boutique, seulement avec `withCost: true`.
+  À l'arrivée de G-1d (§ 9), plus jamais vers ou depuis une boutique associée sans le lien « même entreprise ».
 - Le stock n'est jamais copié. Les photos sont recopiées.
 - La boutique cible reçoit un avis (notification et courriel `group_catalog_copied`). Elle voit la copie dans ses imports et peut
   l'annuler elle-même ; elle ne peut pas la confirmer.
@@ -201,3 +202,67 @@ Refus :
 - les frais du siège (G-7) ;
 - le bilan PDF du groupe (G-8) ;
 - la création d'une boutique par le groupe (§ 2).
+
+## 9. « Même entreprise » (lot G-1d : contrat VALIDÉ le 19/11/2026, PAS ENCORE EN PRODUCTION)
+
+À coder par le backend avant le transfert (G-5). Les routes ci-dessous n'existent pas encore : l'écran peut se préparer, il ne doit pas
+s'afficher avant l'annonce « LIVRÉ : G-1d ».
+
+**Le principe.** Une boutique ASSOCIÉE (entreprise invitée) peut être déclarée « de la même entreprise que le siège ». Elle est alors
+traitée comme une boutique créée par le groupe pour deux gestes seulement : le transfert de stock (G-5) et la copie du coût d'achat (§ 7).
+Sans ce lien, la règle prudente s'applique : pas de transfert, pas de coût copié. Le siège et les boutiques créées par le groupe sont
+toujours « même entreprise » : le lien ne concerne que les boutiques associées.
+
+**Changement du § 7 à l'arrivée de G-1d.** Le coût d'achat ne sera copié qu'entre deux boutiques de la même entreprise. Vers ou depuis une
+boutique associée sans lien : la copie part sans coût, et `withCost: true` est refusé (422 `COPY_COST_ASSOCIATED_SHOP`). Un aperçu fait
+avec le coût est relu à la confirmation : si le lien a disparu entre-temps, la confirmation est refusée de la même façon.
+
+### 9.1 Poser le lien à l'acceptation de l'invitation (boutique)
+
+`POST /api/site/group-invitations/{id}/accept { consent: "g1-v1", sameCompany?: true, sameCompanyConsent?: "g1d-v1" }`
+
+- Une seconde case FACULTATIVE sous celle de l'invitation : « Cette boutique appartient à la même entreprise que le siège ». Non cochée :
+  ne rien envoyer de plus, rien ne change.
+- Cochée : envoyer `sameCompany: true` et `sameCompanyConsent` égal à la version reçue (`sameCompanyConsentVersion` dans la liste des
+  invitations, avec son texte `sameCompanyConsent`). Version absente ou différente : 422 `GROUP_CONSENT_REQUIRED`.
+- Texte (fr ; en selon la langue du site), affiché tel que le serveur le donne : « Cette boutique appartient à la même entreprise que le
+  siège du groupe X. Le directeur pourra y transférer du stock et y copier le coût d'achat. Vous pouvez retirer ce lien à tout moment,
+  seul et tout de suite. »
+
+### 9.2 Le demander plus tard (directeur, au siège)
+
+- `GET /api/group` : chaque boutique porte `sameCompany: { state: "none" | "pending" | "confirmed", since, requestExpiresAt }` (pour le
+  siège et les boutiques créées : `state: "confirmed"`, sans demande possible).
+- `POST /api/group/shops/{code}/same-company` → 202 `{ asked: true, expiresInDays: 14 }`. Refus : 409 `SAME_COMPANY_PENDING` (une demande
+  en cours) ou `SAME_COMPANY_ALREADY` ; 422 `SAME_COMPANY_NOT_ASSOCIATED` (boutique créée ou siège) ; 403 `GROUP_HEAD_ONLY`,
+  `GROUP_FORBIDDEN`.
+- `DELETE /api/group/shops/{code}/same-company` → 200 : le directeur retire le lien, effet immédiat ; la boutique est prévenue.
+
+### 9.3 Le confirmer, le refuser, le retirer (boutique, son administrateur, dans l'écran Multi-boutiques)
+
+- `GET /api/site/group-same-company` → `{ sameCompany, since, request: null | { id, group, head, expiresAt, consent, consentVersion } }`.
+- `POST /api/site/group-same-company/{id}/confirm { consent: "<consentVersion reçue>" }` → 200 (après une case cochée). 422
+  `GROUP_CONSENT_REQUIRED` ; 404 `SAME_COMPANY_REQUEST_NOT_FOUND` (inconnue, échue au bout de 14 jours, déjà traitée, boutique sortie du
+  groupe).
+- `POST /api/site/group-same-company/{id}/refuse` → 204.
+- `DELETE /api/site/group-same-company` → 200 : la boutique retire le lien SEULE, effet immédiat ; le directeur est prévenu.
+- L'administrateur de la boutique reçoit un courriel à chaque demande, SANS lien d'action : il répond dans l'écran.
+
+### 9.4 Ce qui suit un retrait
+
+- Les nouveaux transferts entre cette boutique et le reste du groupe sont refusés ; un transfert déjà envoyé se termine normalement ; un
+  transfert seulement demandé est annulé, avec un avis aux deux (G-5).
+- Les copies suivantes partent sans coût.
+- Quitter le groupe efface le lien : en revenant, la boutique repart de zéro.
+
+### 9.5 Qui peut quoi
+
+| Geste | Directeur | Admin de la boutique associée | Directeur entré dans la boutique | Agence, plateforme, assistant IA |
+|---|---|---|---|---|
+| Lire l'état | oui | oui (le sien) | non | l'assistant du directeur lit l'état |
+| Demander | oui | — | non | l'assistant le PROPOSE, le directeur confirme |
+| Confirmer, refuser | — | oui | **non** (403) | **non** |
+| Retirer | oui (côté siège) | oui (côté boutique) | non | non |
+
+Toutes les routes du § 9 refusent une entrée dans la boutique : le directeur entré ne peut jamais confirmer à la place de la boutique.
+Chaque pose, confirmation, refus et retrait est tracé au journal des deux sites (« Accès extérieurs ») et à celui du groupe.
