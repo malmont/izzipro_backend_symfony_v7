@@ -253,11 +253,11 @@ loss_box_cancelled:
     ignore: 'Rien n''a été changé dans votre site.'
 
 group_catalog_copied:
-    subject: '%site% : %count% article(s) copiés dans votre catalogue'
+    subject: '{1}%site% : 1 article copié dans votre catalogue|]1,Inf[%site% : %count% articles copiés dans votre catalogue'
     title: 'Articles copiés dans votre catalogue'
     greeting: 'Bonjour,'
-    message: 'Le directeur du groupe %group% a copié %count% article(s) dans le catalogue de votre boutique. Ils sont masqués : ni en ligne, ni en caisse, tant que vous ne les publiez pas. Le stock n''est pas copié.'
-    message_visible: 'Le directeur du groupe %group% a copié %count% article(s) dans le catalogue de votre boutique. Il a choisi de les publier comme dans la boutique d''origine. Le stock n''est pas copié.'
+    message: 'Le directeur du groupe %group% a copié des articles (%count%) dans le catalogue de votre boutique. Ils sont masqués : ni en ligne, ni en caisse, tant que vous ne les publiez pas. Le stock n''est pas copié.'
+    message_visible: 'Le directeur du groupe %group% a copié des articles (%count%) dans le catalogue de votre boutique. Il a choisi de les publier comme dans la boutique d''origine. Le stock n''est pas copié.'
     button: 'Ouvrir vos imports'
     validity: 'Vous pouvez annuler cette copie pendant 7 jours depuis vos imports : les articles que rien n''utilise sont retirés.'
     ignore: 'Si vous ne connaissez pas ce groupe, contactez-nous.'
