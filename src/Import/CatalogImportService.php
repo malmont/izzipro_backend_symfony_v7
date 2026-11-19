@@ -58,25 +58,39 @@ class CatalogImportService
     }
 
     /**
-     * Lot G-4 : pose le coût d'achat (première variante) dans le catalogue figé d'une copie encore analysée, quand le directeur le
-     * demande depuis une autre boutique que le siège (`withCost`) ; jamais pour une autre tâche.
+     * Lot G-4 : pose le coût d'achat (première variante) dans le catalogue figé d'une copie, quand le directeur le demande depuis une autre
+     * boutique que le siège (`withCost`) ; appelé par `confirm()` une fois la tâche passée à l'exécution ; jamais pour une autre tâche.
      *
      * @param array<string, string> $costs référence de l'article → coût (« 12.34 »)
      */
-    public function patchGroupCosts(int $id, array $costs): void
+    private function writeGroupCosts(array $job, array $costs): void
     {
-        $job = $this->store->find($id);
-        if ($job === null || $job['source'] !== ImportJobStore::SOURCE_GROUP || $job['status'] !== ImportJobStore::ANALYSED) {
+        if ($job['source'] !== ImportJobStore::SOURCE_GROUP) {
             return;
         }
-        $products = $this->groupProducts($id);
+        $products = $this->groupProducts((int) $job['id']);
         foreach ($products as $i => $product) {
             $ref = mb_strtolower((string) $product['handle']);
             if (isset($costs[$ref], $product['variants'][0])) {
                 $products[$i]['variants'][0]['costRaw'] = $costs[$ref];
             }
         }
-        file_put_contents($this->directory() . '/' . basename((string) $job['stored_name']), (string) json_encode($products, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR));
+        $path = $this->directory() . '/' . basename((string) $job['stored_name']);
+        $temp = $path . '.' . bin2hex(random_bytes(4));
+        file_put_contents($temp, (string) json_encode($products, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR));
+        rename($temp, $path); // écriture d'un seul coup : le worker ne lit jamais un fichier à moitié écrit
+    }
+
+    /** Lot G-4 : une copie du groupe annulée (par le directeur ou par la boutique) est marquée annulée dans la base maître */
+    private function markGroupCopyCancelled(array $job, int $id): void
+    {
+        if ($job['source'] !== ImportJobStore::SOURCE_GROUP || $this->groupCopies === null) {
+            return;
+        }
+        $copy = $this->groupCopies->byJob((string) $this->tenants->getCurrentTenantCode(), $id);
+        if ($copy !== null) {
+            $this->groupCopies->cancel((int) $copy['id']);
+        }
     }
 
     /**
@@ -208,11 +222,20 @@ class CatalogImportService
         if (!$this->store->move($id, ImportJobStore::ANALYSED, ImportJobStore::RUNNING, ['options' => $options, 'started_at' => true])) {
             throw new ImportException('IMPORT_NOT_READY', 409, ['status' => $this->job($id)['status']]);
         }
+        // lot G-4 : le coût relu dans la source (`withCost`) n'entre dans le catalogue figé qu'une fois la tâche passée à l'exécution, plus
+        // annulable comme un aperçu : jamais un fichier recréé par une annulation concurrente
+        $costs = (array) ($extra['costs'] ?? []);
+        if ($costs !== []) {
+            $this->writeGroupCosts($job, $costs);
+        }
         try {
             $this->bus->dispatch(new RunCatalogImportMessage($id, (string) $this->tenants->getCurrentTenantCode(), $by));
         } catch (\Throwable $e) {
             // la file est indisponible : l'import revient à « analysé », le gérant pourra confirmer de nouveau
             $this->logger->error(sprintf('[Import] import %d non mis en file (%s)', $id, $e::class));
+            if ($costs !== []) {
+                $this->writeGroupCosts($job, array_map(static fn (): string => '', $costs)); // un second essai sans `withCost` ne doit pas les retrouver
+            }
             $this->store->move($id, ImportJobStore::RUNNING, ImportJobStore::ANALYSED);
             throw new ImportException('IMPORT_QUEUE_UNAVAILABLE', 503);
         }
@@ -302,6 +325,7 @@ class CatalogImportService
             if ($this->store->move($id, $job['status'], ImportJobStore::CANCELLED, ['cancelled_at' => true])) {
                 @unlink($this->directory() . '/' . $job['stored_name']);
             }
+            $this->markGroupCopyCancelled($job, $id); // relecture neuve, passe 2 : un aperçu annulé par la cible ne bloque pas le directeur
 
             return $this->view($this->job($id));
         }
@@ -403,10 +427,7 @@ class CatalogImportService
                 'SELECT id FROM product WHERE id = ANY(?::int[])', ['{' . implode(',', $linked) . '}']));
             $this->groupCopies->forgetTargetProducts($site, array_values(array_diff($linked, $alive)));
             // relecture neuve : annulée par la boutique elle-même, la copie le dit aussi au directeur
-            $copy = $this->groupCopies->byJob($site, $id);
-            if ($copy !== null) {
-                $this->groupCopies->cancel((int) $copy['id']);
-            }
+            $this->markGroupCopyCancelled($job, $id);
         }
 
         return $this->view($this->job($id));

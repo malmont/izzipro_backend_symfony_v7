@@ -691,7 +691,17 @@ du groupe vers une autre. Code : `src/Services/Group/Copy/` (`GroupCatalogCopySe
   comme l'import (taux inconnu : 422). Au plus 5 000 articles ; une seule tâche active par cible (409 `IMPORT_ALREADY_ACTIVE`).
 - **Correspondance** : après l'exécution, le worker écrit dans la base maître le lien article et variante source → copie
   (`shop_group_item_links`) ; une annulation (du directeur ou de la cible) retire les liens des articles retirés. Elle servira à G-5 et G-6.
-- Refus : 403 `GROUP_COPY_FORBIDDEN` (pas le directeur, ou entré dans une boutique : la garde du mode groupe ferme aussi `/api/gestion/groupe`),
+- **Coût d'une boutique associée** : jamais écrit dans le catalogue figé à l'aperçu ; avec `withCost: true`, relu dans la source (READ ONLY) et
+  posé dans le fichier seulement une fois la tâche passée à l'exécution (retiré si la file est indisponible).
+- **Codes-barres** : celui de l'article (gardé sur sa fiche quand il a plusieurs variantes) et ceux des variantes, mêmes règles CB-1. Un
+  article SANS variante est copié avec une variante unique à son prix, qui porte son code ; son lien a `source_variant_id` nul (G-5 le lira
+  comme « article sans variante »). Seule la première option autre que taille et couleur est reprise (comme un fichier Shopify : trois
+  options au plus).
+- **Annulation par la cible** (dans ses imports, aperçu ou copie faite) : la copie est marquée annulée pour le directeur ; son annulation à
+  lui réussit alors sans rien refaire. À la bascule : `messenger:stop-workers` (le gestionnaire `RunCatalogImportHandler` change).
+- Lecture de la source : par paquets de 200, articles du type de base seulement (jamais un véhicule) ; la limite compte ces articles.
+- Refus : 403 `GROUP_COPY_FORBIDDEN` (pas le directeur, ou entré dans une boutique : la garde du mode groupe ferme aussi `/api/gestion/groupe`,
+  donc aussi `GET /api/gestion/groupe/resultat` pour le directeur entré : 403 `MODE_FORBIDDEN` au lieu de 400),
   404 `GROUP_SHOP_UNKNOWN`, `COPY_NOT_FOUND`, 409 `COPY_NOT_READY`, 422 `VALIDATION_FAILED`, `COPY_TOO_MANY`.
 
 ## Tenir cette fiche à jour

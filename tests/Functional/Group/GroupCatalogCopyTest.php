@@ -116,8 +116,11 @@ class GroupCatalogCopyTest extends WebTestCase
         $returned = $this->pdo(MV_TEST_TENANT_DB)->query("SELECT purchase_price, image FROM product WHERE name = 'Copie g4 {$this->tag}' AND id <> $pid")->fetch(\PDO::FETCH_ASSOC);
         $this->assertNull($returned['purchase_price'], 'aucun coût d\'une boutique associée sans withCost');
         $this->files[] = (string) $returned['image'];
+        // avant l'annulation (qui efface le fichier) : le catalogue figé chez le siège ne porte aucun coût de la boutique associée
+        $frozen = array_values(array_filter($this->groupJson(MV_TEST_TENANT_DB)));
+        $this->assertNotSame([], $frozen, 'le catalogue figé de la copie est lu');
+        $this->assertSame([''], array_values(array_unique(array_map(static fn (array $p): string => (string) $p['variants'][0]['costRaw'], $frozen[0]))), 'le coût d\'une boutique associée n\'est jamais figé chez une autre');
         $this->json('POST', '/api/gestion/groupe/copies/' . $back['id'] . '/cancel', $director, MV_TEST_TENANT_HOST, null, 200);
-        $this->assertStringNotContainsString('12.34', (string) json_encode($this->groupJson(MV_TEST_TENANT_DB)), 'le coût d\'une boutique associée n\'est jamais figé chez une autre');
         // … sauf demande explicite : `withCost: true` relit le coût dans la source à la confirmation
         $back2 = $this->json('POST', '/api/gestion/groupe/copies', $director, MV_TEST_TENANT_HOST, ['source' => MV_TEST_TENANT2_CODE, 'target' => MV_TEST_TENANT_CODE, 'articles' => [(int) $copied['id']]], 201);
         $this->assertTrue($this->json('POST', '/api/gestion/groupe/copies/' . $back2['id'] . '/confirm', $director, MV_TEST_TENANT_HOST, ['withCost' => true], 202)['withCost']);
@@ -161,6 +164,22 @@ class GroupCatalogCopyTest extends WebTestCase
         foreach ([['GET', ''], ['POST', '/confirm'], ['POST', '/cancel']] as [$method, $suffix]) {
             $this->assertSame([404, 'COPY_NOT_FOUND'], $this->call($method, "/api/gestion/groupe/copies/$foreign$suffix", $director, MV_TEST_TENANT_HOST, $method === 'POST' ? [] : null));
         }
+    }
+
+    public function testAPreviewCancelledByTheShopIsCancelledForTheDirectorToo(): void
+    {
+        $this->group();
+        $director = $this->account(MV_TEST_TENANT_DB, MV_TEST_TENANT_CODE, 'directeur', ['ROLE_ADMIN']);
+        $shopAdmin = $this->account(MV_TEST_TENANT2_DB, MV_TEST_TENANT2_CODE, 'boutique', ['ROLE_ADMIN']);
+        [$pid] = $this->product(MV_TEST_TENANT_DB, MV_TEST_TENANT_CODE);
+        $copy = $this->json('POST', '/api/gestion/groupe/copies', $director, MV_TEST_TENANT_HOST, ['target' => MV_TEST_TENANT2_CODE, 'articles' => [$pid]], 201);
+        // la boutique libère sa place d'import en annulant l'aperçu, dans ses imports
+        $this->assertSame('cancelled', $this->json('POST', '/api/site/imports/' . $copy['import']['id'] . '/cancel', $shopAdmin, MV_TEST_TENANT2_HOST, null, 200)['status']);
+        $this->assertNotNull($this->json('GET', '/api/gestion/groupe/copies/' . $copy['id'], $director, MV_TEST_TENANT_HOST, null, 200)['cancelledAt'], 'le directeur la voit annulée');
+        $this->assertSame([409, 'COPY_NOT_READY'], $this->call('POST', '/api/gestion/groupe/copies/' . $copy['id'] . '/confirm', $director, MV_TEST_TENANT_HOST, []));
+        $this->assertSame('cancelled', $this->json('POST', '/api/gestion/groupe/copies/' . $copy['id'] . '/cancel', $director, MV_TEST_TENANT_HOST, null, 200)['import']['status'], 'son annulation réussit, sans rien refaire');
+        // la place est libre : une nouvelle copie s'analyse
+        $this->json('POST', '/api/gestion/groupe/copies', $director, MV_TEST_TENANT_HOST, ['target' => MV_TEST_TENANT2_CODE, 'articles' => [$pid]], 201);
     }
 
     /** @return list<mixed> le catalogue figé des copies du groupe dans une base (tous les fichiers JSON de ses tâches `group`) */

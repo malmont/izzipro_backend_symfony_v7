@@ -33,10 +33,15 @@ final class RunCatalogImportHandler
         $this->emProvider->switchTenant($tenant['dbname'], $tenant['code']);
         try {
             $this->imports->run($message->jobId, $message->by);
-            // lot G-4 : une copie du groupe écrit sa correspondance article et variante (base maître) une fois exécutée
-            $links = $this->groupCopies?->recordLinks($message->jobId) ?? 0;
-            if ($links > 0) {
-                $this->logger->info(sprintf('[Import] site %s, copie du groupe %d : %d lien(s) d\'articles', $message->tenantCode, $message->jobId, $links));
+            // lot G-4 : une copie du groupe écrit sa correspondance article et variante (base maître) une fois exécutée ; un échec se dit
+            // à part (l'import, lui, est fait)
+            try {
+                $links = $this->groupCopies?->recordLinks($message->jobId) ?? 0;
+                if ($links > 0) {
+                    $this->logger->info(sprintf('[Import] site %s, copie du groupe %d : %d lien(s) d\'articles', $message->tenantCode, $message->jobId, $links));
+                }
+            } catch (\Throwable $e) {
+                $this->logger->error(sprintf('[Import] site %s, copie du groupe %d faite, liens d\'articles NON écrits (%s)', $message->tenantCode, $message->jobId, $e::class));
             }
         } catch (\Throwable $e) {
             $this->logger->error(sprintf('[Import] site %s, import %d en échec (%s)', $message->tenantCode, $message->jobId, $e::class), ['exception' => $e]);

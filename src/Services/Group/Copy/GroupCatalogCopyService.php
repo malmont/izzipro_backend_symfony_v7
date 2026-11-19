@@ -131,13 +131,10 @@ class GroupCatalogCopyService
             // `withCost` demandé depuis une autre boutique que le siège : le coût, jamais figé à l'aperçu, est relu maintenant dans la source
             $costs = $withCost && !$fromHead && isset($shops[(string) $copy['source_tenant_code']]) ? $this->sourceCosts($shops[(string) $copy['source_tenant_code']], (string) $copy['source_tenant_code'], $shops[$target], $target, (int) $copy['target_job_id']) : null;
             $this->emProvider->switchTenant((string) $shops[$target]['dbname'], $target);
-            if ($costs !== null) {
-                $this->imports->patchGroupCosts((int) $copy['target_job_id'], $costs);
-            }
             $pos = (bool) ($body['pos'] ?? false);
             // ajout 2 du chef : masqués par défaut, ni en ligne (`hidden`) ni en caisse (`pos` faux)
             $view = $this->imports->confirm((int) $copy['target_job_id'], ['visibility' => $visibility, 'pos' => $pos,
-                'pricesIncludeTax' => $copy['source_prices_include_tax']], $by->getUserIdentifier(), ['withoutCost' => !$withCost]);
+                'pricesIncludeTax' => $copy['source_prices_include_tax']], $by->getUserIdentifier(), ['withoutCost' => !$withCost, 'costs' => $costs ?? []]);
             $queued = true;
             // ajout 3 du chef : chaque administrateur de la cible est prévenu (jamais une panne pour la copie déjà en file)
             $this->notifier->copied($copyId, (string) $group['name'], (int) ($view['report']['products']['importable'] ?? $copy['articles']), $visibility === 'hidden' && !$pos);
@@ -165,7 +162,9 @@ class GroupCatalogCopyService
         $home = $this->home();
         try {
             $this->emProvider->switchTenant((string) $tenant['dbname'], (string) $copy['target_tenant_code']);
-            $view = $this->imports->cancel((int) $copy['target_job_id'], $by->getUserIdentifier());
+            $current = $this->imports->show((int) $copy['target_job_id']);
+            // déjà annulée (par la boutique elle-même) : l'annulation du directeur réussit, sans rien refaire
+            $view = $current['status'] === ImportJobStore::CANCELLED ? $current : $this->imports->cancel((int) $copy['target_job_id'], $by->getUserIdentifier());
             $this->copies->cancel($copyId);
         } catch (ImportException $e) {
             throw new GroupException($e->errorCode, $e->status, $e->getMessage(), $e->extra);
