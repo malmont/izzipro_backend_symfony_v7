@@ -519,7 +519,13 @@ class AboRightsService
         $subscription = $first->getSubscription();
         $em->refresh($subscription);
         $plan = $subscription->getPlan();
+        if ($plan !== null && $em->contains($plan)) {
+            $em->refresh($plan); // carte de séances ou report réglés entre-temps : relus, comme l'abonnement
+        }
         $pb = $first->getPlanBenefit();
+        if ($pb !== null && $em->contains($pb)) {
+            $em->refresh($pb);
+        }
         $continues = in_array($subscription->getStatus(), [Subscription::STATUS_ACTIVE, Subscription::STATUS_TRIALING, Subscription::STATUS_PAST_DUE, Subscription::STATUS_PAUSED], true)
             && !$subscription->isCancelAtPeriodEnd() && !($plan?->isSinglePeriod() ?? false);
         $allowed = 0;

@@ -122,6 +122,17 @@ class AboRightsTest extends WebTestCase
         $this->db->executeStatement("UPDATE benefit_occurrence SET valid_until = NOW() - INTERVAL '1 hour' WHERE invoice_id = ?", ["in_abo1_e_$this->tag"]);
         $this->assertSame(['redispatched' => 0, 'carried' => 0, 'expired' => 2], $rights->dailyPass());
 
+        // un droit reporté ne l'est jamais une seconde fois, même quand la limite (2 places × 1) laisse de la marge : 4 droits, 3 utilisés,
+        // le dernier reporté, puis perdu à sa seconde échéance
+        $this->db->executeStatement('UPDATE subscription_plan SET single_period = false WHERE id = ?', [$this->planId]);
+        [$room, $roomStripe] = $this->subscription(2);
+        $this->paid("evt_abo1_k_$this->tag", $roomStripe, "in_abo1_k_$this->tag", 'subscription_cycle', $t, $t + 7 * 86400);
+        $this->db->executeStatement("UPDATE benefit_occurrence SET status = 'done' WHERE id IN (SELECT id FROM benefit_occurrence WHERE invoice_id = ? ORDER BY id LIMIT 3)", ["in_abo1_k_$this->tag"]);
+        $this->db->executeStatement("UPDATE benefit_occurrence SET valid_until = NOW() - INTERVAL '1 hour' WHERE invoice_id = ? AND status = 'available'", ["in_abo1_k_$this->tag"]);
+        $this->assertSame(['redispatched' => 0, 'carried' => 1, 'expired' => 0], $rights->dailyPass());
+        $this->db->executeStatement("UPDATE benefit_occurrence SET valid_until = NOW() - INTERVAL '1 hour' WHERE invoice_id = ? AND status = 'available'", ["in_abo1_k_$this->tag"]);
+        $this->assertSame(['redispatched' => 0, 'carried' => 0, 'expired' => 1], $rights->dailyPass(), 'un droit reporté n\'est jamais reporté deux fois');
+
         // l'historique garde la naissance, le report et la perte
         $types = $this->db->fetchFirstColumn('SELECT type FROM subscription_abo_event WHERE subscription_id = ? ORDER BY id', [$s->getId()]);
         $this->assertSame(['born', 'born', 'born', 'carried', 'expired', 'expired', 'expired'], $types);
