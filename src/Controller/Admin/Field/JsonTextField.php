@@ -20,7 +20,7 @@ final class JsonTextField implements FieldInterface
         return (new self())
             ->setProperty($propertyName)
             ->setLabel($label)
-            ->setTemplateName('crud/field/textarea')
+            ->setTemplatePath('admin/field/json_text.html.twig') // pas `crud/field/textarea` : son title lit la valeur brute (un tableau)
             ->setFormType(JsonTextType::class)
             ->addCssClass('field-textarea')
             ->setFormTypeOption('attr', ['rows' => 8, 'class' => 'font-monospace'])

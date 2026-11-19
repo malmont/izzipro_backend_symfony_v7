@@ -232,6 +232,33 @@ class AboBenefitsTest extends WebTestCase
         $this->assertStringContainsString('Quantité par période', json_decode((string) $r->getContent(), true)['message'], 'le refus de l\'écran, repris tel quel');
     }
 
+    /**
+     * Les listes d'EasyAdmin des formules et des prestations s'ouvrent AVEC des lignes (19/11/2026) : le gabarit `textarea` d'EasyAdmin
+     * écrivait la valeur brute d'un champ JSON (un tableau) dans `title`, et la liste des formules tombait en 500 dès qu'une formule
+     * existait. Une formule aux noms de forme inattendue (un tableau sous « fr ») s'affiche aussi, en JSON.
+     */
+    public function testTheEasyAdminListsOpenWithRows(): void
+    {
+        $service = static::getContainer()->get(BenefitService::class);
+        $service->saveBenefit(null, ['kind' => 'session', 'names' => ['fr' => 'Yoga liste', 'en' => 'Yoga list'], 'descriptions' => ['fr' => 'Une description']]);
+        $em = $this->provider->getEntityManager();
+        $model = $em->getRepository(SubscriptionPlan::class)->find($this->planId);
+        $em->persist((new SubscriptionPlan())->setProduct($model->getProduct())->setNames(['fr' => ['abo-test', 'forme inattendue']])->setInterval('month')->setIntervalCount(1)->setPrice(1000));
+        $em->flush();
+        $this->assertGreaterThan(1, (int) $this->db->fetchOne('SELECT COUNT(*) FROM subscription_plan'));
+        $email = 'ea-abo-' . $this->tag . '@example.invalid';
+        $user = (new User())->setEmail($email)->setUsername($email)->setFirstname('Admin')->setLastname('Abo')->setRoles(['ROLE_ADMIN'])->setIsVerified(true)->setPassword('x');
+        $em->persist($user);
+        $em->flush();
+        $this->client->loginUser($user, 'main');
+        foreach ([\App\Controller\Admin\SubscriptionPlanCrudController::class => 'forme inattendue', \App\Controller\Admin\BenefitCrudController::class => 'Yoga liste'] as $controller => $shown) {
+            $this->client->request('GET', 'https://' . MV_TEST_TENANT_HOST . '/admin?' . http_build_query(['crudAction' => 'index', 'crudControllerFqcn' => $controller]), [], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST]);
+            $html = (string) $this->client->getResponse()->getContent();
+            $this->assertSame(200, $this->client->getResponse()->getStatusCode(), "$controller : " . substr(strip_tags($html), 0, 300));
+            $this->assertStringContainsString($shown, $html, "$controller : la ligne est affichée");
+        }
+    }
+
     private function refusal(callable $fn): string
     {
         try {
