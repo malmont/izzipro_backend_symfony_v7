@@ -713,11 +713,15 @@ relu à chaque appel et à la confirmation). Code : `SiteAssistantTools::GROUP_R
 
 - **Lectures** (palier « Aide IA » compris) : `get_group` (le groupe, ses boutiques, ce que l'assistant ne fait pas) ; `get_group_view`
   (`statistics`, `day`, `losses`, `to_receive` première page, `cash_balances`, `cash_movements`, `year`, `result` sur from/to) : les mêmes
-  réponses que « Toutes les boutiques ». Le modèle ne reçoit que des nombres, des codes de boutique et des noms de catalogue : le libellé
-  d'un mouvement prévu (texte libre) et les notes sont retirés ; les salaires sont regroupés ; les noms de notes de frais sont retirés.
+  réponses que « Toutes les boutiques », avec les mêmes refus (`result` : 366 jours au plus, `GroupViews::resultRange`, partagée avec
+  l'écran). Aucune donnée personnelle : le libellé d'un mouvement prévu (texte libre) et les notes sont retirés ; les salaires sont
+  regroupés ; les noms de notes de frais sont retirés. Restent, comme DONNÉES de commerçants (consigne du prompt) : nombres, codes et noms
+  de boutiques, noms de catalogue, noms de périodes, de campagnes publicitaires et de commandes fournisseurs.
 - **Actions**, proposées puis confirmées par le directeur (« IA complète ») : `propose_group_invitation` (une boutique existante ; elle
   accepte ou refuse elle-même) ; `propose_group_copy` (G-4 : aperçu puis copie à la confirmation, masquée par défaut, stock jamais copié,
-  coût seulement depuis le siège sauf `withCost`, boutique cible prévenue).
+  coût seulement depuis le siège sauf `withCost`, boutique cible prévenue). Le résumé à confirmer donne les conditions (coût,
+  visibilité) AVANT les noms de boutiques. Si la confirmation échoue après l'aperçu, l'aperçu est annulé (il bloquerait sinon tout import
+  de la cible).
 - **Refusés au modèle, et dits** (`get_group.refusedToAssistant`) : quitter ou dissoudre le groupe (geste destructif qui coupe aussitôt les
   entrées du directeur) ; entrer dans une boutique (geste de sécurité : jeton, session) ; créer une boutique (aucune route de création au
   groupe à ce jour).

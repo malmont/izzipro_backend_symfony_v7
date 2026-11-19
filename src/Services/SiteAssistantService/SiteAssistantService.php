@@ -598,7 +598,6 @@ TXT;
                 $view = (string) ($input['view'] ?? '');
                 $from = is_string($input['from'] ?? null) ? $input['from'] : null;
                 $to = is_string($input['to'] ?? null) ? $input['to'] : null;
-                $day = static fn (?string $d): bool => $d !== null && preg_match('/^\d{4}-\d{2}-\d{2}$/', $d) === 1 && \DateTimeImmutable::createFromFormat('!Y-m-d', $d)?->format('Y-m-d') === $d;
                 try {
                     $data = match ($view) {
                         'statistics' => $this->groupViews->statistics($group, array_filter(['range' => $input['range'] ?? null, 'from' => $from, 'to' => $to, 'source' => $input['source'] ?? null], static fn ($v) => is_string($v) && $v !== ''), 'fr'),
@@ -608,11 +607,15 @@ TXT;
                         'cash_balances' => $this->groupViews->balances($group, 20),
                         'cash_movements' => self::withoutLabels($this->groupViews->movements($group, null, 'fr')),
                         'year' => $this->groupViews->year($group, 'fr'),
-                        'result' => $day($from) && $day($to) && $from <= $to ? $this->groupViews->result($group, (string) $from, (string) $to) : ['error' => 'result : from et to (AAAA-MM-JJ, from ≤ to) attendus'],
+                        // les mêmes règles que l'écran : dates du magasin, from ≤ to, 366 jours au plus (422 → paramètres refusés)
+                        'result' => $this->groupViews->result($group, ...\App\Services\Group\AllShops\GroupViews::resultRange($from, $to)),
                         default => ['error' => 'vue inconnue', 'views' => SiteAssistantTools::GROUP_VIEWS],
                     };
                 } catch (\App\Gestion\Services\GestionValidationException $e) {
                     $data = ['error' => 'paramètres refusés', 'fields' => $e->fields];
+                } catch (\Symfony\Component\HttpKernel\Exception\HttpExceptionInterface $e) {
+                    // un refus HTTP d'une lecture (paramètre, droit) ne coupe pas tout l'échange : il est dit au modèle, sans détail
+                    $data = ['error' => 'lecture refusée', 'status' => $e->getStatusCode()];
                 }
 
                 return [$data, null, $linkTo('groupe')];
@@ -634,8 +637,12 @@ TXT;
                 $options = array_filter(['withCost' => is_bool($input['withCost'] ?? null) ? $input['withCost'] : null, 'visibility' => in_array($input['visibility'] ?? null, ['hidden', 'as_source'], true) ? $input['visibility'] : null,
                     'pos' => is_bool($input['pos'] ?? null) ? $input['pos'] : null], static fn ($v) => $v !== null);
                 $action = $this->remember($tenantCode, 'propose_group_copy', ['source' => $source, 'target' => $target, 'articles' => $articles] + $options,
-                    sprintf('Copier %s du catalogue de « %s » vers « %s »%s%s', $articles === null ? 'tous les articles' : count($articles) . ' article(s)', (string) $shops[$source], (string) $shops[$target],
-                        ($options['visibility'] ?? 'hidden') === 'hidden' && !($options['pos'] ?? false) ? ', masqués' : ', visibles', ($options['withCost'] ?? ($source === $group['head_tenant_code'])) ? ', avec le coût d\'achat' : ', sans le coût d\'achat'));
+                    // les conditions D'ABORD, les noms (données des commerçants, longueur libre) ensuite : la coupe à 200 caractères ne retire jamais une condition
+                    sprintf('Copier %s (%s, %s) du catalogue de « %s » vers « %s »', $articles === null ? 'tous les articles' : (count($articles) === 1 ? '1 article' : count($articles) . ' articles'),
+                        ($options['withCost'] ?? ($source === $group['head_tenant_code'])) ? 'avec le coût d\'achat' : 'sans le coût d\'achat',
+                        ($options['visibility'] ?? 'hidden') === 'as_source' ? 'visibilité en ligne de la source' . (($options['pos'] ?? false) ? ', en caisse' : ', pas en caisse') : (($options['pos'] ?? false) ? 'masqués en ligne, en caisse' : 'masqués'),
+                        // chaque nom borné (60) et suivi du code : la cible reste lisible sous la coupe de 200 caractères
+                        mb_substr((string) $shops[$source], 0, 60) . ' [' . $source . ']', mb_substr((string) $shops[$target], 0, 60) . ' [' . $target . ']'));
 
                 return [$proposed($action, ['note' => 'Proposé au directeur ; à la confirmation, l\'aperçu puis la copie partent (stock jamais copié), et la boutique cible est prévenue.']), $action, $linkTo('groupe')];
         }

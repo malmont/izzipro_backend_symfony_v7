@@ -35,6 +35,7 @@ class ConfirmSiteAssistantActionUseCase
         private readonly ?\App\Services\Group\AllShops\GroupDirector $groupDirector = null,
         private readonly ?\App\Services\Group\GroupService $groupService = null,
         private readonly ?\App\Services\Group\Copy\GroupCatalogCopyService $groupCopies = null,
+        private readonly ?\Psr\Log\LoggerInterface $logger = null,
     ) {
     }
 
@@ -217,9 +218,21 @@ class ConfirmSiteAssistantActionUseCase
                         }
                         $copy = $this->groupCopies->analyse($actor, array_filter(['source' => $input['source'] ?? null, 'target' => $input['target'] ?? null, 'articles' => $input['articles'] ?? null], static fn ($v) => $v !== null));
 
-                        return $this->groupCopies->confirm($actor, (int) $copy['id'], array_intersect_key($input, array_flip(['withCost', 'visibility', 'pos'])));
+                        try {
+                            return $this->groupCopies->confirm($actor, (int) $copy['id'], array_intersect_key($input, array_flip(['withCost', 'visibility', 'pos'])));
+                        } catch (\App\Services\Group\GroupException $e) {
+                            // relecture IA-G : un aperçu laissé ouvert bloquerait tout import de la cible (409 IMPORT_ALREADY_ACTIVE) ; il est annulé.
+                            // Seulement sur un REFUS de la copie (GroupException : levé avant la mise en file) ; jamais sur une panne imprévue, qui
+                            // peut survenir après la mise en file (annuler retirerait alors des articles déjà copiés)
+                            try {
+                                $this->groupCopies->cancel($actor, (int) $copy['id']);
+                            } catch (\Throwable $cancel) {
+                                $this->logger?->warning('[SiteAssistant] aperçu de copie non annulé après un refus', ['copy' => (int) $copy['id'], 'error' => $cancel::class]);
+                            }
+                            throw $e;
+                        }
                     } catch (\App\Services\Group\GroupException $e) {
-                        throw new \InvalidArgumentException($e->getMessage() . ' (' . $e->errorCode . ')');
+                        throw new \InvalidArgumentException($e->getMessage() . ' (' . $e->errorCode . ')', 0, $e);
                     }
                 case 'request_agency_assistance':
                     // seul un administrateur DU site : ni le compte de la plateforme, ni une entrée par jeton

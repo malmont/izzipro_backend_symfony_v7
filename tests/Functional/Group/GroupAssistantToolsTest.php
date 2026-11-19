@@ -62,6 +62,7 @@ class GroupAssistantToolsTest extends WebTestCase
         $this->answer([['get_group', []]]);
         $this->chat($shopAdmin, MV_TEST_TENANT2_HOST);
         $this->assertNotContains('get_group', array_column(FakeLandingAiClient::$requests[0]['tools'], 'name'), 'l\'administrateur d\'une boutique n\'est pas le directeur');
+        $this->assertStringContainsString('directeur', (string) json_decode(FakeLandingAiClient::$requests[1]['messages'][2]['content'][0]['content'], true)['error'], 'inventé par lui : refusé');
 
         // le directeur : les outils lui sont donnés, et une consigne dans ses données reste une donnée
         $pdo = $this->pdo(MV_TEST_TENANT2_DB);
@@ -78,6 +79,8 @@ class GroupAssistantToolsTest extends WebTestCase
         $state = json_decode($results[0]['content'], true);
         $this->assertSame([MV_TEST_TENANT_CODE, MV_TEST_TENANT2_CODE], array_column($state['shops'], 'code'));
         $this->assertContains('quitter ou dissoudre le groupe', $state['refusedToAssistant']);
+        $movements = json_decode($results[1]['content'], true);
+        $this->assertSame('ok', array_column($movements['shops'], 'status', 'site')[MV_TEST_TENANT2_CODE] ?? null, 'la boutique au mouvement est bien lue');
         $this->assertStringNotContainsString('Jeanne', $results[1]['content'], 'le libellé d\'un mouvement (texte libre) n\'atteint jamais le modèle');
         $this->assertStringContainsString('"rent"', $results[1]['content'], 'la catégorie et le montant, oui');
         $this->assertSame('group', json_decode($results[2]['content'], true)['scope']);
@@ -106,9 +109,60 @@ class GroupAssistantToolsTest extends WebTestCase
         $this->assertSame(1, $jobs());
 
         // un code inconnu ou la boutique elle-même : refusés avant toute proposition
-        $this->answer([['propose_group_copy', ['source' => MV_TEST_TENANT2_CODE, 'target' => MV_TEST_TENANT2_CODE]], ['propose_group_invitation', ['site' => MV_TEST_TENANT2_CODE]]]);
+        $this->answer([['propose_group_copy', ['source' => MV_TEST_TENANT2_CODE, 'target' => MV_TEST_TENANT2_CODE]], ['propose_group_invitation', ['site' => MV_TEST_TENANT2_CODE]],
+            ['propose_group_copy', ['target' => 'inconnue-' . $this->tag]]]);
         $body = $this->chat($director);
         $this->assertSame([], $body['actions']);
+    }
+
+    /** Relecture IA-G, passe 1 : la confirmation relit le directeur ; le résultat suit le plafond de l'écran (366 jours) */
+    public function testTheConfirmationRereadsTheDirectorAndTheResultKeepsTheScreenLimit(): void
+    {
+        $this->group();
+        $director = $this->account(MV_TEST_TENANT_DB, MV_TEST_TENANT_CODE, 'directeur', ['ROLE_ADMIN']);
+        $pid = $this->product();
+        $jobs = fn (): int => (int) $this->pdo(MV_TEST_TENANT2_DB)->query("SELECT COUNT(*) FROM import_job WHERE source = 'group'")->fetchColumn();
+
+        $this->answer([['get_group_view', ['view' => 'result', 'from' => '2000-01-01', 'to' => '2026-01-01']]]);
+        $this->chat($director);
+        $read = json_decode((string) FakeLandingAiClient::$requests[1]['messages'][2]['content'][0]['content'], true);
+        $this->assertSame(['paramètres refusés', ['to' => 'RANGE_TOO_LONG']], [$read['error'] ?? null, $read['fields'] ?? null], 'aucune boutique ne calcule 26 ans');
+
+        $this->answer([['propose_group_copy', ['target' => MV_TEST_TENANT2_CODE, 'articles' => [$pid]]]]);
+        $body = $this->chat($director);
+        $this->assertCount(1, $body['actions']);
+        $this->assertStringContainsString('avec le coût d\'achat, masqués', $body['actions'][0]['summary'], 'les conditions viennent avant les noms');
+        // le module Multi-boutiques s'éteint entre la proposition et la confirmation : refusée, rien n'est écrit chez la cible
+        $this->pdo(MV_TEST_TENANT_DB)->exec('UPDATE entreprise SET is_multi_shop_active = FALSE');
+        static::getContainer()->get(TenantCacheService::class)->invalidateSite(MV_TEST_TENANT_CODE, MV_TEST_TENANT_DB);
+        $confirmed = $this->request('POST', '/api/site/assistant/actions/' . $body['actions'][0]['id'] . '/confirm', $director, MV_TEST_TENANT_HOST, []);
+        $this->assertNotSame(200, $confirmed->getStatusCode(), (string) $confirmed->getContent());
+        $this->assertSame(0, $jobs());
+    }
+
+    /** Relecture IA-G, passe 2 : une confirmation REFUSÉE après l'aperçu annule l'aperçu (sinon tout import de la cible resterait bloqué) */
+    public function testARefusedConfirmationCancelsThePreviewItMade(): void
+    {
+        $this->group();
+        $director = $this->account(MV_TEST_TENANT_DB, MV_TEST_TENANT_CODE, 'directeur', ['ROLE_ADMIN']);
+        $pid = $this->product();
+        $this->answer([['propose_group_copy', ['target' => MV_TEST_TENANT2_CODE, 'articles' => [$pid]]]]);
+        $body = $this->chat($director);
+        $this->assertCount(1, $body['actions']);
+        // l'import devient indisponible chez la cible (type de mouvement « Import » absent) : la confirmation est refusée APRÈS l'aperçu
+        $target = $this->pdo(MV_TEST_TENANT2_DB);
+        $target->exec("UPDATE movement_type SET name = 'Import-iag-{$this->tag}' WHERE name = 'Import'");
+        try {
+            $confirmed = $this->request('POST', '/api/site/assistant/actions/' . $body['actions'][0]['id'] . '/confirm', $director, MV_TEST_TENANT_HOST, []);
+        } finally {
+            $target->exec("UPDATE movement_type SET name = 'Import' WHERE name = 'Import-iag-{$this->tag}'");
+        }
+        $this->assertNotSame(200, $confirmed->getStatusCode());
+        $this->assertStringContainsString('IMPORT_NOT_AVAILABLE', (string) $confirmed->getContent());
+        $copy = $this->master->query("SELECT target_job_id, confirmed_at, cancelled_at FROM shop_group_copies WHERE target_tenant_code = '" . MV_TEST_TENANT2_CODE . "' ORDER BY id DESC LIMIT 1")->fetch(\PDO::FETCH_ASSOC);
+        $this->assertNotNull($copy['cancelled_at'], 'la copie est annulée');
+        $this->assertNull($copy['confirmed_at']);
+        $this->assertNotSame('analysed', $target->query('SELECT status FROM import_job WHERE id = ' . (int) $copy['target_job_id'])->fetchColumn(), 'l\'aperçu ne bloque plus les imports de la cible');
     }
 
     /** @param list<array{0: string, 1: array<string, mixed>}> $uses */
