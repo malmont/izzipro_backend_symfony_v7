@@ -261,7 +261,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (706)
+## Boutique et commun (715)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -573,6 +573,15 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/api/gestion/preparation/estimations` | ROLE_ADMIN | `Gestion\Controller\GestionPreparationController::estimations` |
 | POST | `/api/gestion/preparation/simulation` | ROLE_ADMIN | `Gestion\Controller\GestionPreparationController::simulate` |
 | POST | `/api/gestion/preparation/valider` | ROLE_ADMIN | `Gestion\Controller\GestionPreparationController::validate` |
+| POST | `/api/gestion/prets/apercu` | ROLE_ADMIN | `Gestion\Controller\GestionLoanController::preview` |
+| GET | `/api/gestion/prets/exercice` | ROLE_ADMIN | `Gestion\Controller\GestionLoanController::financialYear` |
+| DELETE | `/api/gestion/prets/{id}/remboursements/{index}` | ROLE_ADMIN | `Gestion\Controller\GestionLoanController::removePrepayment` |
+| POST | `/api/gestion/prets/{id}/remboursements` | ROLE_ADMIN | `Gestion\Controller\GestionLoanController::addPrepayment` |
+| DELETE | `/api/gestion/prets/{id}` | ROLE_ADMIN | `Gestion\Controller\GestionLoanController::delete` |
+| GET | `/api/gestion/prets/{id}` | ROLE_ADMIN | `Gestion\Controller\GestionLoanController::get` |
+| PATCH | `/api/gestion/prets/{id}` | ROLE_ADMIN | `Gestion\Controller\GestionLoanController::update` |
+| GET | `/api/gestion/prets` | ROLE_ADMIN | `Gestion\Controller\GestionLoanController::list` |
+| POST | `/api/gestion/prets` | ROLE_ADMIN | `Gestion\Controller\GestionLoanController::create` |
 | POST | `/api/gestion/prix/annuler` | ROLE_ADMIN | `Gestion\Controller\GestionPriceController::undo` |
 | POST | `/api/gestion/prix/apercu` | ROLE_ADMIN | `Gestion\Controller\GestionPriceController::preview` |
 | POST | `/api/gestion/prix/appliquer` | ROLE_ADMIN | `Gestion\Controller\GestionPriceController::apply` |
