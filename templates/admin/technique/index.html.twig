@@ -2,6 +2,8 @@
 {% extends ea() is not null ? '@EasyAdmin/page/content.html.twig' : 'base_admin.html.twig' %}
 
 {% block title %}Tableau de bord technique{% endblock %}
+{# titre de l'onglet sous EasyAdmin (sinon celui de la page lue avant) ; le contenu garde le thème sombre d'EasyAdmin #}
+{% block page_title %}Tableau de bord technique{% endblock %}
 {% block content_title %}Tableau de bord technique{% endblock %}
 
 {% block main %}{{ block('technique_panel') }}{% endblock %}
@@ -19,6 +21,8 @@
     {%- endif -%}
 {% endmacro %}
 {% import _self as ui %}
+{# Liens de la page : sous EasyAdmin, ils RESTENT dans EasyAdmin (une route nue perdrait le menu et le thème : page blanche) #}
+{% macro lien(params) %}{{ ea() is not null ? ea_url().unsetAll().setRoute('admin_technique', params) : path('admin_technique', params) }}{% endmacro %}
 
 {% block technique_panel %}
     <link rel="stylesheet" href="{{ asset('assets/css/admin-technique.css') }}">
@@ -31,7 +35,7 @@
     <div class="d-flex flex-wrap align-items-center gap-2 mb-3 tech-barre">
         <span class="text-muted">Fenêtre :</span>
         {% for key, w in windows %}
-            <a class="btn btn-sm {{ key == window ? 'btn-primary' : 'btn-outline-secondary' }}" href="{{ path('admin_technique', {fenetre: key, site: detail ? detail.site : null, tri: sort}) }}">{{ w.label }}</a>
+            <a class="btn btn-sm {{ key == window ? 'btn-primary' : 'btn-outline-secondary' }}" href="{{ ui.lien({fenetre: key, site: detail ? detail.site : null, tri: sort}) }}">{{ w.label }}</a>
         {% endfor %}
         <span class="ms-auto">{{ ui.statut(freshness.status) }} <span class="text-muted small" data-fraicheur>{{ freshness.label }}</span></span>
     </div>
@@ -46,7 +50,7 @@
                 <tr>
                     <th>Site</th>
                     {% for key, r in resources %}
-                        <th class="text-end {{ key == sort ? 'tech-tri-actif' : '' }}"><a href="{{ path('admin_technique', {fenetre: window, site: detail ? detail.site : null, tri: key}) }}" title="Trier par {{ r.label|lower }}">{{ r.label }}</a>{% if r.kind == 'latest' %} <span class="text-muted small" title="dernier relevé">●</span>{% endif %}</th>
+                        <th class="text-end {{ key == sort ? 'tech-tri-actif' : '' }}"><a href="{{ ui.lien({fenetre: window, site: detail ? detail.site : null, tri: key}) }}" title="Trier par {{ r.label|lower }}">{{ r.label }}</a>{% if r.kind == 'latest' %} <span class="text-muted small" title="dernier relevé">●</span>{% endif %}</th>
                     {% endfor %}
                 </tr>
             </thead>
@@ -54,7 +58,7 @@
                 {% for row in ranking %}
                     <tr class="{{ detail and row.site == detail.site ? 'table-active' : '' }}" data-site="{{ row.site }}">
                         <td>
-                            <a href="{{ path('admin_technique', {fenetre: window, site: row.site, tri: sort}) }}"><strong>{{ row.site }}</strong></a>
+                            <a href="{{ ui.lien({fenetre: window, site: row.site, tri: sort}) }}"><strong>{{ row.site }}</strong></a>
                             <div class="text-muted small">{{ row.names|join(', ') }}{% if row.codes|length > 1 %} <span title="codes partageant la même base">({{ row.codes|join(' + ') }})</span>{% endif %}{% if not row.known %} <span class="badge bg-secondary">site inconnu de la table tenants</span>{% endif %}</div>
                         </td>
                         {% for key, r in resources %}

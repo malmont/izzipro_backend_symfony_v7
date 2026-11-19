@@ -5,6 +5,7 @@ namespace App\Controller\Admin;
 use App\Security\RoleAssignmentPolicy;
 use App\UseCase\TechDashboardUseCase\GetTechDashboardUseCase;
 use App\UseCase\TechDashboardUseCase\UpdateTechThresholdsUseCase;
+use EasyCorp\Bundle\EasyAdminBundle\Router\AdminUrlGenerator;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -23,6 +24,7 @@ class TechDashboardAdminController extends AbstractController
     public function __construct(
         private readonly GetTechDashboardUseCase $getDashboard,
         private readonly UpdateTechThresholdsUseCase $updateThresholds,
+        private readonly ?AdminUrlGenerator $urls = null,
     ) {
     }
 
@@ -51,6 +53,16 @@ class TechDashboardAdminController extends AbstractController
             }
         }
 
-        return $this->redirectToRoute('admin_technique', array_filter(['fenetre' => $request->request->get('fenetre'), 'site' => $request->request->get('site')]) + ['_fragment' => 'seuils']);
+        // retour à la page HABILLÉE par EasyAdmin : une redirection vers la route nue perdrait le menu et le thème (page blanche)
+        $params = array_filter(['fenetre' => $request->request->get('fenetre'), 'site' => $request->request->get('site')]);
+        try {
+            if ($this->urls !== null) {
+                return $this->redirect($this->urls->unsetAll()->setRoute('admin_technique', $params)->generateUrl() . '#seuils');
+            }
+        } catch (\Throwable) {
+            // pas de contexte d'EasyAdmin : la route nue
+        }
+
+        return $this->redirectToRoute('admin_technique', $params + ['_fragment' => 'seuils']);
     }
 }
