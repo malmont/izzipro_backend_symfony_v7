@@ -6,9 +6,9 @@ namespace App\Services\Group;
 final class GroupException extends \RuntimeException
 {
     /** @param array<string, mixed> $extra */
-    public function __construct(public readonly string $errorCode, public readonly int $status, string $message = '', public readonly array $extra = [])
+    public function __construct(public readonly string $errorCode, public readonly int $status, string $message = '', public readonly array $extra = [], ?\Throwable $previous = null)
     {
-        parent::__construct($message !== '' ? $message : $errorCode);
+        parent::__construct($message !== '' ? $message : $errorCode, 0, $previous);
     }
 
     /** @return array<string, mixed> */
