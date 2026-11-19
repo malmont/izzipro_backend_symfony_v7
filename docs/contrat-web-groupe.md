@@ -280,6 +280,8 @@ L'écran peut se préparer ; il ne s'affiche qu'après l'annonce « LIVRÉ : G-5
 - Seules les boutiques de la même entreprise que le siège : le siège, les boutiques créées par le groupe, et les associées avec le lien
   « même entreprise » (§ 9). Sinon 422 `TRANSFER_ASSOCIATED_SHOP`.
 - Chaque article doit avoir été copié dans la destination (§ 7), sinon 422 `TRANSFER_ITEM_NOT_IN_TARGET` (liste des lignes en cause).
+- La source et la destination doivent avoir la MÊME devise : sinon la demande est refusée, 409 `TRANSFER_CURRENCY_DIFFERS`. Aucune
+  conversion (même règle et même famille de code que la copie : `COPY_CURRENCY_DIFFERS`).
 
 ### 10.1 Directeur, au siège (sans l'en-tête X-Group-Scope)
 
@@ -287,7 +289,7 @@ L'écran peut se préparer ; il ne s'affiche qu'après l'annonce « LIVRÉ : G-5
 |---|---|
 | `POST /api/gestion/groupe/transferts { source, target, lines: [{ variantId, quantity }] }` → 201 | demande, état `requested` (1 à 200 lignes, `variantId` = la variante de la SOURCE) |
 | `GET /api/gestion/groupe/transferts` → `{ transfers: [...] }` | la liste, du plus récent au plus ancien (sans les lignes) |
-| `GET /api/gestion/groupe/transferts/{id}` | la fiche, avec ses lignes et le coût unitaire figé à l'envoi |
+| `GET /api/gestion/groupe/transferts/{id}` | la fiche, avec ses lignes et le coût unitaire figé à l'envoi (`unitCostCents` : le coût de la SOURCE à la date de l'envoi, coût moyen de ses lignes d'achat, sinon le prix d'achat de sa fiche ; pour un transfert depuis le siège, c'est le coût du siège) |
 | `POST /api/gestion/groupe/transferts/{id}/cancel` | annulation (voir 10.3) |
 
 Un transfert : `{ id, source, target, state, currency, requestedAt, sentAt, receivedAt, cancelledAt, partlyReceived, targetOrderId,
@@ -309,6 +311,20 @@ Refus de l'envoi :
 - 404 `TRANSFER_NOT_FOUND`, `GROUP_SHOP_UNKNOWN` ;
 - 503 `TRANSFER_SEND_FAILED` : la destination a refusé ; le stock est revenu, on peut renvoyer ;
 - 503 `TRANSFER_SEND_PENDING` : vérification en cours ; l'envoi sera repris tout seul, ne pas renvoyer, relire plus tard.
+
+**Marque sur la commande de destination.** Les lectures des commandes fournisseurs (`GET /api/commandes`, la liste, et la fiche
+`GET /api/commandes/{id}`) portent `groupTransfer` : `true` pour la commande d'arrivée d'un transfert, `false` sinon. Les écrans
+(gestion web et MAUI) cachent alors « Modifier » et « Supprimer » sans attendre le 409 `TRANSFER_ORDER_LOCKED` ; « Réceptionner » reste.
+
+**Réception incomplète** (casse, manque) : la destination réceptionne ce qui est arrivé, ligne par ligne, comme d'habitude.
+- Le transfert reste `sent`, avec `partlyReceived: true` ; il ne passe à `received` que si TOUTES les lignes sont entièrement reçues.
+- Il ne s'annule plus (409 `TRANSFER_PARTLY_RECEIVED`) : le stock reçu est chez la destination, la quantité entière est sortie de la
+  source.
+- L'écart n'est écrit nulle part : c'est une perte de fait, lisible en comparant commandé et reçu sur la commande de destination (et
+  sur la fiche du transfert : `quantity` contre ce qui a été reçu). Aucun mouvement ne la corrige ; un écart se règle par l'inventaire
+  de la boutique qui l'a subi.
+- La destination peut figer sa commande (« figer » des commandes fournisseurs) : le transfert reste alors `sent` + `partlyReceived` pour
+  de bon. L'écran du directeur dit « reçu en partie » et n'offre plus l'annulation.
 
 ### 10.3 Annulation (directeur)
 
