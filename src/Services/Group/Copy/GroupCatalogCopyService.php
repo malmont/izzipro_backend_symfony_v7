@@ -84,7 +84,7 @@ class GroupCatalogCopyService
             $view = $this->imports->createFromProducts('Copie depuis ' . ($shops[$source]['name'] ?: $source), $products, $by->getUserIdentifier());
             $copyId = $this->copies->create((int) $group['id'], $source, $target, (int) $view['id'], count($products), $inclusive, $by->getUserIdentifier());
         } catch (ImportException $e) {
-            throw new GroupException($e->errorCode, $e->status, $e->getMessage(), $e->extra);
+            throw new GroupException($e->errorCode, $e->status, $e->getMessage(), $e->extra, previous: $e);
         } finally {
             $this->restore($home);
         }
@@ -140,7 +140,7 @@ class GroupCatalogCopyService
             $this->notifier->copied($copyId, (string) $group['name'], (int) ($view['report']['products']['importable'] ?? $copy['articles']), $visibility === 'hidden' && !$pos);
         } catch (ImportException $e) {
             $this->copies->unconfirm($copyId);
-            throw new GroupException($e->errorCode, $e->status, $e->getMessage(), $e->extra);
+            throw new GroupException($e->errorCode, $e->status, $e->getMessage(), $e->extra, previous: $e);
         } catch (\Throwable $e) {
             if (!$queued) {
                 $this->copies->unconfirm($copyId); // une panne imprévue avant la mise en file : la copie reste confirmable, jamais bloquée
@@ -167,7 +167,7 @@ class GroupCatalogCopyService
             $view = $current['status'] === ImportJobStore::CANCELLED ? $current : $this->imports->cancel((int) $copy['target_job_id'], $by->getUserIdentifier());
             $this->copies->cancel($copyId);
         } catch (ImportException $e) {
-            throw new GroupException($e->errorCode, $e->status, $e->getMessage(), $e->extra);
+            throw new GroupException($e->errorCode, $e->status, $e->getMessage(), $e->extra, previous: $e);
         } finally {
             $this->restore($home);
         }

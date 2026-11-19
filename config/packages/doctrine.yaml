@@ -9,7 +9,6 @@ doctrine:
         # port: 5432
         # dbname: 'ecommerceflutter' # Le nom de votre base par défaut
         # user: 'postgres'         # Votre utilisateur de base de données
-        # password: 'Wipit2017'   # Votre mot de passe
         # server_version: '14'      # La version de votre serveur PostgreSQL
         # charset: UTF8
         

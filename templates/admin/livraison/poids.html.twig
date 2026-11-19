@@ -35,8 +35,8 @@
                     <tbody>
                     {% for r in rows %}
                         {% set p = proposals[r.productId] ?? null %}
-                        <tr data-product-row="{{ r.productId }}" class="{{ p ? 'table-warning' : '' }}">
-                            <td>{% if r.imageUrl %}<img src="{{ r.imageUrl }}" alt="" style="width:36px;height:36px;object-fit:cover;border-radius:4px" class="me-2">{% endif %}<strong>{{ r.name }}</strong>{% if r.categories is not empty %}<div class="small text-muted">{{ r.categories|join(', ') }}</div>{% endif %}</td>
+                        <tr data-product-row="{{ r.productId }}"{% if p %} style="box-shadow: inset 4px 0 0 var(--bs-warning)"{% endif %}>{# filet, jamais un fond clair : illisible sous le thème sombre #}
+                            <td>{% if r.imageUrl %}<img src="{{ r.imageUrl }}" alt="" style="width:36px;height:36px;object-fit:cover;border-radius:4px" class="me-2">{% endif %}<strong>{{ r.name }}</strong>{% if p %} <span class="badge bg-warning text-dark">proposition</span>{% endif %}{% if r.categories is not empty %}<div class="small text-muted">{{ r.categories|join(', ') }}</div>{% endif %}</td>
                             <td><input class="form-control form-control-sm" name="rows[{{ r.productId }}][weightKg]" value="{{ p ? p.weightKg : (r.weightKg ?? '') }}" inputmode="decimal" placeholder="0,5"></td>
                             <td><input class="form-control form-control-sm" name="rows[{{ r.productId }}][lengthCm]" value="{{ p ? p.lengthCm : (r.lengthCm ?? '') }}" inputmode="decimal"></td>
                             <td><input class="form-control form-control-sm" name="rows[{{ r.productId }}][widthCm]" value="{{ p ? p.widthCm : (r.widthCm ?? '') }}" inputmode="decimal"></td>

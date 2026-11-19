@@ -489,8 +489,8 @@
                     </thead>
                     <tbody>
                         {% for t in trafficMetrics.tenants_details|default([]) %}
-                            <tr {% if t.code == currentTenantCode %}class="table-primary font-weight-bold"{% endif %}>
-                                <td>{{ t.name }} <span class="badge bg-light text-muted">{{ t.code }}</span></td>
+                            <tr {% if t.code == currentTenantCode %}class="font-weight-bold" style="box-shadow: inset 4px 0 0 var(--bs-primary)"{% endif %}>{# filet, jamais un fond clair : illisible sous le thème sombre #}
+                                <td>{{ t.name }} <span class="badge bg-secondary">{{ t.code }}</span>{% if t.code == currentTenantCode %} <span class="badge bg-primary">ce site</span>{% endif %}</td>
                                 <td><a href="https://{{ t.domain }}" target="_blank" class="text-muted small"><i class="fas fa-external-link-alt mr-1"></i>{{ t.domain }}</a></td>
                                 <td class="text-center">
                                     {% if t.online > 0 %}

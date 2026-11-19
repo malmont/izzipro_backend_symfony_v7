@@ -103,10 +103,10 @@ notifications:
         body: 'The platform cancelled the shipment of box %serial%. Do not confirm it.'
     group_catalog_copied:
         title: 'Items copied into your catalogue'
-        body: "The director of the group %group% copied %count% item(s) into your catalogue, hidden. You decide whether to publish them; they can be cancelled for 7 days."
+        body: "{1}The director of the group %group% copied 1 item into your catalogue, hidden. You decide whether to publish it; it can be cancelled for 7 days.|]1,Inf[The director of the group %group% copied %count% items into your catalogue, hidden. You decide whether to publish them; they can be cancelled for 7 days."
     group_catalog_copied_visible:
         title: 'Items copied into your catalogue'
-        body: "The director of the group %group% copied %count% item(s) into your catalogue, published as in the original shop. They can be cancelled for 7 days."
+        body: "{1}The director of the group %group% copied 1 item into your catalogue, published as in the original shop. It can be cancelled for 7 days.|]1,Inf[The director of the group %group% copied %count% items into your catalogue, published as in the original shop. They can be cancelled for 7 days."
     loss_box_plugged:
         title: 'Your box is plugged in'
         body: 'Box %serial% is plugged in at your shop. Confirm "This is my box" within 72 hours. If you did not plug anything in, do not confirm and contact us.'

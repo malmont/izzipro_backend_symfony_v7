@@ -104,6 +104,14 @@ class TechDashboardAdminTest extends WebTestCase
         $this->client->request('GET', 'https://' . MV_TEST_TENANT_HOST . '/admin?routeName=admin_technique');
         $this->assertSame(200, $this->client->getResponse()->getStatusCode());
         $this->assertStringContainsString('Classement des sites par ressource', (string) $this->client->getResponse()->getContent());
+        // sous EasyAdmin : le titre de l'onglet est celui de la page, et ses liens (fenêtre, site, tri) RESTENT dans EasyAdmin (sinon page blanche)
+        $crawler = $this->client->getCrawler();
+        $this->assertSame('Tableau de bord technique', trim($crawler->filter('title')->text()));
+        $links = $crawler->filter('a[href*="fenetre"]')->each(static fn ($a) => (string) $a->attr('href'));
+        $this->assertNotSame([], $links);
+        foreach ($links as $href) {
+            $this->assertStringContainsString('routeName=admin_technique', urldecode($href), 'un lien de la page reste dans EasyAdmin');
+        }
     }
 
     public function testTheOwnerSeesTheRankingTheSiteDetailThePlatformAndTheRoutes(): void
@@ -170,8 +178,9 @@ class TechDashboardAdminTest extends WebTestCase
         $token = $form->get('_token')->getValue();
 
         $this->client->request('POST', 'https://' . MV_TEST_TENANT_HOST . '/admin/technique/seuils', ['_token' => $token, 'fenetre' => '7j', 'seuils' => ['disk_used_pct' => ['good' => '60', 'warn' => '90'], 'fpm_active_pct' => ['good' => '40,5', 'warn' => '75']]]);
+        $this->assertStringContainsString('routeName=admin_technique', urldecode((string) $this->client->getResponse()->headers->get('Location')), 'retour à la page habillée par EasyAdmin');
         $this->assertSame(302, $this->client->getResponse()->getStatusCode());
-        $this->assertStringContainsString('fenetre=7j', (string) $this->client->getResponse()->headers->get('Location'));
+        $this->assertStringContainsString('[fenetre]=7j', urldecode((string) $this->client->getResponse()->headers->get('Location')), 'la fenêtre choisie est gardée');
         $this->assertSame(['good' => 60.0, 'warn' => 90.0], $this->threshold('disk_used_pct'));
         $this->assertSame(['good' => 40.5, 'warn' => 75.0], $this->threshold('fpm_active_pct'), 'virgule décimale acceptée');
         $this->client->followRedirect();
