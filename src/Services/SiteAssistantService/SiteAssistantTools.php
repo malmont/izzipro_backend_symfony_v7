@@ -16,6 +16,8 @@ final class SiteAssistantTools
         'mon_site' => 'Mon site : pilotage (modules : allumer, éteindre, essayer, demander)', 'ouverture' => 'Ouverture du site (liste de contrôle, ouvrir la boutique)',
         'codes_barres' => 'Gestion des codes-barres', 'assistance_agence' => 'Assistance de mon agence (demander, suivre, fermer)',
         'pertes' => 'Prévention des pertes : constats', 'pertes_sante' => 'Prévention des pertes : santé du matériel et installation', 'pertes_exercice' => 'Prévention des pertes : mode exercice',
+        // lot ABO-0 (18/11/2026) : abonnements universels
+        'abo_benefits' => 'Prestations (ce que les formules livrent)', 'abo_plan_benefits' => 'Prestations des formules', 'subscriptions' => 'Abonnements (abonnés, identité, état)',
     ];
 
     /**
@@ -28,6 +30,9 @@ final class SiteAssistantTools
         'get_loss_health' => ['loss_prevention'], 'get_loss_finding' => ['loss_prevention'], 'start_loss_count' => ['loss_prevention'],
         'get_missing_barcodes' => ['boutique', 'management'], 'generate_missing_barcodes' => ['boutique', 'management'],
         'add_default_variant' => ['boutique'],
+        // lot ABO-0 (18/11/2026) : abonnements universels, outils donnés seulement avec le module Boutique
+        'get_subscription_plans' => ['boutique'], 'get_benefits' => ['boutique'], 'get_plan_subscribers' => ['boutique'], 'get_subscription' => ['boutique'],
+        'propose_benefit' => ['boutique'], 'propose_plan' => ['boutique'], 'set_plan_benefits' => ['boutique'],
     ];
     /** Lot IA-A : nombre d'articles au plus par action (aperçu nommé), et codes-barres au plus par action (décision du chef) */
     public const MAX_VARIANTS = 50;
@@ -39,9 +44,12 @@ final class SiteAssistantTools
      */
     public const HELP_TOOLS = ['get_settings', 'get_readiness', 'open_screen', 'get_domain_status', 'delegate_to_editor', 'get_orders_todo', 'get_order', 'get_help', 'get_controls', 'get_configuration_paths',
         // lot IA-A : lectures
-        'get_storefront_checklist', 'get_modules', 'get_missing_barcodes', 'get_loss_health', 'get_loss_finding'];
+        'get_storefront_checklist', 'get_modules', 'get_missing_barcodes', 'get_loss_health', 'get_loss_finding',
+        // lot ABO-0 : lectures des abonnements
+        'get_subscription_plans', 'get_benefits', 'get_plan_subscribers', 'get_subscription'];
     /** Lot IA-A : propositions des fonctions ajoutées, appliquées après confirmation (ConfirmSiteAssistantActionUseCase) et tracées « par l'assistant » */
-    public const IAA_ACTIONS = ['add_default_variant', 'start_loss_exercise', 'start_loss_count', 'toggle_module', 'start_module_trial', 'generate_missing_barcodes', 'request_agency_assistance'];
+    public const IAA_ACTIONS = ['add_default_variant', 'start_loss_exercise', 'start_loss_count', 'toggle_module', 'start_module_trial', 'generate_missing_barcodes', 'request_agency_assistance',
+        'propose_benefit', 'propose_plan', 'set_plan_benefits']; // lot ABO-0
 
     /** Champs de la fiche Entreprise que l'assistant peut proposer de remplir (cheminement complet, 07/11/2026) ; les textes légaux peuvent être rédigés par l'IA */
     public const ENTREPRISE_FIELDS = ['name', 'email', 'tel', 'website', 'LegalNotice', 'conditionOfUse', 'privacyPolicy', 'apropos', 'metaTitle', 'metaDescription', 'seoKeywords', 'tvaIntracommunautaire', 'gstNumber', 'qstNumber', 'siret'];
@@ -98,6 +106,8 @@ final class SiteAssistantTools
             ['name' => 'start_module_trial', 'description' => 'Propose de lancer l\'essai gratuit d\'un module non accordé (libre-service, une fois par module). L\'administrateur confirme.', 'input_schema' => ['type' => 'object', 'properties' => ['feature' => ['type' => 'string']], 'required' => ['feature']]],
             ['name' => 'generate_missing_barcodes', 'description' => 'Propose de générer les codes-barres manquants (200 au plus par action) ; l\'aperçu donne le nombre et les 10 premiers articles. Les codes seront définitifs (ils peuvent être imprimés aussitôt). L\'administrateur confirme.', 'input_schema' => ['type' => 'object', 'properties' => new \stdClass()]],
             ['name' => 'request_agency_assistance', 'description' => 'Propose de demander l\'assistance de l\'agence qui gère le site, pour UNE section, en consultation (read) ou en modification (write), pendant une heure à partir de sa première visite. Seul un administrateur du site confirme.', 'input_schema' => ['type' => 'object', 'properties' => ['section' => ['type' => 'string', 'enum' => ['commandes', 'clients', 'gestion', 'pertes']], 'mode' => ['type' => 'string', 'enum' => ['read', 'write']]], 'required' => ['section']]],
+            // --- lot ABO-0 (18/11/2026) : abonnements universels ; aucune identité d'abonné, textes lus = données
+            ...\App\Abo\Services\AboAssistantTools::definitions(),
         ];
     }
 }

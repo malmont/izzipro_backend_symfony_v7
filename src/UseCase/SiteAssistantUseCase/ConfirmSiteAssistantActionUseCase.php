@@ -30,6 +30,7 @@ class ConfirmSiteAssistantActionUseCase
         private readonly ?\App\Services\Agency\Assistance\AssistanceService $assistance = null,
         private readonly ?\App\Services\ContentAuditService\ContentAuditRecorder $audit = null,
         private readonly ?\App\Security\Entry\EntryContext $entry = null,
+        private readonly ?\App\Abo\Services\AboAssistantTools $abo = null, // lot ABO-0 : formules et prestations
     ) {
     }
 
@@ -48,7 +49,7 @@ class ConfirmSiteAssistantActionUseCase
             // lot IA-A : tout est relu à la confirmation (module, état, compte) ; un refus ne consume pas l'action, la trace dit qui a confirmé
             $result = $this->added($action['tool'], $action['input'], $tenant, $user, $actor);
             $this->audit?->record('site_assistant', $id, 'confirm', null, ['tool' => $action['tool'], 'by' => 'assistant', 'confirmedBy' => trim((string) $actor?->getFirstname()) ?: 'administrateur',
-                'summary' => $action['summary'], 'result' => array_intersect_key($result, array_flip(['created', 'written', 'remaining', 'scenario', 'countId', 'feature', 'on', 'kind', 'assistance']))], ['assistant']);
+                'summary' => $action['summary'], 'result' => array_intersect_key($result, array_flip(['created', 'written', 'remaining', 'scenario', 'countId', 'feature', 'on', 'kind', 'assistance', 'planId', 'benefitId', 'benefits']))], ['assistant']);
             $this->assistant->forgetAction($tenant, $id);
 
             return ['tool' => $action['tool'], 'input' => $action['input'], 'result' => $result];
@@ -207,8 +208,13 @@ class ConfirmSiteAssistantActionUseCase
                     }
 
                     return ['assistance' => $this->assistance->request($tenant, $input['section'] ?? null, $input['mode'] ?? null, $actor)];
+                case 'propose_benefit':
+                case 'propose_plan':
+                case 'set_plan_benefits':
+                    // lot ABO-0 : par le service de l'écran, tout relu (formule, produit porteur, prestations actives) ; un refus garde son message
+                    return ($this->abo ?? throw new \OutOfBoundsException('Outil indisponible'))->apply($tool, $input);
             }
-        } catch (\App\Gestion\Services\GestionConflictException|\App\Gestion\Services\GestionValidationException|\App\Services\Agency\Assistance\AssistanceException|\App\UseCase\LandingContentUseCase\LandingContentException $e) {
+        } catch (\App\Abo\Services\AboException|\App\Gestion\Services\GestionConflictException|\App\Gestion\Services\GestionValidationException|\App\Services\Agency\Assistance\AssistanceException|\App\UseCase\LandingContentUseCase\LandingContentException $e) {
             throw new \InvalidArgumentException($e->getMessage() !== '' ? $e->getMessage() : 'Action refusée.', 0, $e);
         }
 

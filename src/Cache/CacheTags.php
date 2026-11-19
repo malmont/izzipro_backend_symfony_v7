@@ -140,6 +140,8 @@ use App\Entity\StripeConfig;
 use App\Entity\Style;
 use App\Entity\Subscription;
 use App\Entity\SubscriptionPlan;
+use App\Abo\Entity\Benefit;
+use App\Abo\Entity\PlanBenefit;
 use App\Entity\SyncJob;
 use App\Entity\Tax;
 use App\Entity\Team;
@@ -271,6 +273,9 @@ final class CacheTags
         ProductType::class => [self::PRODUCT_REFERENTIALS],
         RentalPack::class => [self::PRODUCT_REFERENTIALS],
         SubscriptionPlan::class => [self::PRODUCT_REFERENTIALS],
+        // lot ABO-0 : les prestations sont lues avec la grille des formules
+        Benefit::class => [self::PRODUCT_REFERENTIALS],
+        PlanBenefit::class => [self::PRODUCT_REFERENTIALS],
         ReviewSetting::class => [self::PRODUCT_REFERENTIALS],
 
         Entreprise::class => [self::ENTREPRISE],

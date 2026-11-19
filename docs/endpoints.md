@@ -261,7 +261,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (691)
+## Boutique et commun (689)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -459,11 +459,6 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/api/gestion/ecrans/{code}/guide` | ROLE_ADMIN | `Gestion\Controller\GestionScreenGuideController::guide` |
 | GET | `/api/gestion/exports/achats.csv` | ROLE_ADMIN | `Gestion\Controller\GestionExportController::purchases` |
 | GET | `/api/gestion/frais-fixes` | ROLE_ADMIN | `Gestion\Controller\GestionFixedCostController::list` |
-| POST | `/api/gestion/groupe/copies/{id}/cancel` | ROLE_ADMIN | `Gestion\Controller\GestionGroupCopyController::cancel` |
-| POST | `/api/gestion/groupe/copies/{id}/confirm` | ROLE_ADMIN | `Gestion\Controller\GestionGroupCopyController::confirm` |
-| GET | `/api/gestion/groupe/copies/{id}` | ROLE_ADMIN | `Gestion\Controller\GestionGroupCopyController::show` |
-| GET | `/api/gestion/groupe/copies` | ROLE_ADMIN | `Gestion\Controller\GestionGroupCopyController::list` |
-| POST | `/api/gestion/groupe/copies` | ROLE_ADMIN | `Gestion\Controller\GestionGroupCopyController::create` |
 | GET | `/api/gestion/groupe/resultat` | ROLE_ADMIN | `Gestion\Controller\GestionGroupResultController::result` |
 | GET | `/api/gestion/ia` | ROLE_ADMIN | `Gestion\Controller\GestionAiController::usage` |
 | GET | `/api/gestion/journee` | ROLE_ADMIN | `Gestion\Controller\GestionDayController::overview` |
@@ -833,6 +828,9 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | DELETE | `/api/site-content/demo` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\SiteContentController\SiteContentController::deleteDemo` |
 | GET | `/api/site-content/demo` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\SiteContentController\SiteContentController::demo` |
 | POST | `/api/site-content/seed` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\SiteContentController\SiteContentController::seed` |
+| GET | `/api/site/abonnements/formules/{id}/abonnes` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Abo\Controller\AboFollowUpController::subscribers` |
+| GET | `/api/site/abonnements/formules` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Abo\Controller\AboFollowUpController::plans` |
+| GET | `/api/site/abonnements/{id}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Abo\Controller\AboFollowUpController::subscription` |
 | POST | `/api/site/assistance/{id}/close` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\SiteFeaturesController\SiteAssistanceController::close` |
 | GET | `/api/site/assistance/{id}/journal` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\SiteFeaturesController\SiteAssistanceController::journal` |
 | GET | `/api/site/assistance` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\SiteFeaturesController\SiteAssistanceController::list` |

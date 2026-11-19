@@ -726,6 +726,9 @@ class DashboardController extends AbstractDashboardController
         yield MenuItem::section('Boutique : accueil et pages');
         yield MenuItem::linkToCrud('Diaporama de l\'accueil', 'fas fa-images', HomeSlider::class);
         yield MenuItem::linkToCrud('Formules d\'abonnement', 'fas fa-sync-alt', SubscriptionPlan::class);
+        // lot ABO-0 (18/11/2026) : ce que les formules livrent
+        yield MenuItem::linkToCrud('Prestations', 'fas fa-concierge-bell', \App\Abo\Entity\Benefit::class);
+        yield MenuItem::linkToCrud('Prestations des formules', 'fas fa-list-check', \App\Abo\Entity\PlanBenefit::class);
         yield MenuItem::linkToCrud('Abonnements', 'fas fa-id-card', Subscription::class);
         yield MenuItem::linkToCrud('Atouts (icône + phrase)', 'fa fa-star', Feature::class);
         yield MenuItem::linkToCrud('Cartes « Explorer »', 'fa fa-th-large', ExploreCard::class);

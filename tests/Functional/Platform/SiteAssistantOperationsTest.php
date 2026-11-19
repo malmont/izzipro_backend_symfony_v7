@@ -150,8 +150,9 @@ class SiteAssistantOperationsTest extends WebTestCase
         $this->assertSame(200, $r->getStatusCode(), $r->getContent());
         $body = json_decode((string) $r->getContent(), true);
         $this->assertSame(['site', 'help', []], [$body['access'], $body['tier'], $body['actions']]);
-        // lot IA-A : les lectures d'un module éteint sur le site de test (codes-barres, pertes) ne sont pas données
-        $this->assertSame(array_values(array_diff(\App\Services\SiteAssistantService\SiteAssistantTools::HELP_TOOLS, ['get_missing_barcodes', 'get_loss_health', 'get_loss_finding'])), array_column(FakeLandingAiClient::$requests[0]['tools'], 'name'));
+        // lot IA-A : les lectures d'un module éteint sur le site de test (codes-barres, pertes ; lot ABO-0 : abonnements, module Boutique) ne sont pas données
+        $this->assertSame(array_values(array_diff(\App\Services\SiteAssistantService\SiteAssistantTools::HELP_TOOLS, ['get_missing_barcodes', 'get_loss_health', 'get_loss_finding',
+            'get_subscription_plans', 'get_benefits', 'get_plan_subscribers', 'get_subscription'])), array_column(FakeLandingAiClient::$requests[0]['tools'], 'name'));
         $this->assertStringContainsString('Aide IA', FakeLandingAiClient::$requests[0]['system']);
         $results = FakeLandingAiClient::$requests[1]['messages'][2]['content'];
         $this->assertStringContainsString('IA complète', json_decode($results[0]['content'], true)['error']);

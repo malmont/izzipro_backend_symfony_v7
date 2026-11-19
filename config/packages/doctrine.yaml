@@ -60,6 +60,12 @@ doctrine:
                 dir: '%kernel.project_dir%/src/LossPrevention/Entity'
                 prefix: 'App\LossPrevention\Entity'
                 alias: AppLossPrevention
+            # Abonnement universel (lot ABO-0, 18/11/2026) : prestations des formules, entités dans src/Abo
+            AppAbo:
+                is_bundle: false
+                dir: '%kernel.project_dir%/src/Abo/Entity'
+                prefix: 'App\Abo\Entity'
+                alias: AppAbo
 
 when@test:
     doctrine:

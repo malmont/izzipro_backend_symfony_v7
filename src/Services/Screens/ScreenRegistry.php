@@ -77,6 +77,8 @@ final class ScreenRegistry
         'site.taxes' => ['family' => self::VENTE, 'module' => null],
         // lot G-1a : le groupe de boutiques (siège) et les invitations reçues (boutique) : gestes du commerçant, jamais de l'agence
         'groupe' => ['family' => self::VENTE, 'module' => null],
+        // lot ABO-0 : le suivi des abonnements (gestion web et application de gestion mobile) : identité des abonnés, impayés
+        'abonnements' => ['family' => self::VENTE, 'module' => 'module.boutique'],
         'imports.commandes' => ['family' => self::VENTE, 'module' => 'module.boutique'],
         'imports.clients' => ['family' => self::CLIENTS, 'module' => 'module.boutique'],
         // --- Clients, assistance, contenus (web)
@@ -302,6 +304,7 @@ final class ScreenRegistry
         ['#^/api/site/imports/archive/orders$#', 'imports.commandes'],
         ['#^/api/site/imports/[^/]+/(customers|invitations)$#', 'imports.clients'],
         ['#^/api/site/imports(/|$)#', 'imports'],
+        ['#^/api/site/abonnements(/|$)#', 'abonnements'], // lot ABO-0
         ['#^/api/site/storefront(/preview)?$#', '@public'],
         ['#^/api/site/storefront/#', 'site.ouverture'],
         ['#^/api/(site/readiness|site/shipping|app-keys)(/|$)#', 'site.reglages'],
@@ -397,6 +400,8 @@ final class ScreenRegistry
         'StripeConfigCrudController' => 'admin.paiement', 'SquareConfigCrudController' => 'admin.paiement',
         'ShippingOrderCrudController' => 'admin.expeditions', 'ParcelCrudController' => 'admin.expeditions', 'ShippingLabelCrudController' => 'admin.expeditions',
         'SubscriptionCrudController' => 'admin.abonnements',
+        // lot ABO-0 : ce que les formules livrent, réglé avec les formules
+        'BenefitCrudController' => 'admin.boutique-pages', 'PlanBenefitCrudController' => 'admin.boutique-pages',
         'MovementTypeCrudController' => 'admin.stock', 'InventoryMovementsCrudController' => 'admin.stock',
         'CashRegisterCrudController' => 'admin.caisse', 'PosFavoriteCrudController' => 'admin.caisse', 'CaisseCrudController' => 'admin.caisse', 'CashRegisterReportCrudController' => 'admin.caisse',
         'PosAuditLogCrudController' => 'admin.caisse', 'TransactionCaisseCrudController' => 'admin.caisse', 'TransactionTypeCrudController' => 'admin.caisse',

@@ -162,10 +162,11 @@ foreach ([MV_TEST_TENANT_DB, MV_TEST_TENANT2_DB] as $db) {
     foreach (\DoctrineMigrations\Version20270201200000::STATEMENTS as $sql) {
         $tenantDb->exec($sql);
     }
-    // PROVISOIRE, lot PROVISION-3 (18/11/2026) : la migration Version20270201300000 posée sur les COPIES de test, jusqu'à sa pose sur le
-    // modèle des bases de test à la bascule (instruction idempotente : sans effet une fois le modèle migré ; ce bloc s'enlève alors)
-    require_once dirname(__DIR__) . '/migrations/Version20270201300000.php';
-    foreach (\DoctrineMigrations\Version20270201300000::STATEMENTS as $sql) {
+    // PROVISOIRE, lot ABO-0 (18/11/2026) : la migration Version20270201400000 posée sur les COPIES de test, jusqu'à sa pose sur le
+    // modèle des bases de test à la bascule (instructions idempotentes : sans effet une fois le modèle migré ; ce bloc s'enlève alors).
+    // Le bloc de PROVISION-3 (Version20270201300000) est retiré : le modèle est migré (chaperon, train-113)
+    require_once dirname(__DIR__) . '/migrations/Version20270201400000.php';
+    foreach (\DoctrineMigrations\Version20270201400000::STATEMENTS as $sql) {
         $tenantDb->exec($sql);
     }
     $tenantDb = null;

@@ -985,6 +985,45 @@ retire les droits d'usage du site cible (`Services/Platform/OfferFulfillmentServ
   mode test, 13/10/2026).
 - Tests : `tests/Functional/Boutique/SubscriptionApiTest.php` (Stripe simulé : souscription, gestion, webhooks, refus). ; actions EasyAdmin : `testAdministratorManagesASubscriptionFromEasyAdmin`.
 
+### Prestations des formules et suivi des abonnements (lot ABO-0, 18/11/2026, `docs/plan-abo-universel.md`)
+
+Socle de l'abonnement universel : une formule livre des **prestations** ; aucun effet sur la facturation ni sur les droits à ce lot.
+
+- **Tables de site** (migration `Version20270201400000`, script `scripts/migrate_all_v2_abo_benefits.sh`) :
+  - `benefit` : la prestation du site, type `session` (séance planifiée), `service` (service à rendre) ou `quota` (carte ou forfait
+    d'usages) ; `module` est réservé jusqu'à ABO-5 (BENEFIT_KIND_RESERVED). Noms et descriptions par langue, durée, lieu, intervenant par
+    défaut (jamais montré aux abonnés ni au modèle), active, ordre ;
+  - `plan_benefit` : ce qu'une formule livre, une ligne par prestation : quantité par période (1 à 999, vide = sans limite, séances
+    seulement), dates (`none`, `client_at_subscription`, `admin_after`, `fixed_slots` avec `slot_choice` client ou admin, séances
+    seulement), délai d'annulation (24 h par défaut), report au plus (vide = la quantité), preuve (`none`, `note`, `photo`).
+- **Service** `App\Abo\Services\BenefitService` : validation et codes stables (BENEFIT_NAME_REQUIRED, BENEFIT_KIND_INVALID,
+  BENEFIT_KIND_RESERVED, PLAN_BENEFIT_QUANTITY_INVALID, PLAN_BENEFIT_SCHEDULING_INVALID, PLAN_BENEFIT_RULES_INVALID,
+  PLAN_BENEFIT_DUPLICATE ; 409 BENEFIT_IN_USE : une prestation livrée ne se supprime pas, elle se désactive) et phrase « ce que verra
+  l'abonné » calculée par le serveur, en français et en anglais (« 8 séances Yoga par semaine ; vous choisissez vos créneaux ;
+  annulation sans frais jusqu'à 24 h avant ; jusqu'à 8 reportées à la période suivante. »).
+- **EasyAdmin** (section « Boutique : accueil et pages ») : « Prestations », « Prestations des formules » (filtres formule et prestation,
+  colonne « Ce que verra l'abonné »), et sur la fiche d'une formule, « Prestations livrées ».
+- **Grille publique** : `GET /api/subscription-plans` rend `benefits[]` pour chaque formule (`[]` sans prestation) : `{ id, benefitId,
+  kind, name, description, durationMinutes, location, quantity, scheduling, slotChoice, cancelDeadlineHours, carryOverMax, proof,
+  summary }`, dans la langue demandée ; jamais l'intervenant ni un coût. Cache : `Benefit` et `PlanBenefit` étiquetés avec les formules.
+- **Suivi** pour la gestion web ET l'application de gestion mobile, mêmes routes (`ROLE_ADMIN`, module Boutique, lecture seule,
+  `?locale=en` possible, dates ATOM à l'heure du magasin) ; écran du registre `abonnements` (famille vente) :
+  - `GET /api/site/abonnements/formules` → `{ plans: [{ id, name, price, currency, interval, intervalCount, active, fulfillmentType,
+    benefits[], counts: { incomplete, trialing, active, past_due, paused, canceled }, toFollow }] }` (`toFollow` = impayés + en pause) ;
+  - `GET /api/site/abonnements/formules/{id}/abonnes?status=&page=&limit=` (25 par défaut, 100 au plus) → `{ plan, subscriptions:
+    [{ subscriptionId, status, quantity, currentPeriodEnd, cancelAtPeriodEnd, pausedAt, createdAt, paymentIssue: { amountDue, currency,
+    attemptCount, maxAttempts, nextPaymentAttempt } | null, customer: { id, firstname, lastname, email } }], total, page, limit }` ;
+    jamais le lien de paiement ; 404 PLAN_NOT_FOUND, 422 STATUS_INVALID ;
+  - `GET /api/site/abonnements/{id}` → la ligne ci-dessus + `plan`, `benefits[]`, `canceledAt`, `fulfillmentTarget`, `orders` (commandes
+    d'échéance : id, référence, date, total en centimes), et `todo`, `history`, `balance` présents et vides jusqu'à ABO-1 ; 404
+    SUBSCRIPTION_NOT_FOUND.
+- **Assistant du site (IA-A)**, outils donnés seulement avec le module Boutique : lectures `get_subscription_plans` (avec les produits
+  porteurs possibles), `get_benefits`, `get_plan_subscribers`, `get_subscription`, **sans aucune identité** (un abonné = son numéro,
+  l'écran lié montre l'identité) ; propositions confirmées par l'administrateur `propose_benefit`, `propose_plan` (sur un produit porteur
+  EXISTANT dont l'abonnement est activé, sinon PRODUCT_NOT_SUBSCRIBABLE et renvoi à l'écran Produits), `set_plan_benefits`, appliquées par
+  le service de l'écran (mêmes refus) et tracées au journal du site. Textes lus = données (essai d'injection).
+- Essais : `tests/Functional/Abo/AboBenefitsTest.php`.
+
 ### Codes des refus des abonnements (04/11/2026, application e-commerce mobile)
 
 Même contrat que les codes du devis : chaque refus (`SubscriptionException`) porte un `code` de premier niveau et un `message`

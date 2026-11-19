@@ -36,6 +36,9 @@ class GroupWritesClassificationTest extends KernelTestCase
         'get_settings' => 'lecture', 'get_readiness' => 'lecture', 'open_screen' => 'lecture', 'get_domain_status' => 'lecture', 'get_help' => 'lecture',
         'get_configuration_paths' => 'lecture', 'get_controls' => 'lecture', 'get_loss_finding' => 'lecture', 'get_loss_health' => 'lecture',
         'get_missing_barcodes' => 'lecture', 'get_modules' => 'lecture', 'get_order' => 'lecture', 'get_orders_todo' => 'lecture', 'get_storefront_checklist' => 'lecture',
+        // lot ABO-0 : abonnements (formules, prestations, abonnés sans identité)
+        'get_subscription_plans' => 'lecture', 'get_benefits' => 'lecture', 'get_plan_subscribers' => 'lecture', 'get_subscription' => 'lecture',
+        'propose_benefit' => 'catalogue', 'propose_plan' => 'catalogue', 'set_plan_benefits' => 'catalogue',
     ];
 
     public function testEveryWriteEveryScreenAndEveryAssistantToolIsClassifiedForTheDirector(): void
