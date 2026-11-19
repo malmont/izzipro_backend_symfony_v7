@@ -42,17 +42,25 @@ interface SubscriptionStripeGatewayInterface
      * @param list<string> $taxRateIds
      * @param ?string $shippingPriceId seconde ligne récurrente (livraison), facturée à chaque échéance
      */
-    public function create(string $customerId, string $priceId, int $quantity, int $trialDays, array $metadata, array $taxRateIds, bool $automaticTax, ?string $shippingPriceId = null): array;
+    public function create(string $customerId, string $priceId, int $quantity, int $trialDays, array $metadata, array $taxRateIds, bool $automaticTax, ?string $shippingPriceId = null, bool $cancelAtPeriodEnd = false): array;
 
     public function retrieve(string $subscriptionId): array;
 
     /** Annulation à la fin de la période (true) ou immédiate (false) */
     public function cancel(string $subscriptionId, bool $atPeriodEnd): array;
 
-    /** Reprise : annulation programmée levée et collecte reprise */
-    public function resume(string $subscriptionId): array;
+    /** Lot ABO-1 : résiliation programmée à une date (fin d'engagement), sans prorata */
+    public function cancelAt(string $subscriptionId, int $timestamp): array;
 
-    public function pause(string $subscriptionId): array;
+    /** Reprise : annulation programmée levée et collecte reprise */
+    /**
+     * `$liftCancellation` (lot ABO-1) : lever aussi une résiliation programmée ; sinon seule la collecte reprend. `$scheduledAt` : la fin
+     * programmée est une DATE (`cancel_at`, fin d'engagement), pas une fin de période.
+     */
+    public function resume(string $subscriptionId, bool $liftCancellation = true, bool $scheduledAt = false): array;
+
+    /** `$resumesAt` (lot ABO-1) : Stripe reprend seul la facturation à cette date (horodatage) ; null : pause sans date */
+    public function pause(string $subscriptionId, ?int $resumesAt = null): array;
 
     public function changePlan(string $subscriptionId, string $itemId, string $priceId, int $quantity): array;
 

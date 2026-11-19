@@ -19,7 +19,8 @@ class AboFollowUpService
     public const PAGE_DEFAULT = 25;
     public const PAGE_MAX = 100;
 
-    public function __construct(private readonly TenantEntityManagerProvider $emProvider, private readonly BenefitService $benefits, private readonly StoreClock $clock)
+    public function __construct(private readonly TenantEntityManagerProvider $emProvider, private readonly BenefitService $benefits, private readonly StoreClock $clock,
+        private readonly ?AboRightsService $rights = null) // lot ABO-1 : solde, à faire, historique
     {
     }
 
@@ -99,7 +100,9 @@ class AboFollowUpService
         return $this->row($s, $withIdentity) + [
             'plan' => $this->planHead($s->getPlan(), $locale), 'benefits' => $this->benefits->viewsFor($s->getPlan(), $locale),
             'canceledAt' => $this->at($s->getCanceledAt()), 'fulfillmentTarget' => $s->getFulfillmentTarget(), 'orders' => $orders,
-            'todo' => [], 'history' => [], 'balance' => [],
+            // lot ABO-1 : remplis ; « par qui » et les notes seulement pour l'équipe, jamais pour le modèle
+            'todo' => $this->rights?->todo($s, $locale) ?? [], 'history' => $this->rights?->history($s, $withIdentity) ?? [], 'balance' => $this->rights?->balance($s, $locale) ?? [],
+            'pauses' => $withIdentity ? $s->getPauses() : array_map(fn (array $p) => array_intersect_key($p, array_flip(['from', 'until', 'resumedAt'])), $s->getPauses()),
         ];
     }
 

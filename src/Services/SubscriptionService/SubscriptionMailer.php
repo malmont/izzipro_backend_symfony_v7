@@ -16,6 +16,8 @@ final class SubscriptionMailer
         'paused' => ['Votre abonnement est en pause', 'Votre abonnement « %s » est en pause : aucune échéance ne sera facturée jusqu\'à sa reprise depuis votre compte.'],
         'canceled' => ['Votre abonnement est résilié', 'Votre abonnement « %s » est résilié. Merci de votre confiance ; vous pouvez souscrire de nouveau à tout moment.'],
         'cancel_scheduled' => ['Votre abonnement prendra fin', 'Votre abonnement « %s » prendra fin à la fin de la période en cours. Vous pouvez le reprendre avant cette date depuis votre compte.'],
+        // lot ABO-1 : résiliation programmée à la fin d'un engagement minimal (la date est dans le récapitulatif)
+        'cancel_at_term_end' => ['Votre résiliation est enregistrée', 'Votre demande de résiliation de l\'abonnement « %s » est enregistrée. Il prendra fin à la fin de votre engagement, à la date ci-dessous ; aucune échéance ne sera prélevée après. Vous pouvez annuler cette résiliation avant cette date depuis votre compte.'],
     ];
 
     public function __construct(
@@ -26,7 +28,7 @@ final class SubscriptionMailer
     }
 
     /**
-     * @param 'payment_failed'|'canceled_unpaid'|'paused'|'canceled'|'cancel_scheduled' $kind
+     * @param 'payment_failed'|'canceled_unpaid'|'paused'|'canceled'|'cancel_scheduled'|'cancel_at_term_end' $kind
      * @param array{rows?: array<string, string>, payUrl?: ?string} $details lignes ajoutées au récapitulatif, lien de paiement
      */
     public function notify(Subscription $subscription, string $kind, string $locale, string $host, array $details = []): void

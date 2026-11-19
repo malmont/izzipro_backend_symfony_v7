@@ -93,6 +93,24 @@ class SubscriptionPlan
     public function getProduct(): ?Product { return $this->product; }
     public function setProduct(?Product $product): static { $this->product = $product; return $this; }
     /** @return array<string, string> */
+    /** Lot ABO-1 : formule à une seule période (carte de séances, décision 11) : souscrite avec fin programmée, droits jamais reportés */
+    #[ORM\Column(name: 'single_period', options: ['default' => false])]
+    private bool $singlePeriod = false;
+
+    /** Lot ABO-1 : pause de 90 jours au plus, une fois par an glissant (décision 3), réglables par formule */
+    #[ORM\Column(name: 'max_pause_days', options: ['default' => 90])]
+    private int $maxPauseDays = 90;
+
+    #[ORM\Column(name: 'pauses_per_year', options: ['default' => 1])]
+    private int $pausesPerYear = 1;
+
+    public function isSinglePeriod(): bool { return $this->singlePeriod; }
+    public function setSinglePeriod(bool $single): static { $this->singlePeriod = $single; return $this; }
+    public function getMaxPauseDays(): int { return $this->maxPauseDays; }
+    public function setMaxPauseDays(int $days): static { $this->maxPauseDays = max(1, min(365, $days)); return $this; }
+    public function getPausesPerYear(): int { return $this->pausesPerYear; }
+    public function setPausesPerYear(int $n): static { $this->pausesPerYear = max(0, min(12, $n)); return $this; }
+
     public function getNames(): array { return $this->names; }
     /** @param array<string, string> $names */
     public function setNames(array $names): static { $this->names = $names; return $this; }

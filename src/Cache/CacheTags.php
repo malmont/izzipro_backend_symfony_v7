@@ -468,6 +468,9 @@ final class CacheTags
         CartDetails::class,
         CheckoutSession::class,
         Subscription::class,
+        // lot ABO-1 : droits et historique des abonnements, lus frais (solde, gestes du quotidien)
+        \App\Abo\Entity\BenefitOccurrence::class,
+        \App\Abo\Entity\SubscriptionAboEvent::class,
         StripeConfig::class,
         SquareConfig::class,
         EasyPostConfiguration::class,

@@ -210,11 +210,15 @@ class HandleSubscriptionWebhookUseCase
         if ($this->payments === null || !is_string($invoiceId) || $invoiceId === '') {
             return;
         }
-        $period = $invoice['lines']['data'][0]['period'] ?? [];
-        $start = is_numeric($period['start'] ?? null) ? (int) $period['start'] : null;
-        $end = is_numeric($period['end'] ?? null) ? (int) $period['end'] : null;
         $amount = (int) ($invoice['amount_paid'] ?? 0);
         $reason = is_string($invoice['billing_reason'] ?? null) ? $invoice['billing_reason'] : null;
+        // lot ABO-1 (relecture neuve) : la période est celle de la ligne d'ABONNEMENT hors prorata, jamais une ligne de prorata (« temps
+        // restant… », période passée) placée en tête. Une facture de changement de formule sans ligne de ce genre est un prorata pur : elle
+        // n'ouvre aucune période (début et fin vides) ; avec une telle ligne (passage du mois à l'année : cycle remis à zéro), elle en ouvre une.
+        $line = self::periodLine($invoice);
+        $period = ($line ?? ($reason === 'subscription_update' ? [] : ($invoice['lines']['data'][0] ?? [])))['period'] ?? [];
+        $start = is_numeric($period['start'] ?? null) ? (int) $period['start'] : null;
+        $end = is_numeric($period['end'] ?? null) ? (int) $period['end'] : null;
         if (!$this->payments->recordPeriodPaid($tenantCode, $invoiceId, (int) $subscription->getId(), $start, $end, $amount, $reason)) {
             return;
         }
@@ -224,6 +228,29 @@ class HandleSubscriptionWebhookUseCase
         } catch (\Throwable $e) {
             $this->logger->error('[Subscription] « période payée » non traitée', ['subscription' => $subscription->getId(), 'exception' => $e::class]);
         }
+    }
+
+    /**
+     * La ligne d'une facture qui ouvre une période d'abonnement : ligne d'abonnement (ancienne forme `type: subscription`, ou
+     * `parent.subscription_item_details` depuis l'API 2025) qui n'est pas un prorata.
+     *
+     * @return array<string, mixed>|null
+     */
+    public static function periodLine(array $invoice): ?array
+    {
+        foreach ($invoice['lines']['data'] ?? [] as $line) {
+            if (!is_array($line)) {
+                continue;
+            }
+            $details = $line['parent']['subscription_item_details'] ?? null;
+            $isSubscription = ($line['type'] ?? null) === 'subscription' || is_array($details) || isset($line['subscription_item']);
+            $proration = (bool) ($line['proration'] ?? (is_array($details) ? ($details['proration'] ?? false) : false));
+            if ($isSubscription && !$proration && isset($line['period']['start'], $line['period']['end'])) {
+                return $line;
+            }
+        }
+
+        return null;
     }
 
     /**

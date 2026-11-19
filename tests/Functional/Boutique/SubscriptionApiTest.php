@@ -130,6 +130,13 @@ class SubscriptionApiTest extends WebTestCase
         $this->assertSame('active', $this->json($this->request('POST', "/api/subscriptions/$id/resume"))['status']);
         $changed = $this->json($this->request('POST', "/api/subscriptions/$id/change-plan", json_encode(['planId' => $plans[2]['id']])));
         $this->assertSame('Panier mensuel', $changed['plan']['name']);
+        // lot ABO-1 (résiliation simple) : le panier mensuel a 3 périodes d'engagement ; la résiliation du client est PROGRAMMÉE à leur fin,
+        // jamais refusée ; la reprise la lève
+        $this->assertNotNull($changed['cancellation']['cancellableFrom']);
+        $engaged = $this->json($this->request('POST', "/api/subscriptions/$id/cancel", '{}'));
+        $this->assertSame([false, 'active', $changed['cancellation']['cancellableFrom']], [$engaged['cancelAtPeriodEnd'], $engaged['status'], $engaged['cancellation']['scheduledAt']]);
+        $this->assertNull($this->json($this->request('POST', "/api/subscriptions/$id/resume"))['cancellation']['scheduledAt']);
+        $this->assertSame('Panier hebdomadaire', $this->json($this->request('POST', "/api/subscriptions/$id/change-plan", json_encode(['planId' => $plans[0]['id']])))['plan']['name']);
         $scheduled = $this->json($this->request('POST', "/api/subscriptions/$id/cancel", '{}'));
         $this->assertSame([true, 'active'], [$scheduled['cancelAtPeriodEnd'], $scheduled['status']], 'par défaut : fin de période');
         $this->assertFalse($this->json($this->request('POST', "/api/subscriptions/$id/resume"))['cancelAtPeriodEnd']);

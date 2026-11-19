@@ -39,6 +39,9 @@ class GroupWritesClassificationTest extends KernelTestCase
         // lot ABO-0 : abonnements (formules, prestations, abonnés sans identité)
         'get_subscription_plans' => 'lecture', 'get_benefits' => 'lecture', 'get_plan_subscribers' => 'lecture', 'get_subscription' => 'lecture',
         'propose_benefit' => 'catalogue', 'propose_plan' => 'catalogue', 'set_plan_benefits' => 'catalogue',
+        // lot ABO-1 : gestes du quotidien sur un abonnement
+        'get_expiring_rights' => 'lecture', 'propose_use' => 'commande', 'propose_gift' => 'commande', 'propose_pause' => 'commande', 'propose_resume' => 'commande',
+        'propose_cancel_subscription' => 'argent',
     ];
 
     public function testEveryWriteEveryScreenAndEveryAssistantToolIsClassifiedForTheDirector(): void

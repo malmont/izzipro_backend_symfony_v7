@@ -61,7 +61,17 @@ final class StripeConnectSetupService
         return strlen($ascii) >= 5 ? $ascii : trim($ascii . ' BOUTIQUE');
     }
 
-    /** Configuration du portail client (créée au besoin) ; null sans compte connecté */
+    /** Métadonnée qui repère la configuration du portail créée par la plateforme (jamais une configuration du commerçant) */
+    public const PORTAL_MARK = 'izzi_platform';
+
+    /**
+     * Configuration du portail client de la PLATEFORME sur le compte connecté (créée au besoin) ; null sans compte connecté.
+     *
+     * Lot ABO-1 (décision du chef, 19/11/2026) : l'annulation est coupée dans le portail. Le client résilie par nos écrans, qui appliquent
+     * l'engagement minimal et programment la résiliation à sa fin (résiliation simple, en deux gestes). Seule la configuration repérée par
+     * la métadonnée `izzi_platform` est utilisée et mise à jour : une configuration créée par le commerçant n'est jamais lue pour la
+     * session ni modifiée.
+     */
     public function ensurePortalConfiguration(string $siteName): ?string
     {
         $account = $this->accountId();
@@ -69,18 +79,26 @@ final class StripeConnectSetupService
             return null;
         }
         $client = $this->client();
-        $existing = $client->billingPortal->configurations->all(['limit' => 1, 'active' => true], ['stripe_account' => $account]);
-        if ($existing->data !== []) {
-            return $existing->data[0]->id;
+        $features = [
+            'invoice_history' => ['enabled' => true],
+            'payment_method_update' => ['enabled' => true],
+            'customer_update' => ['enabled' => true, 'allowed_updates' => ['email', 'address', 'phone']],
+            'subscription_cancel' => ['enabled' => false],
+        ];
+        foreach ($client->billingPortal->configurations->all(['limit' => 100, 'active' => true], ['stripe_account' => $account])->data as $configuration) {
+            if ((string) ($configuration->metadata[self::PORTAL_MARK] ?? '') !== '1') {
+                continue; // une configuration du commerçant : jamais touchée
+            }
+            if ((bool) ($configuration->features->subscription_cancel->enabled ?? false)) {
+                $client->billingPortal->configurations->update($configuration->id, ['features' => ['subscription_cancel' => ['enabled' => false]]], ['stripe_account' => $account]);
+            }
+
+            return $configuration->id;
         }
         $configuration = $client->billingPortal->configurations->create([
             'business_profile' => ['headline' => sprintf('%s — gestion de votre abonnement', $siteName)],
-            'features' => [
-                'invoice_history' => ['enabled' => true],
-                'payment_method_update' => ['enabled' => true],
-                'customer_update' => ['enabled' => true, 'allowed_updates' => ['email', 'address', 'phone']],
-                'subscription_cancel' => ['enabled' => true, 'mode' => 'at_period_end'],
-            ],
+            'features' => $features,
+            'metadata' => [self::PORTAL_MARK => '1'],
         ], ['stripe_account' => $account]);
 
         return $configuration->id;

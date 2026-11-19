@@ -8,14 +8,16 @@ namespace App\Abo\Services;
  */
 final class AboException extends \RuntimeException
 {
-    public function __construct(public readonly int $status, public readonly string $errorCode, string $message, public readonly ?string $field = null)
+    /** @param array<string, mixed> $details champs ajoutés à la réponse (ex. `cancellableFrom`) */
+    public function __construct(public readonly int $status, public readonly string $errorCode, string $message, public readonly ?string $field = null, public readonly array $details = [],
+        ?\Throwable $previous = null) // la cause, quand le refus reprend le message d'une autre exception (garde-fou ClientErrorGuardTest)
     {
-        parent::__construct($message);
+        parent::__construct($message, 0, $previous);
     }
 
-    /** @return array{error: string, code: string, message: string, field?: string} */
+    /** @return array<string, mixed> */
     public function toArray(): array
     {
-        return ['error' => $this->errorCode, 'code' => $this->errorCode, 'message' => $this->getMessage()] + ($this->field !== null ? ['field' => $this->field] : []);
+        return ['error' => $this->errorCode, 'code' => $this->errorCode, 'message' => $this->getMessage()] + ($this->field !== null ? ['field' => $this->field] : []) + $this->details;
     }
 }

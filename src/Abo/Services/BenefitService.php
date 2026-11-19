@@ -78,6 +78,10 @@ class BenefitService
         if ($benefit->getId() !== null && $this->planBenefits()->isUsed($benefit)) {
             throw new AboException(409, 'BENEFIT_IN_USE', 'Cette prestation est livrée par une formule : désactivez-la plutôt que de la supprimer.');
         }
+        // lot ABO-1 : des droits d'abonnés (même passés) la citent : leur historique est gardé, la prestation se désactive
+        if ($benefit->getId() !== null && $this->emProvider->getEntityManager()->getConnection()->fetchOne('SELECT 1 FROM benefit_occurrence WHERE benefit_id = ? LIMIT 1', [$benefit->getId()]) !== false) {
+            throw new AboException(409, 'BENEFIT_IN_USE', 'Des abonnés ont des droits sur cette prestation : désactivez-la plutôt que de la supprimer.');
+        }
     }
 
     /**

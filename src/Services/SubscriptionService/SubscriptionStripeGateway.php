@@ -113,7 +113,7 @@ final class SubscriptionStripeGateway implements SubscriptionStripeGatewayInterf
         });
     }
 
-    public function create(string $customerId, string $priceId, int $quantity, int $trialDays, array $metadata, array $taxRateIds, bool $automaticTax, ?string $shippingPriceId = null): array
+    public function create(string $customerId, string $priceId, int $quantity, int $trialDays, array $metadata, array $taxRateIds, bool $automaticTax, ?string $shippingPriceId = null, bool $cancelAtPeriodEnd = false): array
     {
         $items = [['price' => $priceId, 'quantity' => $quantity, 'metadata' => ['role' => 'plan']]];
         if ($shippingPriceId !== null) {
@@ -130,6 +130,9 @@ final class SubscriptionStripeGateway implements SubscriptionStripeGatewayInterf
         ];
         if ($trialDays > 0) {
             $params['trial_period_days'] = $trialDays;
+        }
+        if ($cancelAtPeriodEnd) {
+            $params['cancel_at_period_end'] = true; // lot ABO-1 : carte de séances, payée une fois, fin posée dès la création
         }
         if ($automaticTax) {
             $params['automatic_tax'] = ['enabled' => true];
@@ -154,14 +157,24 @@ final class SubscriptionStripeGateway implements SubscriptionStripeGatewayInterf
         return self::normalize($this->call(fn (StripeClient $c, array $o) => $c->subscriptions->update($subscriptionId, ['cancel_at_period_end' => true], $o)));
     }
 
-    public function resume(string $subscriptionId): array
+    public function cancelAt(string $subscriptionId, int $timestamp): array
     {
-        return self::normalize($this->call(fn (StripeClient $c, array $o) => $c->subscriptions->update($subscriptionId, ['cancel_at_period_end' => false, 'pause_collection' => ''], $o)));
+        return self::normalize($this->call(fn (StripeClient $c, array $o) => $c->subscriptions->update($subscriptionId, ['cancel_at' => $timestamp, 'proration_behavior' => 'none'], $o)));
     }
 
-    public function pause(string $subscriptionId): array
+    public function resume(string $subscriptionId, bool $liftCancellation = true, bool $scheduledAt = false): array
     {
-        return self::normalize($this->call(fn (StripeClient $c, array $o) => $c->subscriptions->update($subscriptionId, ['pause_collection' => ['behavior' => 'void']], $o)));
+        // Stripe refuse `cancel_at` et `cancel_at_period_end` dans la même requête : on lève l'une ou l'autre, selon la fin programmée
+        $params = ['pause_collection' => ''] + ($liftCancellation ? ($scheduledAt ? ['cancel_at' => ''] : ['cancel_at_period_end' => false]) : []);
+
+        return self::normalize($this->call(fn (StripeClient $c, array $o) => $c->subscriptions->update($subscriptionId, $params, $o)));
+    }
+
+    public function pause(string $subscriptionId, ?int $resumesAt = null): array
+    {
+        $pause = ['behavior' => 'void'] + ($resumesAt !== null ? ['resumes_at' => $resumesAt] : []);
+
+        return self::normalize($this->call(fn (StripeClient $c, array $o) => $c->subscriptions->update($subscriptionId, ['pause_collection' => $pause], $o)));
     }
 
     public function changePlan(string $subscriptionId, string $itemId, string $priceId, int $quantity): array
@@ -259,6 +272,7 @@ final class SubscriptionStripeGateway implements SubscriptionStripeGatewayInterf
             'status' => (string) ($a['status'] ?? ''),
             'currentPeriodEnd' => isset($a['current_period_end']) ? (int) $a['current_period_end'] : (isset($item['current_period_end']) ? (int) $item['current_period_end'] : null),
             'cancelAtPeriodEnd' => (bool) ($a['cancel_at_period_end'] ?? false),
+            'cancelAt' => isset($a['cancel_at']) ? (int) $a['cancel_at'] : null, // lot ABO-1 : résiliation programmée à une date
             'paused' => !empty($a['pause_collection']),
             // carte par défaut de l'abonnement (champ absent de l'objet : inconnu)
             'hasPaymentMethod' => array_key_exists('default_payment_method', $a) ? !empty($a['default_payment_method']) : null,

@@ -583,7 +583,7 @@ TXT;
         if ($this->available('get_subscription_plans')) {
             // lot ABO-0 : abonnements universels
             $lines[] = '- abonnements : lire les formules, leurs prestations et leurs abonnés par statut (get_subscription_plans), les prestations (get_benefits), les abonnés d\'une formule (get_plan_subscribers, status past_due pour « qui est en impayé ? ») et la fiche d\'un abonnement (get_subscription). Un abonné est désigné par son NUMÉRO d\'abonnement : tu ne connais ni son nom ni son courriel, l\'écran lié (open_screen subscriptions) les montre à l\'administrateur ; ne les demande pas, ne les invente pas.'
-                . ($tier !== 'help' ? ' Proposer, toujours confirmé : une prestation (propose_benefit), une formule sur un produit porteur existant avec ses prestations (propose_plan : prix en centimes, période, quantité par période), ou les prestations d\'une formule (set_plan_benefits). Pour « crée-moi une formule yoga 2 séances par semaine », crée d\'abord la prestation si elle n\'existe pas, puis la formule.' : '') . ' ;';
+                . ($tier !== 'help' ? ' Proposer, toujours confirmé : une prestation (propose_benefit), une formule sur un produit porteur existant avec ses prestations (propose_plan : prix en centimes, période, quantité par période), ou les prestations d\'une formule (set_plan_benefits). Pour « crée-moi une formule yoga 2 séances par semaine », crée d\'abord la prestation si elle n\'existe pas, puis la formule. Au quotidien (lot ABO-1) : le solde d\'un abonnement (get_subscription), les droits qui expirent bientôt (get_expiring_rights) ; proposer, toujours confirmé : marquer une utilisation (propose_use), offrir des droits avec un motif (propose_gift), une pause datée (propose_pause), une reprise (propose_resume), une résiliation EN FIN DE PÉRIODE seulement (propose_cancel_subscription). Jamais de résiliation immédiate, de remboursement ni de retrait de droits payés.' : '') . ' ;';
         }
         if ($tier !== 'help') {
             $lines[] = '- proposer, toujours confirmé par l\'administrateur : ajouter une variante aux articles en ligne non achetables (add_default_variant), lancer un exercice des pertes (start_loss_exercise)'
@@ -733,6 +733,7 @@ TXT;
             case 'get_benefits':
             case 'get_plan_subscribers':
             case 'get_subscription':
+            case 'get_expiring_rights':
                 if ($this->abo === null) {
                     return [['error' => 'abonnements indisponibles'], null, null];
                 }
@@ -742,6 +743,11 @@ TXT;
             case 'propose_benefit':
             case 'propose_plan':
             case 'set_plan_benefits':
+            case 'propose_use':
+            case 'propose_gift':
+            case 'propose_pause':
+            case 'propose_resume':
+            case 'propose_cancel_subscription':
                 if ($this->abo === null) {
                     return [['error' => 'abonnements indisponibles'], null, null];
                 }
