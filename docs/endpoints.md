@@ -261,7 +261,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (689)
+## Boutique et commun (694)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -459,6 +459,11 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/api/gestion/ecrans/{code}/guide` | ROLE_ADMIN | `Gestion\Controller\GestionScreenGuideController::guide` |
 | GET | `/api/gestion/exports/achats.csv` | ROLE_ADMIN | `Gestion\Controller\GestionExportController::purchases` |
 | GET | `/api/gestion/frais-fixes` | ROLE_ADMIN | `Gestion\Controller\GestionFixedCostController::list` |
+| POST | `/api/gestion/groupe/copies/{id}/cancel` | ROLE_ADMIN | `Gestion\Controller\GestionGroupCopyController::cancel` |
+| POST | `/api/gestion/groupe/copies/{id}/confirm` | ROLE_ADMIN | `Gestion\Controller\GestionGroupCopyController::confirm` |
+| GET | `/api/gestion/groupe/copies/{id}` | ROLE_ADMIN | `Gestion\Controller\GestionGroupCopyController::show` |
+| GET | `/api/gestion/groupe/copies` | ROLE_ADMIN | `Gestion\Controller\GestionGroupCopyController::list` |
+| POST | `/api/gestion/groupe/copies` | ROLE_ADMIN | `Gestion\Controller\GestionGroupCopyController::create` |
 | GET | `/api/gestion/groupe/resultat` | ROLE_ADMIN | `Gestion\Controller\GestionGroupResultController::result` |
 | GET | `/api/gestion/ia` | ROLE_ADMIN | `Gestion\Controller\GestionAiController::usage` |
 | GET | `/api/gestion/journee` | ROLE_ADMIN | `Gestion\Controller\GestionDayController::overview` |
