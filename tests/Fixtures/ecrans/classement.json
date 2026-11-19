@@ -784,19 +784,25 @@
         "POST /api/gestion/accueil/vignettes/{id}/ecarter"
     ],
     "groupe": [
+        "DELETE /api/group/shops/{code}/same-company",
+        "DELETE /api/site/group-same-company",
         "GET /api/gestion/groupe/copies",
         "GET /api/gestion/groupe/copies/{id}",
         "GET /api/gestion/groupe/resultat",
         "GET /api/group",
         "GET /api/site/group-invitations",
+        "GET /api/site/group-same-company",
         "POST /api/gestion/groupe/copies",
         "POST /api/gestion/groupe/copies/{id}/cancel",
         "POST /api/gestion/groupe/copies/{id}/confirm",
         "POST /api/group",
         "POST /api/group/invitations",
         "POST /api/group/leave",
+        "POST /api/group/shops/{code}/same-company",
         "POST /api/site/group-invitations/{id}/accept",
-        "POST /api/site/group-invitations/{id}/refuse"
+        "POST /api/site/group-invitations/{id}/refuse",
+        "POST /api/site/group-same-company/{id}/confirm",
+        "POST /api/site/group-same-company/{id}/refuse"
     ],
     "imports": [
         "GET /api/site/imports",

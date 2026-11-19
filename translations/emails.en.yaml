@@ -347,6 +347,50 @@ group_invitation:
     validity: 'The invitation is valid for %days% days. Without an answer, it expires.'
     ignore: 'If you do not know this group, refuse the invitation or ignore this message: nothing changes without your consent.'
 
+group_same_company:
+    requested:
+        subject: '%site%: the group %group% asks for the "same company" link'
+        title: '"Same company" link requested'
+        greeting: 'Hello,'
+        message: 'The director of the group "%group%" (head: %head%) asks that your shop %site% be declared part of the same company as the head. %consent% To confirm or refuse, open your administration space: the request is waiting in the "Multi-shop" screen.'
+        validity: 'The request is valid for %days% days. Without an answer, it expires and nothing changes.'
+        ignore: 'If your shop does not belong to the same company as this head, refuse the request: nothing changes without your consent.'
+    confirmed:
+        subject: '%site% confirmed the "same company" link'
+        title: '"Same company" link confirmed'
+        greeting: 'Hello,'
+        message: 'The administrator of the shop %site% confirmed that it belongs to the same company as the head of the group "%group%". Stock transfers and copying the purchase cost to this shop are allowed.'
+        validity: 'The shop can remove this link at any time; you will be told.'
+        ignore: 'This message follows a request made from the head of the group.'
+    refused:
+        subject: '%site% refused the "same company" link'
+        title: '"Same company" link refused'
+        greeting: 'Hello,'
+        message: 'The administrator of the shop %site% refused to declare it part of the same company as the head of the group "%group%". It stays an associated shop: no stock transfer, no copy of the purchase cost.'
+        validity: 'You can ask again later.'
+        ignore: 'This message follows a request made from the head of the group.'
+    removed_by_shop:
+        subject: '%site% removed the "same company" link'
+        title: '"Same company" link removed by the shop'
+        greeting: 'Hello,'
+        message: 'The administrator of the shop %site% removed the "same company" link with the head of the group "%group%". From now on: no new stock transfer, and copies to this shop go without the purchase cost. A transfer already sent ends normally.'
+        validity: 'The removal applies immediately.'
+        ignore: 'The shop stays in the group, as an associated shop.'
+    removed_by_head:
+        subject: '%site%: the group %group% removed the "same company" link'
+        title: '"Same company" link removed by the head'
+        greeting: 'Hello,'
+        message: 'The director of the group "%group%" removed the "same company" link with your shop %site%. From now on: no new stock transfer to or from your shop, and copies arrive without the purchase cost.'
+        validity: 'The removal applies immediately.'
+        ignore: 'Your shop stays in the group, as an associated shop.'
+    set_at_accept:
+        subject: '%site% joined the group %group% as "same company"'
+        title: '"Same company" link set at acceptance'
+        greeting: 'Hello,'
+        message: 'The administrator of the shop %site% accepted the invitation of the group "%group%" and declared that it belongs to the same company as the head. Stock transfers and copying the purchase cost to this shop are allowed.'
+        validity: 'The shop can remove this link at any time; you will be told.'
+        ignore: 'This message follows the acceptance of your invitation by the shop.'
+
 bug_report_answer:
     subject: 'Your report no. %id%: %status%'
     title: 'Your report'

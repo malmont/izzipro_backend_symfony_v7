@@ -42,8 +42,8 @@ class GroupInvitationMailer
         return $sent;
     }
 
-    /** @return list<string> les administrateurs vérifiés du site, hors compte de la plateforme */
-    private function recipients(string $dbname): array
+    /** @return list<string> les administrateurs vérifiés du site, hors compte de la plateforme (partagé avec le lien « même entreprise », lot G-1d) */
+    public function recipients(string $dbname): array
     {
         $rows = $this->databases->pdo($dbname)->query("SELECT email, roles FROM \"user\" WHERE is_verified = TRUE AND roles::text LIKE '%ROLE_ADMIN%' ORDER BY id")->fetchAll(\PDO::FETCH_ASSOC) ?: [];
         $out = [];

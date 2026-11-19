@@ -143,6 +143,32 @@ class PlatformAccessJournal
     }
 
     /**
+     * Lot G-1d : chaque pose, confirmation, refus et retrait du lien « même entreprise » qui touche ce site (la boutique ET le siège le voient),
+     * le plus récent d'abord. Écrits par `GroupCompanyService::trace`.
+     *
+     * @return list<array{at: \DateTimeImmutable, account: string, channel: string, channelLabel: string}>
+     */
+    public function groupLinks(int $limit = 100): array
+    {
+        $rows = $this->emProvider->getEntityManager()->getConnection()->fetchAllAssociative(
+            'SELECT created_at, user_identifier, after_state FROM content_audit_log WHERE resource = ? AND action = ? AND tenant = ? ORDER BY id DESC LIMIT ' . max(1, min(500, $limit)),
+            [\App\Services\Entry\EntryService::JOURNAL_RESOURCE, \App\Services\Group\GroupCompanyService::JOURNAL_ACTION, $this->tenant()]
+        );
+        $labels = ['same_company_set_at_accept' => 'posé à l\'acceptation de l\'invitation', 'same_company_requested' => 'demandé par le directeur', 'same_company_confirmed' => 'confirmé par la boutique',
+            'same_company_refused' => 'refusé par la boutique', 'same_company_removed' => 'retiré', 'same_company_request_cancelled' => 'demande retirée par le directeur'];
+
+        return array_map(static function (array $row) use ($labels): array {
+            $after = is_string($row['after_state']) ? json_decode($row['after_state'], true) : null;
+            $after = is_array($after) ? $after : [];
+            $event = (string) ($after['event'] ?? '');
+            $side = ($after['side'] ?? null) === 'head' ? ' (côté siège)' : (($after['side'] ?? null) === 'shop' ? ' (côté boutique)' : '');
+
+            return ['at' => new \DateTimeImmutable((string) $row['created_at'], new \DateTimeZone('UTC')), 'account' => (string) $row['user_identifier'],
+                'channel' => 'group_link', 'channelLabel' => sprintf('Lien « même entreprise » avec le groupe : %s%s, boutique %s', $labels[$event] ?? $event, $side, (string) ($after['shop'] ?? ''))];
+        }, $rows);
+    }
+
+    /**
      * Lot AG-ASSIST : chaque requête faite par une agence pendant une assistance ouverte par le commerçant (écran consulté, fiche lue,
      * écriture), la plus récente d'abord ; avec `$grantId`, celles d'UNE assistance.
      *

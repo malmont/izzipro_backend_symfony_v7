@@ -33,7 +33,7 @@ class GroupRepository
     /** @return list<array<string, mixed>> les boutiques du groupe, le siège d'abord */
     public function shops(int $groupId): array
     {
-        $stmt = $this->pdo()->prepare("SELECT s.tenant_code, s.origin, s.joined_at, t.name FROM shop_group_sites s LEFT JOIN tenants t ON t.code = s.tenant_code
+        $stmt = $this->pdo()->prepare("SELECT s.tenant_code, s.origin, s.joined_at, s.same_company, s.same_company_since, t.name FROM shop_group_sites s LEFT JOIN tenants t ON t.code = s.tenant_code
             WHERE s.group_id = ? AND s.left_at IS NULL ORDER BY (s.origin = 'head') DESC, s.id");
         $stmt->execute([$groupId]);
 
@@ -44,11 +44,11 @@ class GroupRepository
      * Lot G-2 : les boutiques ouvertes du groupe avec leur base, le siège d'abord, pour « Toutes les boutiques ». Une boutique sans ligne
      * dans `tenants` garde un `dbname` nul : elle sera listée en erreur, jamais lue ailleurs.
      *
-     * @return list<array{tenant_code: string, name: ?string, dbname: ?string, origin: string}>
+     * @return list<array{tenant_code: string, name: ?string, dbname: ?string, origin: string, same_company: bool}>
      */
     public function shopDatabases(int $groupId): array
     {
-        $stmt = $this->pdo()->prepare("SELECT s.tenant_code, t.name, t.dbname, s.origin FROM shop_group_sites s LEFT JOIN tenants t ON t.code = s.tenant_code
+        $stmt = $this->pdo()->prepare("SELECT s.tenant_code, t.name, t.dbname, s.origin, s.same_company FROM shop_group_sites s LEFT JOIN tenants t ON t.code = s.tenant_code
             WHERE s.group_id = ? AND s.left_at IS NULL ORDER BY (s.origin = 'head') DESC, s.id");
         $stmt->execute([$groupId]);
 
@@ -75,7 +75,7 @@ class GroupRepository
     }
 
     /** Ajoute une boutique sous verrou du groupe : `added`, `gone` (groupe dissous), `limit` (forfait plein) ou `taken` (déjà dans un groupe : index unique) */
-    public function addShop(int $groupId, string $code, string $origin, ?string $by): string
+    public function addShop(int $groupId, string $code, string $origin, ?string $by, ?string $sameCompanyConsent = null): string
     {
         $pdo = $this->pdo();
         $pdo->beginTransaction();
@@ -96,7 +96,10 @@ class GroupRepository
 
                 return 'limit';
             }
-            $pdo->prepare('INSERT INTO shop_group_sites (group_id, tenant_code, origin, joined_by) VALUES (?, ?, ?, ?)')->execute([$groupId, $code, $origin, $by]);
+            // lot G-1d : la case « même entreprise » cochée à l'acceptation naît AVEC le lien (jamais une boutique entrée sans le lien qu'elle a coché)
+            $pdo->prepare('INSERT INTO shop_group_sites (group_id, tenant_code, origin, joined_by, same_company, same_company_since, same_company_consent_version)
+                VALUES (?, ?, ?, ?, ?::boolean, CASE WHEN ?::boolean THEN NOW() ELSE NULL END, ?)')
+                ->execute([$groupId, $code, $origin, $by, $sameCompanyConsent !== null ? 't' : 'f', $sameCompanyConsent !== null ? 't' : 'f', $sameCompanyConsent]);
             $pdo->commit();
 
             return 'added';

@@ -729,6 +729,46 @@ relu à chaque appel et à la confirmation). Code : `SiteAssistantTools::GROUP_R
   essai d'injection (`GroupAssistantToolsTest` : un nom de boutique qui porte une consigne reste une donnée de l'aperçu, rien n'est écrit
   avant la confirmation).
 
+## 17 bis. Lot G-1d : le lien « même entreprise » d'une boutique associée (19/11/2026, contrat validé par le chef, décision du propriétaire)
+
+Un transfert ou une copie du coût entre deux ENTREPRISES distinctes serait une vente (facture, taxes) et révélerait le coût de l'une à
+l'autre. Règle unique (`GroupCompanyService::same` / `sameFromRow`) : une boutique est de la même entreprise que le siège si son origine est
+`head` ou `created`, ou si elle est `associated` AVEC le lien confirmé. G-4 (coût) et G-5 (transfert) n'ont pas d'autre source.
+
+- **Base maître** (`ops/sql/group_company_master.sql`, script hors dépôt `scripts/migrate_master_v2_group_company.sh`) : `shop_group_sites`
+  + `same_company`, `same_company_since`, `same_company_consent_version` (l'état, sur le lien OUVERT : un lien neuf après une sortie repart à
+  faux) ; `shop_group_company_requests` (demandes du directeur, `pending | confirmed | refused | expired | cancelled`, 14 jours, une seule
+  en attente par boutique : index unique partiel ; l'échéance se lit sans passage planifié, la demande échue est close à la suivante ; une
+  demande faite AVANT l'entrée actuelle de la boutique (course avec une sortie) n'est ni montrée ni confirmable, et elle est close à la demande
+  suivante). La case cochée à l'acceptation naît avec le lien de la boutique (un seul INSERT, `GroupRepository::addShop`).
+- **Consentement** `g1d-v1` (`GroupCompanyService::consent`, fr et en), exigé à l'identique : sinon 422 `GROUP_CONSENT_REQUIRED`.
+- **Poser** : à l'acceptation (`accept { consent, sameCompany: true, sameCompanyConsent }`, vérifié AVANT l'entrée dans le groupe ; la liste
+  des invitations donne `sameCompanyConsent` et `sameCompanyConsentVersion`) ; ou `POST /api/group/shops/{code}/same-company` (directeur) →
+  202, puis la boutique `GET /api/site/group-same-company`, `POST …/{id}/confirm { consent }` ou `…/{id}/refuse`. Refus : 409
+  `SAME_COMPANY_PENDING`, `SAME_COMPANY_ALREADY`, 422 `SAME_COMPANY_NOT_ASSOCIATED`, 404 `GROUP_SHOP_UNKNOWN`, `SAME_COMPANY_REQUEST_NOT_FOUND`.
+- **Retirer** : `DELETE /api/site/group-same-company` (la boutique seule, effet immédiat) ou `DELETE /api/group/shops/{code}/same-company`
+  (le directeur ; retire aussi sa demande en attente) ; 409 `SAME_COMPANY_NOT_SET`. Quitter le groupe close la demande en attente.
+- **Qui** : administrateur DU site. Le directeur entré dans la boutique, l'agence, le compte de la plateforme : refusés (garde du mode et
+  contrôleurs, 403) : personne ne confirme à la place de la boutique. `GET /api/group` du siège donne `shops[].sameCompany { state:
+  none | pending | confirmed, since, requestExpiresAt }`.
+- **Avis** : courriel indispensable `group_same_company` (`GroupCompanyMailer`, sans lien d'action) : demande → boutique ; confirmation,
+  refus, retrait par la boutique, lien posé à l'acceptation (`set_at_accept`) → siège ; retrait par le siège → boutique.
+- **Traces** : `shop_group_events` (`same_company_set_at_accept`, `_requested`, `_confirmed`, `_refused`, `_removed` avec `side`,
+  `_request_cancelled`) et journal des DEUX sites (`content_audit_log`, `external_access` / `same_company`), lu par « Accès extérieurs »
+  (`PlatformAccessJournal::groupLinks`).
+- **G-4 changé** (annoncé) : le coût n'est copié qu'entre deux boutiques de la même entreprise. Sinon, la copie confirmée sans `withCost`
+  part sans coût, et `withCost: true` est refusé (422 `COPY_COST_ASSOCIATED_SHOP`, rien n'est confirmé). Le coût n'est figé à l'aperçu que du siège vers une boutique CRÉÉE ; vers une
+  associée liée, il est relu à la confirmation (un lien retiré depuis l'aperçu compte).
+- **G-5** lira l'événement `same_company_removed` : nouveaux transferts refusés, transferts seulement demandés annulés, envoyés terminés.
+- **Outils de l'IA** : le directeur lit l'état (`get_group`) ; `propose_group_same_company` (la DEMANDE, confirmée par le directeur).
+  Refusés et dits (`refusedToAssistant`) : la confirmation à la place de la boutique (aucun outil), le retrait. L'assistant refuse aussi
+  `withCost` vers une associée sans lien ; le coût annoncé par son résumé est ENREGISTRÉ dans l'action (un lien posé entre la proposition
+  et la confirmation ne change pas ce qui a été confirmé).
+- **Bascule** : le SQL maître (`group_company_master.sql`) AVANT le code : `addShop`, `shops()` et `shopDatabases()` lisent les colonnes
+  neuves (sans elles : création de groupe, acceptation, `GET /api/group` et « Toutes les boutiques » en 500).
+
+Essai : `tests/Functional/Group/GroupSameCompanyTest.php`.
+
 ## Tenir cette fiche à jour
 
 À chaque écran, famille ou liste hors écran ajoutés ; à chaque champ sensible trouvé ; à chaque mode nouveau.

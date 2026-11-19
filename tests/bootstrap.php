@@ -124,6 +124,8 @@ $master->exec(file_get_contents(__DIR__ . '/../ops/sql/assistance_master.sql'));
 $master->exec(file_get_contents(__DIR__ . '/../ops/sql/groups_master.sql'));
 // Copie du catalogue entre boutiques d'un groupe (lot G-4, 19/11/2026) : copies et correspondance des articles (ops/sql/group_copies_master.sql)
 $master->exec(file_get_contents(__DIR__ . '/../ops/sql/group_copies_master.sql'));
+// Lien « même entreprise » d'une boutique associée (lot G-1d, 19/11/2026) : état sur le lien, demandes du directeur (ops/sql/group_company_master.sql)
+$master->exec(file_get_contents(__DIR__ . '/../ops/sql/group_company_master.sql'));
 // Incidents de la plateforme (lot INC-1a, 18/11/2026) : erreurs des applications et pannes du serveur (ops/sql/platform_incident_master.sql)
 $master->exec(file_get_contents(__DIR__ . '/../ops/sql/platform_incident_master.sql'));
 // Signalements de la plateforme (lot INC-3, 18/11/2026) : après les incidents, qu'ils référencent (ops/sql/platform_bug_report_master.sql)

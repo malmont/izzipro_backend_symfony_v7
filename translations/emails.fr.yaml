@@ -352,6 +352,50 @@ group_invitation:
     validity: 'L''invitation vaut %days% jours. Sans réponse, elle expire.'
     ignore: 'Si vous ne connaissez pas ce groupe, refusez l''invitation ou ignorez ce message : rien ne change sans votre accord.'
 
+group_same_company:
+    requested:
+        subject: '%site% : le groupe %group% demande le lien « même entreprise »'
+        title: 'Lien « même entreprise » demandé'
+        greeting: 'Bonjour,'
+        message: 'Le directeur du groupe « %group% » (siège : %head%) demande que votre boutique %site% soit déclarée de la même entreprise que le siège. %consent% Pour confirmer ou refuser, ouvrez votre espace d''administration : la demande vous attend dans l''écran « Multi-boutiques ».'
+        validity: 'La demande vaut %days% jours. Sans réponse, elle expire et rien ne change.'
+        ignore: 'Si votre boutique n''appartient pas à la même entreprise que ce siège, refusez la demande : rien ne change sans votre accord.'
+    confirmed:
+        subject: '%site% a confirmé le lien « même entreprise »'
+        title: 'Lien « même entreprise » confirmé'
+        greeting: 'Bonjour,'
+        message: 'L''administrateur de la boutique %site% a confirmé qu''elle appartient à la même entreprise que le siège du groupe « %group% ». Le transfert de stock et la copie du coût d''achat vers cette boutique sont permis.'
+        validity: 'La boutique peut retirer ce lien à tout moment ; vous en serez prévenu.'
+        ignore: 'Ce message suit une demande faite depuis le siège du groupe.'
+    refused:
+        subject: '%site% a refusé le lien « même entreprise »'
+        title: 'Lien « même entreprise » refusé'
+        greeting: 'Bonjour,'
+        message: 'L''administrateur de la boutique %site% a refusé de la déclarer de la même entreprise que le siège du groupe « %group% ». Elle reste une boutique associée : ni transfert de stock, ni copie du coût d''achat.'
+        validity: 'Vous pourrez renouveler la demande plus tard.'
+        ignore: 'Ce message suit une demande faite depuis le siège du groupe.'
+    removed_by_shop:
+        subject: '%site% a retiré le lien « même entreprise »'
+        title: 'Lien « même entreprise » retiré par la boutique'
+        greeting: 'Bonjour,'
+        message: 'L''administrateur de la boutique %site% a retiré le lien « même entreprise » avec le siège du groupe « %group% ». Dès maintenant : plus de nouveau transfert de stock, et les copies vers cette boutique partent sans le coût d''achat. Un transfert déjà envoyé se termine normalement.'
+        validity: 'Le retrait vaut tout de suite.'
+        ignore: 'La boutique reste dans le groupe, comme boutique associée.'
+    removed_by_head:
+        subject: '%site% : le groupe %group% a retiré le lien « même entreprise »'
+        title: 'Lien « même entreprise » retiré par le siège'
+        greeting: 'Bonjour,'
+        message: 'Le directeur du groupe « %group% » a retiré le lien « même entreprise » avec votre boutique %site%. Dès maintenant : plus de nouveau transfert de stock vers ou depuis votre boutique, et les copies arrivent sans le coût d''achat.'
+        validity: 'Le retrait vaut tout de suite.'
+        ignore: 'Votre boutique reste dans le groupe, comme boutique associée.'
+    set_at_accept:
+        subject: '%site% a rejoint le groupe %group% comme « même entreprise »'
+        title: 'Lien « même entreprise » posé à l''acceptation'
+        greeting: 'Bonjour,'
+        message: 'L''administrateur de la boutique %site% a accepté l''invitation du groupe « %group% » et a déclaré qu''elle appartient à la même entreprise que le siège. Le transfert de stock et la copie du coût d''achat vers cette boutique sont permis.'
+        validity: 'La boutique peut retirer ce lien à tout moment ; vous en serez prévenu.'
+        ignore: 'Ce message suit l''acceptation de votre invitation par la boutique.'
+
 bug_report_answer:
     subject: 'Votre signalement n° %id% : %status%'
     title: 'Votre signalement'

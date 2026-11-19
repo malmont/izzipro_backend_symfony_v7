@@ -18,7 +18,8 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
  * Les invitations à rejoindre un groupe, côté BOUTIQUE INVITÉE (lot G-1a). Administrateur DU site seulement (ni agence entrée, ni entrée par
  * jeton, ni compte de la plateforme : 403 `GROUP_FORBIDDEN`). Jamais d'ajout silencieux : accepter exige le texte de consentement.
  * - GET → `{ invitations: [{ id, group, head, expiresAt, consent, consentVersion }] }`
- * - POST `/{id}/accept` `{ consent: <consentVersion> }` → 200 (le groupe) ; 422 `GROUP_CONSENT_REQUIRED` ; 404 `GROUP_INVITATION_NOT_FOUND` ;
+ * - POST `/{id}/accept` `{ consent: <consentVersion>, sameCompany?: true, sameCompanyConsent?: <sameCompanyConsentVersion> }` → 200 (le groupe) ;
+ *   422 `GROUP_CONSENT_REQUIRED` (l'un ou l'autre texte) ; 404 `GROUP_INVITATION_NOT_FOUND` ;
  *   409 `GROUP_ALREADY_MEMBER` | `GROUP_SHOP_LIMIT`
  * - POST `/{id}/refuse` → 204
  */
@@ -45,7 +46,8 @@ class SiteGroupInvitationController extends AbstractController
         }
         $body = json_decode((string) $request->getContent(), true);
         try {
-            return $this->json($this->groups->accept($this->site(), $id, is_array($body) ? ($body['consent'] ?? null) : null, $user));
+            return $this->json($this->groups->accept($this->site(), $id, is_array($body) ? ($body['consent'] ?? null) : null, $user,
+                is_array($body) ? ($body['sameCompany'] ?? null) : null, is_array($body) ? ($body['sameCompanyConsent'] ?? null) : null, (string) $request->query->get('locale', 'fr') === 'en' ? 'en' : 'fr'));
         } catch (GroupException $e) {
             return $this->json($e->body(), $e->status);
         }

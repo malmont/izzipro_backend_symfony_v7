@@ -223,7 +223,7 @@ class GroupApiTest extends WebTestCase
 
     private function clean(): void
     {
-        foreach (['shop_group_item_links', 'shop_group_copies', 'shop_group_events', 'shop_group_invitations', 'shop_group_sites', 'shop_groups'] as $table) {
+        foreach (['shop_group_item_links', 'shop_group_copies', 'shop_group_events', 'shop_group_invitations', 'shop_group_company_requests', 'shop_group_sites', 'shop_groups'] as $table) {
             $this->master->exec("DELETE FROM $table");
         }
         foreach ([[MV_TEST_TENANT_DB, MV_TEST_TENANT_CODE], [MV_TEST_TENANT2_DB, MV_TEST_TENANT2_CODE]] as [$db, $code]) {

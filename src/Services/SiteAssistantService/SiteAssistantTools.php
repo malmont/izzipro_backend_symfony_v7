@@ -31,7 +31,7 @@ final class SiteAssistantTools
      * sécurité : jeton, session), créer une boutique (aucune route de création au groupe à ce jour).
      */
     public const GROUP_READS = ['get_group', 'get_group_view'];
-    public const GROUP_ACTIONS = ['propose_group_invitation', 'propose_group_copy'];
+    public const GROUP_ACTIONS = ['propose_group_invitation', 'propose_group_copy', 'propose_group_same_company']; // lot G-1d : la demande du lien
     /** Vues de « Toutes les boutiques » données au modèle (`get_group_view`) */
     public const GROUP_VIEWS = ['statistics', 'day', 'losses', 'to_receive', 'cash_balances', 'cash_movements', 'year', 'result'];
 
@@ -67,7 +67,7 @@ final class SiteAssistantTools
     /** Lot IA-A : propositions des fonctions ajoutées, appliquées après confirmation (ConfirmSiteAssistantActionUseCase) et tracées « par l'assistant » */
     public const IAA_ACTIONS = ['add_default_variant', 'start_loss_exercise', 'start_loss_count', 'toggle_module', 'start_module_trial', 'generate_missing_barcodes', 'request_agency_assistance',
         'propose_benefit', 'propose_plan', 'set_plan_benefits', // lot ABO-0
-        'propose_group_invitation', 'propose_group_copy']; // lot IA-G
+        'propose_group_invitation', 'propose_group_copy', 'propose_group_same_company']; // lot IA-G, G-1d
 
     /** Champs de la fiche Entreprise que l'assistant peut proposer de remplir (cheminement complet, 07/11/2026) ; les textes légaux peuvent être rédigés par l'IA */
     public const ENTREPRISE_FIELDS = ['name', 'email', 'tel', 'website', 'LegalNotice', 'conditionOfUse', 'privacyPolicy', 'apropos', 'metaTitle', 'metaDescription', 'seoKeywords', 'tvaIntracommunautaire', 'gstNumber', 'qstNumber', 'siret'];
@@ -125,6 +125,7 @@ final class SiteAssistantTools
                 'input_schema' => ['type' => 'object', 'properties' => ['view' => ['type' => 'string', 'enum' => self::GROUP_VIEWS], 'range' => ['type' => 'string', 'enum' => ['today', '7d', 'month', 'year']],
                     'from' => ['type' => 'string', 'description' => 'AAAA-MM-JJ'], 'to' => ['type' => 'string', 'description' => 'AAAA-MM-JJ'], 'source' => ['type' => 'string', 'enum' => ['all', 'ecommerce', 'pos', 'mobile_app']]], 'required' => ['view']]],
             ['name' => 'propose_group_invitation', 'description' => 'Propose d\'inviter une boutique existante (son code de site) à rejoindre le groupe. Elle accepte ou refuse elle-même. L\'administrateur confirme.', 'input_schema' => ['type' => 'object', 'properties' => ['site' => ['type' => 'string']], 'required' => ['site']]],
+            ['name' => 'propose_group_same_company', 'description' => 'Propose de DEMANDER le lien « même entreprise » pour une boutique ASSOCIÉE du groupe (son code) : il permet le transfert de stock et la copie du coût d\'achat. Seul l\'administrateur de cette boutique le confirme ensuite, dans son écran ; l\'assistant ne confirme jamais à sa place. L\'administrateur du siège confirme la demande.', 'input_schema' => ['type' => 'object', 'properties' => ['site' => ['type' => 'string']], 'required' => ['site']]],
             ['name' => 'propose_group_copy', 'description' => 'Propose de copier des articles du catalogue d\'une boutique du groupe (source, le siège par défaut) vers une autre (target) : articles masqués par défaut, stock jamais copié, coût d\'achat copié seulement depuis le siège sauf withCost. L\'administrateur confirme ; la boutique cible est prévenue.',
                 'input_schema' => ['type' => 'object', 'properties' => ['source' => ['type' => 'string'], 'target' => ['type' => 'string'], 'articles' => ['type' => 'array', 'items' => ['type' => 'integer']],
                     'withCost' => ['type' => 'boolean'], 'visibility' => ['type' => 'string', 'enum' => ['hidden', 'as_source']], 'pos' => ['type' => 'boolean']], 'required' => ['target']]],

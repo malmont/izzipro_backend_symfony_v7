@@ -30,6 +30,7 @@ class GroupService
         private readonly TenantConnectionManager $tenants,
         private readonly MessageBusInterface $bus,
         private readonly ?\App\Services\Entry\EntryService $entries = null,
+        private readonly ?GroupCompanyService $company = null, // lot G-1d : le lien « même entreprise »
     ) {
     }
 
@@ -49,8 +50,12 @@ class GroupService
             return ['group' => null, 'shops' => [], 'canCreate' => $this->modules->isEnabled(ModuleAccessService::MULTI_SHOP)];
         }
 
-        return ['group' => $this->view($group, $site), 'shops' => array_map(static fn (array $s): array => ['code' => (string) $s['tenant_code'], 'name' => (string) ($s['name'] ?? $s['tenant_code']),
-            'origin' => (string) $s['origin'], 'joinedAt' => self::iso($s['joined_at'])], $this->groups->shops((int) $group['id'])), 'canCreate' => false];
+        $isHead = $group['head_tenant_code'] === $site;
+
+        return ['group' => $this->view($group, $site), 'shops' => array_map(fn (array $s): array => ['code' => (string) $s['tenant_code'], 'name' => (string) ($s['name'] ?? $s['tenant_code']),
+            'origin' => (string) $s['origin'], 'joinedAt' => self::iso($s['joined_at'])]
+            // lot G-1d : l'état du lien « même entreprise », lu par le seul siège (une boutique lit le sien par `/api/site/group-same-company`)
+            + ($isHead && $this->company !== null ? ['sameCompany' => $this->company->state((int) $group['id'], $s)] : []), $this->groups->shops((int) $group['id'])), 'canCreate' => false];
     }
 
     /** @return array<string, mixed> @throws GroupException */
@@ -103,22 +108,33 @@ class GroupService
     public function invitationsFor(string $site, string $language = 'fr'): array
     {
         return array_map(fn (array $i): array => ['id' => (int) $i['id'], 'group' => (string) $i['group_name'], 'head' => (string) ($this->tenantName((string) $i['head_tenant_code']) ?? $i['head_tenant_code']),
-            'expiresAt' => self::iso($i['expires_at']), 'consent' => self::consent((string) $i['group_name'], $language), 'consentVersion' => self::CONSENT_VERSION], $this->groups->openInvitationsFor($site));
+            'expiresAt' => self::iso($i['expires_at']), 'consent' => self::consent((string) $i['group_name'], $language), 'consentVersion' => self::CONSENT_VERSION,
+            // lot G-1d : la seconde case, FACULTATIVE, « même entreprise que le siège »
+            'sameCompanyConsent' => GroupCompanyService::consent((string) $i['group_name'], $language), 'sameCompanyConsentVersion' => GroupCompanyService::CONSENT_VERSION], $this->groups->openInvitationsFor($site));
     }
 
     /**
      * Accepter : seulement avec le texte de consentement (`consent` = sa version) ; la boutique entre dans le groupe (origine `associated`).
+     * Lot G-1d : la case FACULTATIVE « même entreprise » (`sameCompany: true`) exige SON texte à l'identique (`sameCompanyConsent`) ; vérifiée
+     * AVANT l'entrée dans le groupe (jamais une boutique entrée sans le lien qu'elle a coché).
      *
      * @return array<string, mixed>
      * @throws GroupException
      */
-    public function accept(string $site, int $id, mixed $consent, User $by): array
+    public function accept(string $site, int $id, mixed $consent, User $by, mixed $sameCompany = null, mixed $sameCompanyConsent = null, string $language = 'fr'): array
     {
         $invitation = $this->openInvitation($site, $id);
         if ($consent !== self::CONSENT_VERSION) {
             throw new GroupException('GROUP_CONSENT_REQUIRED', 422, 'Pour rejoindre le groupe, acceptez le texte qui vous est présenté.', ['consentVersion' => self::CONSENT_VERSION]);
         }
-        $outcome = $this->groups->addShop((int) $invitation['group_id'], $site, 'associated', self::who($by));
+        $linked = $sameCompany === true;
+        if ($sameCompany !== null && !is_bool($sameCompany)) {
+            throw new GroupException('VALIDATION_FAILED', 422, 'Choix invalide.', ['fields' => ['sameCompany' => 'MUST_BE_BOOLEAN']]);
+        }
+        if ($linked && ($this->company === null || $sameCompanyConsent !== GroupCompanyService::CONSENT_VERSION)) {
+            throw new GroupException('GROUP_CONSENT_REQUIRED', 422, 'Pour déclarer la boutique de la même entreprise, acceptez le texte qui vous est présenté.', ['sameCompanyConsentVersion' => GroupCompanyService::CONSENT_VERSION]);
+        }
+        $outcome = $this->groups->addShop((int) $invitation['group_id'], $site, 'associated', self::who($by), $linked ? GroupCompanyService::CONSENT_VERSION : null);
         if ($outcome === 'gone') {
             throw new GroupException('GROUP_INVITATION_NOT_FOUND', 404, 'Invitation inconnue, échue ou déjà traitée.');
         }
@@ -130,6 +146,9 @@ class GroupService
         }
         $this->groups->answer($id, true, self::who($by));
         $this->groups->event((int) $invitation['group_id'], 'joined', $site, ['invitation' => $id, 'consentVersion' => self::CONSENT_VERSION], self::who($by));
+        if ($linked) {
+            $this->company?->setAtAccept((int) $invitation['group_id'], $site, $by, $language);
+        }
 
         return $this->mine($site);
     }
@@ -173,6 +192,7 @@ class GroupService
             throw new GroupException('GROUP_NOT_MEMBER', 404, 'Cette boutique n\'est pas dans le groupe.');
         }
         $this->entries?->endForGroup((int) $group['id'], $target, 'left'); // lot G-1b : les entrées du directeur dans cette boutique se ferment tout de suite
+        $this->company?->onLeft((int) $group['id'], $target, self::who($by)); // lot G-1d : sa demande « même entreprise » en attente est close
         $this->groups->event((int) $group['id'], 'left', $target, ['by' => $isHead && $target !== $site ? 'head' : 'shop'], self::who($by));
 
         return $this->mine($site);

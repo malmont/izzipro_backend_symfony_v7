@@ -22,12 +22,16 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
  * - POST `/api/group/invitations` `{ site }` → 202 `{ asked: true, expiresInDays }` TOUJOURS (que le site existe ou non) ; 403 `GROUP_HEAD_ONLY` ;
  *   429 `GROUP_INVITE_LIMIT` (10 demandes par jour et par groupe)
  * - POST `/api/group/leave` `{ shop? }` → 200 ; la boutique quitte, ou le siège retire une boutique ; le siège seul dissout ; 409 `GROUP_NOT_EMPTY`
+ * - lot G-1d : POST `/api/group/shops/{code}/same-company` → 202 `{ asked, expiresInDays }` (le directeur DEMANDE le lien « même entreprise » ;
+ *   409 `SAME_COMPANY_PENDING` | `SAME_COMPANY_ALREADY`, 422 `SAME_COMPANY_NOT_ASSOCIATED`, 404 `GROUP_SHOP_UNKNOWN`) ; DELETE → 200 (il retire
+ *   le lien, ou sa demande en attente ; 409 `SAME_COMPANY_NOT_SET`)
  */
 #[Route('/api/group')]
 #[IsGranted('ROLE_ADMIN')]
 class GroupController extends AbstractController
 {
-    public function __construct(private readonly GroupService $groups, private readonly EntryContext $entry, private readonly TenantConnectionProvider $tenants)
+    public function __construct(private readonly GroupService $groups, private readonly EntryContext $entry, private readonly TenantConnectionProvider $tenants,
+        private readonly \App\Services\Group\GroupCompanyService $company)
     {
     }
 
@@ -58,6 +62,18 @@ class GroupController extends AbstractController
         $shop = is_array($body) && is_string($body['shop'] ?? null) ? trim($body['shop']) : null;
 
         return $this->act(fn (User $user) => $this->json($this->groups->leave($this->site(), $shop, $user)));
+    }
+
+    #[Route('/shops/{code}/same-company', name: 'api_group_same_company_request', methods: ['POST'], requirements: ['code' => '[a-z0-9][a-z0-9_-]{0,49}'])]
+    public function requestSameCompany(string $code, Request $request): JsonResponse
+    {
+        return $this->act(fn (User $user) => $this->json($this->company->request($this->site(), $code, $user, (string) $request->query->get('locale', 'fr') === 'en' ? 'en' : 'fr'), 202));
+    }
+
+    #[Route('/shops/{code}/same-company', name: 'api_group_same_company_remove', methods: ['DELETE'], requirements: ['code' => '[a-z0-9][a-z0-9_-]{0,49}'])]
+    public function removeSameCompany(string $code, Request $request): JsonResponse
+    {
+        return $this->act(fn (User $user) => $this->json($this->company->removeByHead($this->site(), $code, $user, (string) $request->query->get('locale', 'fr') === 'en' ? 'en' : 'fr')));
     }
 
     /** @param callable(User): JsonResponse $action */

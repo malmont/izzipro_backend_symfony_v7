@@ -114,12 +114,12 @@ class GroupCatalogCopyTest extends WebTestCase
         $this->assertFalse($this->json('POST', '/api/gestion/groupe/copies/' . $back['id'] . '/confirm', $director, MV_TEST_TENANT_HOST, [], 202)['withCost']);
         $this->runCopy($back['import']['id'], MV_TEST_TENANT_CODE);
         $returned = $this->pdo(MV_TEST_TENANT_DB)->query("SELECT purchase_price, image FROM product WHERE name = 'Copie g4 {$this->tag}' AND id <> $pid")->fetch(\PDO::FETCH_ASSOC);
-        $this->assertNull($returned['purchase_price'], 'aucun coût d\'une boutique associée sans withCost');
+        $this->assertNull($returned['purchase_price'], 'aucun coût d\'une autre boutique que le siège sans withCost');
         $this->files[] = (string) $returned['image'];
         // avant l'annulation (qui efface le fichier) : le catalogue figé chez le siège ne porte aucun coût de la boutique associée
         $frozen = array_values(array_filter($this->groupJson(MV_TEST_TENANT_DB)));
         $this->assertNotSame([], $frozen, 'le catalogue figé de la copie est lu');
-        $this->assertSame([''], array_values(array_unique(array_map(static fn (array $p): string => (string) $p['variants'][0]['costRaw'], $frozen[0]))), 'le coût d\'une boutique associée n\'est jamais figé chez une autre');
+        $this->assertSame([''], array_values(array_unique(array_map(static fn (array $p): string => (string) $p['variants'][0]['costRaw'], $frozen[0]))), 'le coût d\'une autre boutique que le siège n\'est jamais figé chez une autre');
         $this->json('POST', '/api/gestion/groupe/copies/' . $back['id'] . '/cancel', $director, MV_TEST_TENANT_HOST, null, 200);
         // … sauf demande explicite : `withCost: true` relit le coût dans la source à la confirmation
         $back2 = $this->json('POST', '/api/gestion/groupe/copies', $director, MV_TEST_TENANT_HOST, ['source' => MV_TEST_TENANT2_CODE, 'target' => MV_TEST_TENANT_CODE, 'articles' => [(int) $copied['id']]], 201);
@@ -250,7 +250,7 @@ class GroupCatalogCopyTest extends WebTestCase
         $this->pdo(MV_TEST_TENANT_DB)->exec('UPDATE entreprise SET is_multi_shop_active = TRUE');
         static::getContainer()->get(TenantCacheService::class)->invalidateSite(MV_TEST_TENANT_CODE, MV_TEST_TENANT_DB);
         $id = (int) $this->master->query("INSERT INTO shop_groups (code, name, head_tenant_code) VALUES ('groupe-g4-{$this->tag}', 'Siège', '" . MV_TEST_TENANT_CODE . "') RETURNING id")->fetchColumn();
-        $this->master->exec("INSERT INTO shop_group_sites (group_id, tenant_code, origin) VALUES ($id, '" . MV_TEST_TENANT_CODE . "', 'head'), ($id, '" . MV_TEST_TENANT2_CODE . "', 'associated')");
+        $this->master->exec("INSERT INTO shop_group_sites (group_id, tenant_code, origin) VALUES ($id, '" . MV_TEST_TENANT_CODE . "', 'head'), ($id, '" . MV_TEST_TENANT2_CODE . "', 'created')");
 
         return $id;
     }
@@ -333,7 +333,7 @@ class GroupCatalogCopyTest extends WebTestCase
             $pdo->exec('UPDATE entreprise SET is_multi_shop_active = FALSE');
         }
         $this->master->exec("DELETE FROM site_entries WHERE mode = 'group'");
-        foreach (['shop_group_item_links', 'shop_group_copies', 'shop_group_events', 'shop_group_invitations', 'shop_group_sites', 'shop_groups'] as $table) {
+        foreach (['shop_group_item_links', 'shop_group_copies', 'shop_group_events', 'shop_group_invitations', 'shop_group_company_requests', 'shop_group_sites', 'shop_groups'] as $table) {
             $this->master->exec("DELETE FROM $table");
         }
         foreach ([[MV_TEST_TENANT_DB, MV_TEST_TENANT_CODE], [MV_TEST_TENANT2_DB, MV_TEST_TENANT2_CODE]] as [$db, $code]) {

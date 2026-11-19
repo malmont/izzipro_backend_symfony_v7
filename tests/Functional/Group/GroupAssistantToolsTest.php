@@ -105,7 +105,7 @@ class GroupAssistantToolsTest extends WebTestCase
         $confirmed = $this->request('POST', '/api/site/assistant/actions/' . $body['actions'][0]['id'] . '/confirm', $director, MV_TEST_TENANT_HOST, []);
         $this->assertSame(200, $confirmed->getStatusCode(), (string) $confirmed->getContent());
         $result = json_decode((string) $confirmed->getContent(), true)['result'];
-        $this->assertSame(['running', true], [$result['import']['status'], $result['withCost']], 'la copie part en file ; depuis le siège, avec le coût');
+        $this->assertSame(['running', false], [$result['import']['status'], $result['withCost']], 'la copie part en file ; vers une boutique associée sans le lien « même entreprise » : sans le coût (G-1d)');
         $this->assertSame(1, $jobs());
 
         // un code inconnu ou la boutique elle-même : refusés avant toute proposition
@@ -131,7 +131,7 @@ class GroupAssistantToolsTest extends WebTestCase
         $this->answer([['propose_group_copy', ['target' => MV_TEST_TENANT2_CODE, 'articles' => [$pid]]]]);
         $body = $this->chat($director);
         $this->assertCount(1, $body['actions']);
-        $this->assertStringContainsString('avec le coût d\'achat, masqués', $body['actions'][0]['summary'], 'les conditions viennent avant les noms');
+        $this->assertStringContainsString('sans le coût d\'achat, masqués', $body['actions'][0]['summary'], 'les conditions viennent avant les noms ; boutique associée sans lien : sans le coût (G-1d)');
         // le module Multi-boutiques s'éteint entre la proposition et la confirmation : refusée, rien n'est écrit chez la cible
         $this->pdo(MV_TEST_TENANT_DB)->exec('UPDATE entreprise SET is_multi_shop_active = FALSE');
         static::getContainer()->get(TenantCacheService::class)->invalidateSite(MV_TEST_TENANT_CODE, MV_TEST_TENANT_DB);
@@ -261,7 +261,7 @@ class GroupAssistantToolsTest extends WebTestCase
             $pdo->exec("DELETE FROM \"user\" WHERE email LIKE 'iag-%@example.invalid'");
             $pdo->exec('UPDATE entreprise SET is_multi_shop_active = FALSE');
         }
-        foreach (['shop_group_item_links', 'shop_group_copies', 'shop_group_events', 'shop_group_invitations', 'shop_group_sites', 'shop_groups'] as $table) {
+        foreach (['shop_group_item_links', 'shop_group_copies', 'shop_group_events', 'shop_group_invitations', 'shop_group_company_requests', 'shop_group_sites', 'shop_groups'] as $table) {
             $this->master->exec("DELETE FROM $table");
         }
         foreach ([[MV_TEST_TENANT_DB, MV_TEST_TENANT_CODE], [MV_TEST_TENANT2_DB, MV_TEST_TENANT2_CODE]] as [$db, $code]) {

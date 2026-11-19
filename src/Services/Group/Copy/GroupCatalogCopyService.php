@@ -11,6 +11,7 @@ use App\Import\ImportImageFetcher;
 use App\Import\ImportJobStore;
 use App\Services\BoutiqueSettingsService\TenantCurrencyProvider;
 use App\Services\FeatureAccess\ModuleAccessService;
+use App\Services\Group\GroupCompanyService;
 use App\Services\Group\GroupException;
 use App\Services\Group\GroupRepository;
 use App\Services\Platform\PlatformAccessJournal;
@@ -75,8 +76,10 @@ class GroupCatalogCopyService
         }
         $home = $this->home();
         try {
-            // relecture neuve : le coût d'un franchisé n'est jamais figé dans la boutique d'un autre ; il ne l'est que depuis le siège (ou à la confirmation, `withCost`)
-            [$products, $currency, $inclusive] = $this->readSource($shops[$source], $source, $articles, $source === $head);
+            // relecture neuve : le coût d'un franchisé n'est jamais figé dans la boutique d'un autre ; il ne l'est que depuis le siège (ou à la confirmation, `withCost`).
+            // Lot G-1d : et seulement vers une boutique qui l'est TOUJOURS (créée par le groupe) : vers une boutique associée, même liée, le coût
+            // n'est jamais figé à l'aperçu ; il est relu à la confirmation si le lien « même entreprise » est encore là.
+            [$products, $currency, $inclusive] = $this->readSource($shops[$source], $source, $articles, $source === $head && ($shops[$target]['origin'] ?? null) !== 'associated');
             $this->emProvider->switchTenant((string) $shops[$target]['dbname'], $target);
             if ($this->currency->code(true) !== $currency) {
                 throw new GroupException('COPY_CURRENCY_DIFFERS', 409, 'Les deux boutiques n\'ont pas la même devise : aucune conversion n\'est faite.');
@@ -113,13 +116,23 @@ class GroupCatalogCopyService
         if ($errors !== []) {
             throw new GroupException('VALIDATION_FAILED', 422, 'Choix de la copie invalides.', ['fields' => $errors]);
         }
-        // ajout 1 du chef : le coût d'achat n'est copié par défaut que depuis le siège ; d'une autre boutique, seulement sur demande explicite
+        // ajout 1 du chef : le coût d'achat n'est copié par défaut que depuis le siège ; d'une autre boutique, seulement sur demande explicite.
+        // Lot G-1d : JAMAIS entre deux entreprises : la source et la cible doivent être de la même entreprise que le siège (origine `head` ou
+        // `created`, ou associée avec le lien confirmé), relu ICI, à la confirmation (un lien retiré depuis l'aperçu compte)
+        $shopsNow = $this->shops((int) $group['id']);
+        $sameCompany = isset($shopsNow[(string) $copy['source_tenant_code']], $shopsNow[(string) $copy['target_tenant_code']])
+            && GroupCompanyService::sameFromRow($shopsNow[(string) $copy['source_tenant_code']]) && GroupCompanyService::sameFromRow($shopsNow[(string) $copy['target_tenant_code']]);
+        if (($body['withCost'] ?? null) === true && !$sameCompany) {
+            throw new GroupException('COPY_COST_ASSOCIATED_SHOP', 422, 'Le coût d\'achat ne se copie pas vers ou depuis une boutique associée sans le lien « même entreprise ».');
+        }
         $fromHead = $copy['source_tenant_code'] === $group['head_tenant_code'];
-        $withCost = array_key_exists('withCost', $body) ? (bool) $body['withCost'] : $fromHead;
+        $withCost = $sameCompany && (array_key_exists('withCost', $body) ? (bool) $body['withCost'] : $fromHead);
+        // le coût n'est figé à l'aperçu que du siège vers une boutique créée : sinon il est relu maintenant dans la source
+        $costFrozen = $fromHead && ($shopsNow[(string) $copy['target_tenant_code']]['origin'] ?? null) !== 'associated';
         if (!$this->copies->confirm($copyId, $withCost)) {
             throw new GroupException('COPY_NOT_READY', 409, 'Cette copie est déjà confirmée ou annulée.');
         }
-        $shops = $this->shops((int) $group['id']);
+        $shops = $shopsNow;
         $target = (string) $copy['target_tenant_code'];
         if (!isset($shops[$target])) {
             $this->copies->unconfirm($copyId);
@@ -129,7 +142,7 @@ class GroupCatalogCopyService
         $queued = false;
         try {
             // `withCost` demandé depuis une autre boutique que le siège : le coût, jamais figé à l'aperçu, est relu maintenant dans la source
-            $costs = $withCost && !$fromHead && isset($shops[(string) $copy['source_tenant_code']]) ? $this->sourceCosts($shops[(string) $copy['source_tenant_code']], (string) $copy['source_tenant_code'], $shops[$target], $target, (int) $copy['target_job_id']) : null;
+            $costs = $withCost && !$costFrozen && isset($shops[(string) $copy['source_tenant_code']]) ? $this->sourceCosts($shops[(string) $copy['source_tenant_code']], (string) $copy['source_tenant_code'], $shops[$target], $target, (int) $copy['target_job_id']) : null;
             $this->emProvider->switchTenant((string) $shops[$target]['dbname'], $target);
             $pos = (bool) ($body['pos'] ?? false);
             // ajout 2 du chef : masqués par défaut, ni en ligne (`hidden`) ni en caisse (`pos` faux)
