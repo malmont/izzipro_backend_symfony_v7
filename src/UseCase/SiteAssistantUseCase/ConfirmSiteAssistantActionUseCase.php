@@ -216,7 +216,16 @@ class ConfirmSiteAssistantActionUseCase
                         }
                         $copy = $this->groupCopies->analyse($actor, array_filter(['source' => $input['source'] ?? null, 'target' => $input['target'] ?? null, 'articles' => $input['articles'] ?? null], static fn ($v) => $v !== null));
 
-                        return $this->groupCopies->confirm($actor, (int) $copy['id'], array_intersect_key($input, array_flip(['withCost', 'visibility', 'pos'])));
+                        try {
+                            return $this->groupCopies->confirm($actor, (int) $copy['id'], array_intersect_key($input, array_flip(['withCost', 'visibility', 'pos'])));
+                        } catch (\Throwable $e) {
+                            // relecture IA-G : un aperçu laissé ouvert bloquerait tout import de la cible (409 IMPORT_ALREADY_ACTIVE) ; il est annulé
+                            try {
+                                $this->groupCopies->cancel($actor, (int) $copy['id']);
+                            } catch (\Throwable) {
+                            }
+                            throw $e;
+                        }
                     } catch (\App\Services\Group\GroupException $e) {
                         throw new \InvalidArgumentException($e->getMessage() . ' (' . $e->errorCode . ')');
                     }

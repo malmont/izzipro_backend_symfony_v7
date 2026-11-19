@@ -111,6 +111,31 @@ class GroupAssistantToolsTest extends WebTestCase
         $this->assertSame([], $body['actions']);
     }
 
+    /** Relecture IA-G, passe 1 : la confirmation relit le directeur ; le résultat suit le plafond de l'écran (366 jours) */
+    public function testTheConfirmationRereadsTheDirectorAndTheResultKeepsTheScreenLimit(): void
+    {
+        $this->group();
+        $director = $this->account(MV_TEST_TENANT_DB, MV_TEST_TENANT_CODE, 'directeur', ['ROLE_ADMIN']);
+        $pid = $this->product();
+        $jobs = fn (): int => (int) $this->pdo(MV_TEST_TENANT2_DB)->query("SELECT COUNT(*) FROM import_job WHERE source = 'group'")->fetchColumn();
+
+        $this->answer([['get_group_view', ['view' => 'result', 'from' => '2000-01-01', 'to' => '2026-01-01']]]);
+        $this->chat($director);
+        $read = json_decode((string) FakeLandingAiClient::$requests[1]['messages'][2]['content'][0]['content'], true);
+        $this->assertSame(['paramètres refusés', ['to' => 'RANGE_TOO_LONG']], [$read['error'] ?? null, $read['fields'] ?? null], 'aucune boutique ne calcule 26 ans');
+
+        $this->answer([['propose_group_copy', ['target' => MV_TEST_TENANT2_CODE, 'articles' => [$pid]]]]);
+        $body = $this->chat($director);
+        $this->assertCount(1, $body['actions']);
+        $this->assertStringContainsString('avec le coût d\'achat, masqués', $body['actions'][0]['summary'], 'les conditions viennent avant les noms');
+        // le module Multi-boutiques s'éteint entre la proposition et la confirmation : refusée, rien n'est écrit chez la cible
+        $this->pdo(MV_TEST_TENANT_DB)->exec('UPDATE entreprise SET is_multi_shop_active = FALSE');
+        static::getContainer()->get(TenantCacheService::class)->invalidateSite(MV_TEST_TENANT_CODE, MV_TEST_TENANT_DB);
+        $confirmed = $this->request('POST', '/api/site/assistant/actions/' . $body['actions'][0]['id'] . '/confirm', $director, MV_TEST_TENANT_HOST, []);
+        $this->assertNotSame(200, $confirmed->getStatusCode(), (string) $confirmed->getContent());
+        $this->assertSame(0, $jobs());
+    }
+
     /** @param list<array{0: string, 1: array<string, mixed>}> $uses */
     private function answer(array $uses): void
     {

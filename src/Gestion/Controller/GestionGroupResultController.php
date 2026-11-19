@@ -2,7 +2,6 @@
 
 namespace App\Gestion\Controller;
 
-use App\Gestion\Services\GestionValidationException;
 use App\Services\Group\AllShops\GroupScope;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -18,9 +17,6 @@ use Symfony\Component\Routing\Attribute\Route;
  */
 class GestionGroupResultController extends AbstractController
 {
-    /** Plus longue plage (jours), comme les statistiques */
-    public const MAX_DAYS = 366;
-
     public function __construct(private readonly \App\Services\Group\AllShops\GroupViews $views)
     {
     }
@@ -31,30 +27,9 @@ class GestionGroupResultController extends AbstractController
         if (!$request->attributes->has(GroupScope::ATTRIBUTE)) {
             return $this->json(['error' => GroupScope::REQUIRED, 'code' => GroupScope::REQUIRED, 'message' => 'Route du groupe : envoyez l\'en-tête X-Group-Scope: all depuis le siège.'], 400);
         }
-        [$from, $to] = self::range($request->query->get('from'), $request->query->get('to'));
+        [$from, $to] = \App\Services\Group\AllShops\GroupViews::resultRange($request->query->get('from'), $request->query->get('to'));
         $group = $request->attributes->get(GroupScope::ATTRIBUTE);
 
         return $this->json($this->views->result($group, $from, $to));
-    }
-
-    /** @return array{0: string, 1: string} jours du magasin Y-m-d ; 422 sinon */
-    private static function range(mixed $from, mixed $to): array
-    {
-        $day = static fn (mixed $v): string|false|null => $v === null || $v === '' ? null
-            : (is_string($v) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $v) && \DateTimeImmutable::createFromFormat('!Y-m-d', $v)?->format('Y-m-d') === $v ? $v : false);
-        $f = $day($from);
-        $t = $day($to);
-        $errors = array_filter(['from' => $f === null ? 'REQUIRED' : ($f === false ? 'INVALID_DATE' : null), 'to' => $t === null ? 'REQUIRED' : ($t === false ? 'INVALID_DATE' : null)]);
-        if ($errors !== []) {
-            throw new GestionValidationException($errors);
-        }
-        if ($t < $f) {
-            throw new GestionValidationException(['to' => 'BEFORE_START']);
-        }
-        if ((new \DateTimeImmutable($f))->diff(new \DateTimeImmutable($t))->days + 1 > self::MAX_DAYS) {
-            throw new GestionValidationException(['to' => 'RANGE_TOO_LONG']);
-        }
-
-        return [$f, $t];
     }
 }

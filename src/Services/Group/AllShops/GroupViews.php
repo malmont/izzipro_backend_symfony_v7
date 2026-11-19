@@ -95,6 +95,31 @@ class GroupViews
     }
 
     /** Le résultat sur des dates (Y-m-d, validées par l'appelant), période NON enregistrée, dans la transaction READ ONLY */
+    /** Plus longue plage du résultat du groupe (jours), comme les statistiques */
+    public const RESULT_MAX_DAYS = 366;
+
+    /** Lot IA-G : la plage du résultat du groupe, la MÊME pour l'écran et pour l'assistant (relecture IA-G, passe 1) */
+    /** @return array{0: string, 1: string} jours du magasin Y-m-d ; 422 sinon */
+    public static function resultRange(mixed $from, mixed $to): array
+    {
+        $day = static fn (mixed $v): string|false|null => $v === null || $v === '' ? null
+            : (is_string($v) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $v) && \DateTimeImmutable::createFromFormat('!Y-m-d', $v)?->format('Y-m-d') === $v ? $v : false);
+        $f = $day($from);
+        $t = $day($to);
+        $errors = array_filter(['from' => $f === null ? 'REQUIRED' : ($f === false ? 'INVALID_DATE' : null), 'to' => $t === null ? 'REQUIRED' : ($t === false ? 'INVALID_DATE' : null)]);
+        if ($errors !== []) {
+            throw new \App\Gestion\Services\GestionValidationException($errors);
+        }
+        if ($t < $f) {
+            throw new \App\Gestion\Services\GestionValidationException(['to' => 'BEFORE_START']);
+        }
+        if ((new \DateTimeImmutable($f))->diff(new \DateTimeImmutable($t))->days + 1 > self::RESULT_MAX_DAYS) {
+            throw new \App\Gestion\Services\GestionValidationException(['to' => 'RANGE_TOO_LONG']);
+        }
+
+        return [$f, $t];
+    }
+
     public function result(array $group, string $from, string $to): array
     {
         return $this->read($group, 'gestion_groupe_resultat', ['from' => $from, 'to' => $to], function () use ($from, $to): array {
