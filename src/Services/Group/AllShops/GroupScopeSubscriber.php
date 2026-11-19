@@ -2,16 +2,10 @@
 
 namespace App\Services\Group\AllShops;
 
-use App\Entity\User;
-use App\Services\FeatureAccess\ModuleAccessService;
-use App\Services\Group\GroupRepository;
-use App\Services\Platform\PlatformAccessJournal;
-use App\Services\TenantConnectionProvider;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpKernel\Event\RequestEvent;
 use Symfony\Component\HttpKernel\KernelEvents;
-use Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorageInterface;
 
 /**
  * Lot G-2 : garde de « Toutes les boutiques » (`GroupScope`). Elle ne fait rien sans l'en-tête. Avec lui, dans cet ordre :
@@ -27,12 +21,8 @@ use Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorageInt
  */
 class GroupScopeSubscriber implements EventSubscriberInterface
 {
-    public function __construct(
-        private readonly TokenStorageInterface $tokens,
-        private readonly GroupRepository $groups,
-        private readonly ModuleAccessService $modules,
-        private readonly TenantConnectionProvider $tenants,
-    ) {
+    public function __construct(private readonly GroupDirector $director)
+    {
     }
 
     public static function getSubscribedEvents(): array
@@ -81,29 +71,10 @@ class GroupScopeSubscriber implements EventSubscriberInterface
         $request->attributes->set(GroupScope::ATTRIBUTE, $group);
     }
 
-    /** @return array<string, mixed>|null le groupe que dirige le compte connecté, relu ; null sinon */
+    /** @return array<string, mixed>|null le groupe que dirige le compte connecté (`GroupDirector`), relu ; null sinon */
     private function directedGroup(): ?array
     {
-        $token = $this->tokens->getToken();
-        $user = $token?->getUser();
-        // un compte du site, jamais un opérateur entré (GroupOperator, ExternalOperator) ni un compte de la plateforme
-        if (!$user instanceof User || !in_array('ROLE_ADMIN', $token->getRoleNames(), true) || PlatformAccessJournal::isPlatformAccount($token->getRoleNames())) {
-            return null;
-        }
-        $current = (string) $this->tenants->getTenantCode();
-        if ($current === '') {
-            return null;
-        }
-        try {
-            $group = $this->groups->ofSite($current);
-            if ($group === null || $group['head_tenant_code'] !== $current || !$this->modules->isEnabled(ModuleAccessService::MULTI_SHOP)) {
-                return null;
-            }
-        } catch (\Throwable) {
-            return null; // base maître ou indicateurs illisibles : fermé
-        }
-
-        return $group;
+        return $this->director->group();
     }
 
     private function refuse(string $code, string $message, int $status): JsonResponse

@@ -20,7 +20,7 @@ class GestionStatisticsController extends AbstractController
     public function __construct(private readonly GestionStatisticsUseCase $useCase, private readonly GestionYearUseCase $years, private readonly ?EmailLocale $siteLocale = null,
         private readonly ?\App\Import\OrderArchive $archive = null, private readonly ?\App\Services\BoutiqueSettingsService\TenantCurrencyProvider $currency = null,
         private readonly ?\Symfony\Contracts\Translation\TranslatorInterface $translator = null,
-        private readonly ?\App\Services\Group\AllShops\AllShopsReader $allShops = null)
+        private readonly ?\App\Services\Group\AllShops\GroupViews $groupViews = null)
     {
     }
 
@@ -54,13 +54,11 @@ class GestionStatisticsController extends AbstractController
     #[Route('/api/gestion/statistiques/annee', name: 'gestion_statistiques_annee', methods: ['GET'])]
     public function year(Request $request): JsonResponse
     {
-        // lot G-3 : « Toutes les boutiques » : chaque boutique à son exercice, réunion par mois civil (`pricePercent` refusé par la garde)
-        $yearQuery = []; // `year` refusé par la garde : l'exercice en cours de chaque boutique
+        // lot G-3 : « Toutes les boutiques » : chaque boutique à son exercice, réunion par mois civil (`year`, `pricePercent` refusés par la garde)
         $locale = $this->locale($request);
-        $group = $this->allShops?->forRequest($request, 'gestion_statistiques_annee', ['query' => $yearQuery, 'locale' => $locale],
-            fn (): array => ['data' => $this->years->overview($yearQuery, $locale)], \App\Services\Group\AllShops\AllShopsListMerger::year(...));
-        if ($group !== null) {
-            return $this->json($group);
+        $group = $request->attributes->get(\App\Services\Group\AllShops\GroupScope::ATTRIBUTE);
+        if (is_array($group) && $this->groupViews !== null) {
+            return $this->json($this->groupViews->year($group, $locale));
         }
 
         return $this->json($this->years->overview($request->query->all(), $locale));
@@ -79,13 +77,9 @@ class GestionStatisticsController extends AbstractController
         $query = $request->query->all();
         $locale = $this->locale($request);
         // lot G-2 : « Toutes les boutiques » (en-tête X-Group-Scope, garde GroupScopeSubscriber) : chaque boutique, puis les totaux par devise
-        // seuls les paramètres qui changent la lecture entrent dans la clé du cache (un paramètre de plus ne force pas une relecture)
-        $groupQuery = array_intersect_key($query, array_flip(\App\Services\Group\AllShops\GroupScope::STATISTICS_PARAMS));
-        ksort($groupQuery);
-        $group = $this->allShops?->forRequest($request, 'gestion_statistiques', ['query' => $groupQuery, 'locale' => $locale],
-            fn (): array => $this->useCase->overviewWithSums($groupQuery, $locale), \App\Services\Group\AllShops\AllShopsMerger::statistics(...));
-        if ($group !== null) {
-            return $this->json($group);
+        $group = $request->attributes->get(\App\Services\Group\AllShops\GroupScope::ATTRIBUTE);
+        if (is_array($group) && $this->groupViews !== null) {
+            return $this->json($this->groupViews->statistics($group, $query, $locale));
         }
 
         return $this->json($this->useCase->overview($query, $locale));

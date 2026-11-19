@@ -31,6 +31,10 @@ class ConfirmSiteAssistantActionUseCase
         private readonly ?\App\Services\ContentAuditService\ContentAuditRecorder $audit = null,
         private readonly ?\App\Security\Entry\EntryContext $entry = null,
         private readonly ?\App\Abo\Services\AboAssistantTools $abo = null, // lot ABO-0 : formules et prestations
+        // lot IA-G (19/11/2026) : actions du directeur du groupe
+        private readonly ?\App\Services\Group\AllShops\GroupDirector $groupDirector = null,
+        private readonly ?\App\Services\Group\GroupService $groupService = null,
+        private readonly ?\App\Services\Group\Copy\GroupCatalogCopyService $groupCopies = null,
     ) {
     }
 
@@ -201,6 +205,22 @@ class ConfirmSiteAssistantActionUseCase
                     return $this->request->trial((string) ($input['feature'] ?? ''), $user) + ['feature' => (string) ($input['feature'] ?? '')];
                 case 'generate_missing_barcodes':
                     return ($this->barcodes ?? throw new \OutOfBoundsException('Outil indisponible'))->generateMissing(SiteAssistantTools::MAX_BARCODES, ['source' => 'assistant', 'confirmedBy' => trim((string) $actor?->getFirstname()) ?: 'administrateur']);
+                case 'propose_group_invitation':
+                case 'propose_group_copy':
+                    // relu à la confirmation : toujours le directeur, sur le site du siège, avec son compte (jamais une entrée)
+                    if ($actor === null || ($this->entry?->active() ?? false) || $this->groupDirector?->group() === null || $this->groupService === null || $this->groupCopies === null) {
+                        throw new \InvalidArgumentException('Action réservée au directeur du groupe, sur le site du siège.');
+                    }
+                    try {
+                        if ($tool === 'propose_group_invitation') {
+                            return $this->groupService->invite($tenant, (string) ($input['site'] ?? ''), $actor, 'fr');
+                        }
+                        $copy = $this->groupCopies->analyse($actor, array_filter(['source' => $input['source'] ?? null, 'target' => $input['target'] ?? null, 'articles' => $input['articles'] ?? null], static fn ($v) => $v !== null));
+
+                        return $this->groupCopies->confirm($actor, (int) $copy['id'], array_intersect_key($input, array_flip(['withCost', 'visibility', 'pos'])));
+                    } catch (\App\Services\Group\GroupException $e) {
+                        throw new \InvalidArgumentException($e->getMessage() . ' (' . $e->errorCode . ')');
+                    }
                 case 'request_agency_assistance':
                     // seul un administrateur DU site : ni le compte de la plateforme, ni une entrée par jeton
                     if ($this->assistance === null || $actor === null || ($this->entry?->active() ?? false) || \App\Services\Platform\PlatformAccessJournal::isPlatformAccount($actor->getRoles())) {

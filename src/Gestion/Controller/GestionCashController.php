@@ -19,7 +19,7 @@ use Symfony\Component\Routing\Attribute\Route;
 class GestionCashController extends AbstractController
 {
     public function __construct(private readonly GestionCashUseCase $useCase, private readonly ?EmailLocale $siteLocale = null,
-        private readonly ?\App\Services\Group\AllShops\AllShopsReader $allShops = null)
+        private readonly ?\App\Services\Group\AllShops\GroupViews $groupViews = null)
     {
     }
 
@@ -34,14 +34,12 @@ class GestionCashController extends AbstractController
     {
         $limit = max(1, min(200, (int) $request->query->get('limit', 50)));
         // lot G-3 : « Toutes les boutiques » : soldes de chaque boutique, dernier solde additionné par devise
-        $group = $this->allShops?->forRequest($request, 'gestion_tresorerie_soldes', ['limit' => $limit], fn (): array => ['data' => $this->useCase->balances($limit)],
-            static fn (array $shops): array => \App\Services\Group\AllShops\AllShopsListMerger::balances($shops, $limit));
-
-        if ($group !== null) {
-            $group['shops'] = array_map(static fn (array $s): array => array_diff_key($s, ['data' => 1]), $group['shops']); // les soldes sont dans `totals`
+        $group = $request->attributes->get(\App\Services\Group\AllShops\GroupScope::ATTRIBUTE);
+        if (is_array($group) && $this->groupViews !== null) {
+            return $this->json($this->groupViews->balances($group, $limit));
         }
 
-        return $this->json($group ?? $this->useCase->balances($limit));
+        return $this->json($this->useCase->balances($limit));
     }
 
     #[Route('/soldes', name: 'gestion_tresorerie_soldes_create', methods: ['POST'])]
@@ -86,13 +84,9 @@ class GestionCashController extends AbstractController
         $category = $request->query->get('category');
 
         // lot G-3 : « Toutes les boutiques » : salaires toujours regroupés (aucun nom), mouvements réunis par devise avec leur boutique
-        $group = $this->allShops?->forRequest($request, 'gestion_tresorerie_mouvements', ['category' => $category, 'locale' => $this->locale($request)],
-            fn (): array => ['data' => $this->useCase->movements(is_string($category) ? strtolower(trim($category)) : null, $this->locale($request), false)],
-            \App\Services\Group\AllShops\AllShopsListMerger::movements(...));
-        if ($group !== null) {
-            $group['shops'] = array_map(static fn (array $s): array => array_diff_key($s, ['data' => 1]), $group['shops']); // les mouvements sont dans `totals`
-
-            return $this->json($group);
+        $group = $request->attributes->get(\App\Services\Group\AllShops\GroupScope::ATTRIBUTE);
+        if (is_array($group) && $this->groupViews !== null) {
+            return $this->json($this->groupViews->movements($group, is_string($category) ? $category : null, $this->locale($request)));
         }
 
         return $this->json($this->useCase->movements(is_string($category) ? strtolower(trim($category)) : null, $this->locale($request), $this->isGranted('ROLE_ADMIN')));
