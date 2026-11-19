@@ -642,8 +642,8 @@ Dans `.env` (non versionné ; **ne jamais écrire de valeur dans la doc**). Un `
 un mot de passe de base de données est retiré (la valeur reste dans l'historique : son changement revient au propriétaire) ; le client
 HTTP `gemsuite.client` (mTLS vers `localhost:8443`, `config/packages/http_client.yaml`), qui n'était plus appelé nulle part (code,
 workers, minuteurs, journaux des 30 derniers jours), est retiré avec ses clés et certificats versionnés de `config/secrets/test/`
-(`iizipro_client.key`, `ca.key` et leurs `.crt`, `ca.srl`). Reste `config/secrets/test/gemsuite_jwt_public.pem`, une clé publique
-qu'aucun code ne lit.
+(`iizipro_client.key`, `ca.key` et leurs `.crt`, `ca.srl`), ainsi que `gemsuite_jwt_public.pem`, une clé publique qu'aucun code ne
+lisait : le dossier `config/secrets/test/` est vide.
 
 Une variable **déjà présente** à la création d'un conteneur garde son ancienne valeur tant que le conteneur n'est pas
 recréé (`docker compose up -d --no-deps --force-recreate <service>`) ; une variable **nouvelle** est lue dans `.env` à
