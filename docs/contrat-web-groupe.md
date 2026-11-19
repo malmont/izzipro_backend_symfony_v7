@@ -312,8 +312,9 @@ Refus de l'envoi :
 - 503 `TRANSFER_SEND_FAILED` : la destination a refusé ; le stock est revenu, on peut renvoyer ;
 - 503 `TRANSFER_SEND_PENDING` : vérification en cours ; l'envoi sera repris tout seul, ne pas renvoyer, relire plus tard.
 
-**Marque sur la commande de destination.** Les lectures des commandes fournisseurs (`GET /api/commandes`, la liste, et la fiche
-`GET /api/commandes/{id}`) portent `groupTransfer` : `true` pour la commande d'arrivée d'un transfert, `false` sinon. Les écrans
+**Marque sur la commande de destination.** Les lectures des commandes fournisseurs portent `groupTransfer` : `true` pour la commande
+d'arrivée d'un transfert, `false` sinon. Elle est dans la liste des commandes d'une période (`GET /api/collections/{id}/commandes`),
+dans la réponse d'une modification de commande, et dans le bloc `commande` de la réponse d'une réception de ligne. Les écrans
 (gestion web et MAUI) cachent alors « Modifier » et « Supprimer » sans attendre le 409 `TRANSFER_ORDER_LOCKED` ; « Réceptionner » reste.
 
 **Réception incomplète** (casse, manque) : la destination réceptionne ce qui est arrivé, ligne par ligne, comme d'habitude.
