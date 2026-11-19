@@ -777,9 +777,14 @@
         "POST /api/gestion/accueil/vignettes/{id}/ecarter"
     ],
     "groupe": [
+        "GET /api/gestion/groupe/copies",
+        "GET /api/gestion/groupe/copies/{id}",
         "GET /api/gestion/groupe/resultat",
         "GET /api/group",
         "GET /api/site/group-invitations",
+        "POST /api/gestion/groupe/copies",
+        "POST /api/gestion/groupe/copies/{id}/cancel",
+        "POST /api/gestion/groupe/copies/{id}/confirm",
         "POST /api/group",
         "POST /api/group/invitations",
         "POST /api/group/leave",
