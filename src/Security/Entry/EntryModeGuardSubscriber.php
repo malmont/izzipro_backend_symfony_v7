@@ -112,6 +112,8 @@ class EntryModeGuardSubscriber implements EventSubscriberInterface
         // les droits : demander l'assistance d'une agence, le groupe lui-même, la vérification des taxes, l'adhésion et l'activation des applications
         ['#^/(api/site|admin)/assistance(/|$)#', ['POST', 'PUT', 'PATCH', 'DELETE'], 'rights'],
         ['#^/api/(group|site/group-invitations|site/taxes)(/|$)#', ['POST', 'PUT', 'PATCH', 'DELETE'], 'rights'],
+        // lot G-4 : les outils du groupe (copie du catalogue…) ne se lancent que du siège, jamais par le directeur entré dans une boutique
+        ['#^/api/gestion/groupe(/|$)#', [], 'rights'],
         ['#^/admin/taxes/verifier(/|$)#', ['POST'], 'rights'],
         ['#^/api/(apps/join|app/activate)(/|$)#', [], 'keys'],
         // le boîtier réel de la prévention des pertes (jumelage, clé, révocation, appareils) ; l'exercice simulé reste ouvert

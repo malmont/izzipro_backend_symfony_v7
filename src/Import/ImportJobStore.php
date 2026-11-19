@@ -13,6 +13,8 @@ use Doctrine\DBAL\Connection;
 class ImportJobStore
 {
     public const SOURCE_SHOPIFY = 'shopify';
+    /** Lot G-4 : copie du catalogue depuis une autre boutique du même groupe (le catalogue source figé en JSON à l'analyse) */
+    public const SOURCE_GROUP = 'group';
     public const KIND_CATALOG = 'catalog';
     /** Lot IMP-2 : le fichier des clients (comptes invités, `CustomerImportService`) */
     public const KIND_CUSTOMERS = 'customers';

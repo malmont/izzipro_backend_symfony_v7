@@ -248,6 +248,15 @@ loss_box_cancelled:
     validity: 'A question about this box? Reply to this e-mail or contact us.'
     ignore: 'Nothing was changed in your site.'
 
+group_catalog_copied:
+    subject: '%site%: %count% item(s) copied into your catalogue'
+    title: 'Items copied into your catalogue'
+    greeting: 'Hello,'
+    message: 'The director of the group %group% copied %count% item(s) into your shop''s catalogue. They are hidden: neither online nor at the till until you publish them. Stock is not copied.'
+    button: 'Open your imports'
+    validity: 'You can cancel this copy for 7 days from your imports: items nothing uses are removed.'
+    ignore: 'If you do not know this group, contact us.'
+
 loss_box_plugged:
     subject: '%site%: your box is plugged in'
     title: 'Your box is plugged in'

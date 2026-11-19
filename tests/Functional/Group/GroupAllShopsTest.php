@@ -644,7 +644,7 @@ class GroupAllShopsTest extends WebTestCase
     private function clean(): void
     {
         $this->master->exec("DELETE FROM site_entries WHERE mode = 'group'");
-        foreach (['shop_group_events', 'shop_group_invitations', 'shop_group_sites', 'shop_groups'] as $table) {
+        foreach (['shop_group_item_links', 'shop_group_copies', 'shop_group_events', 'shop_group_invitations', 'shop_group_sites', 'shop_groups'] as $table) {
             $this->master->exec("DELETE FROM $table");
         }
         $this->master->exec("DELETE FROM tenants WHERE code LIKE 'g2-casse-%' OR code LIKE 'g2-alias-%'");

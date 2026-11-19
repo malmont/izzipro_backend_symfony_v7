@@ -18,6 +18,7 @@ final class RunCatalogImportHandler
         private readonly TenantEntityManagerProvider $emProvider,
         private readonly CatalogImportService $imports,
         private readonly LoggerInterface $logger,
+        private readonly ?\App\Services\Group\Copy\GroupCatalogCopyService $groupCopies = null,
     ) {
     }
 
@@ -32,6 +33,11 @@ final class RunCatalogImportHandler
         $this->emProvider->switchTenant($tenant['dbname'], $tenant['code']);
         try {
             $this->imports->run($message->jobId, $message->by);
+            // lot G-4 : une copie du groupe écrit sa correspondance article et variante (base maître) une fois exécutée
+            $links = $this->groupCopies?->recordLinks($message->jobId) ?? 0;
+            if ($links > 0) {
+                $this->logger->info(sprintf('[Import] site %s, copie du groupe %d : %d lien(s) d\'articles', $message->tenantCode, $message->jobId, $links));
+            }
         } catch (\Throwable $e) {
             $this->logger->error(sprintf('[Import] site %s, import %d en échec (%s)', $message->tenantCode, $message->jobId, $e::class), ['exception' => $e]);
         }

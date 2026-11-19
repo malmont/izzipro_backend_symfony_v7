@@ -64,6 +64,7 @@ notifications:
         loss_digest: 'Loss prevention: daily summary by email'
         weekly_digest: 'Weekly update by email'
         loss_exit: 'Loss prevention: item at the exit without a sale'
+        group_catalog_copied: 'Group: items copied into your catalogue'
         loss_box_plugged: 'Loss prevention: your box is plugged in'
     # NOTIF-1: follow-up e-mail levels ("Notifications" screen)
     levels:
@@ -100,6 +101,9 @@ notifications:
     loss_box_plugged_cancelled:
         title: 'Box shipment cancelled'
         body: 'The platform cancelled the shipment of box %serial%. Do not confirm it.'
+    group_catalog_copied:
+        title: 'Items copied into your catalogue'
+        body: "The director of the group %group% copied %count% item(s) into your catalogue, hidden. You decide whether to publish them; they can be cancelled for 7 days."
     loss_box_plugged:
         title: 'Your box is plugged in'
         body: 'Box %serial% is plugged in at your shop. Confirm "This is my box" within 72 hours. If you did not plug anything in, do not confirm and contact us.'

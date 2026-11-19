@@ -122,7 +122,8 @@ class CatalogImportPlanner
                 $item['variants'][] = $variant;
             }
             foreach ($product['images'] as $url) {
-                if (ImportImageFetcher::allowed((string) $url)) {
+                // lot G-4 : une copie entre boutiques du groupe ne porte que des photos locales, recopiées ; un fichier, jamais les deux
+                if ($source === \App\Import\ImportJobStore::SOURCE_GROUP ? ImportImageFetcher::allowedLocal((string) $url) : ImportImageFetcher::allowed((string) $url)) {
                     $item['images'][] = (string) $url;
                 } else {
                     $issues[] = ['line' => $item['line'], 'handle' => $handle, 'code' => self::IMAGE_HOST_REFUSED, 'detail' => mb_substr((string) $url, 0, 120)];

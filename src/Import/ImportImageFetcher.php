@@ -89,6 +89,45 @@ class ImportImageFetcher
         }
     }
 
+    /** Lot G-4 : préfixe d'une image d'une autre boutique du groupe (nom de fichier du dossier des photos, jamais une adresse) */
+    public const LOCAL_PREFIX = 'local:';
+
+    /** Une image locale acceptable : `local:` puis un nom de fichier simple (aucun chemin, aucun « .. ») */
+    public static function allowedLocal(string $ref): bool
+    {
+        return str_starts_with($ref, self::LOCAL_PREFIX) && preg_match('/^[A-Za-z0-9][A-Za-z0-9._-]{0,200}\.(jpe?g|png|webp|gif)$/i', substr($ref, strlen(self::LOCAL_PREFIX))) === 1;
+    }
+
+    /**
+     * Lot G-4 : RECOPIE une photo d'une autre boutique du groupe sous un nom neuf (`imp-…`), jamais partagée : retirer la copie ne touche
+     * pas l'original, et l'inverse. Mêmes contrôles qu'un téléchargement (taille, type réel lu dans le contenu).
+     *
+     * @return array{file: ?string, error: ?string}
+     */
+    public function copyLocal(string $ref): array
+    {
+        if (!self::allowedLocal($ref)) {
+            return ['file' => null, 'error' => self::REFUSED];
+        }
+        $dir = $this->directory();
+        $path = $dir . '/' . substr($ref, strlen(self::LOCAL_PREFIX));
+        $real = realpath($path);
+        if ($real === false || !str_starts_with($real, (string) realpath($dir) . '/') || !is_file($real)) {
+            return ['file' => null, 'error' => self::UNREACHABLE];
+        }
+        if (filesize($real) > self::MAX_BYTES) {
+            return ['file' => null, 'error' => self::TOO_BIG];
+        }
+        $content = (string) file_get_contents($real);
+        $extension = self::TYPES[(string) (new \finfo(\FILEINFO_MIME_TYPE))->buffer($content)] ?? null;
+        if ($extension === null) {
+            return ['file' => null, 'error' => self::NOT_AN_IMAGE];
+        }
+        $name = 'imp-' . bin2hex(random_bytes(12)) . '.' . $extension;
+
+        return file_put_contents($dir . '/' . $name, $content) === false ? ['file' => null, 'error' => self::UNREACHABLE] : ['file' => $name, 'error' => null];
+    }
+
     /** Retire une image rangée par un import (nom `imp-…` seulement : jamais une autre photo du site) */
     public function remove(string $file): void
     {

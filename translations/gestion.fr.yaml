@@ -67,6 +67,7 @@ notifications:
         loss_digest: 'Prévention des pertes : résumé du jour par courriel'
         weekly_digest: 'Point de la semaine par courriel'
         loss_exit: 'Prévention des pertes : article à la sortie sans vente'
+        group_catalog_copied: 'Groupe : articles copiés dans votre catalogue'
         loss_box_plugged: 'Prévention des pertes : votre boîtier est branché'
     # Lot NOTIF-1 : niveaux des courriels de suivi (écran « Notifications »)
     levels:
@@ -103,6 +104,9 @@ notifications:
     loss_box_plugged_cancelled:
         title: 'Expédition de boîtier annulée'
         body: 'La plateforme a annulé l''expédition du boîtier %serial%. Ne le confirmez pas.'
+    group_catalog_copied:
+        title: 'Articles copiés dans votre catalogue'
+        body: "Le directeur du groupe %group% a copié %count% article(s) dans votre catalogue, masqués. Vous décidez de les publier ; annulation possible 7 jours."
     loss_box_plugged:
         title: 'Votre boîtier est branché'
         body: 'Le boîtier %serial% est branché dans votre boutique. Confirmez « C''est bien mon boîtier » dans les 72 heures. Si vous n''avez rien branché, ne confirmez pas et contactez-nous.'

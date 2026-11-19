@@ -663,6 +663,37 @@ transaction READ ONLY sous son échéance, totaux par devise. Code : `AllShopsLi
 - **Garde-fou des essais** (`tests/PlatformModeGuardListener.php`, demande du chef) : un essai qui laisse la plateforme en mode « live »
   échoue, et le mode est remis à « demo » (base, puis `PlatformModeService::setMode`, qui vide sa mémoire de 60 s).
 
+## 15. Lot G-4 : copie du catalogue entre boutiques du groupe (19/11/2026, contrat validé par le chef, 3 ajouts)
+
+Le directeur (administrateur du siège, son compte, sur le site du siège ; jamais entré dans une boutique) copie des articles d'une boutique
+du groupe vers une autre. Code : `src/Services/Group/Copy/` (`GroupCatalogCopyService`, `GroupCopyRepository`, `GroupCopyNotifier`),
+`GestionGroupCopyController`. Base maître : `ops/sql/group_copies_master.sql` (`shop_group_copies`, `shop_group_item_links`), script
+`scripts/migrate_master_v2_group_copies.sh`. Aucune migration des sites.
+
+| Route (`ROLE_ADMIN`, module de gestion) | Effet |
+|---|---|
+| `POST /api/gestion/groupe/copies { source?, target, articles? }` → 201 | aperçu : la source (le siège par défaut) est lue en transaction READ ONLY, son catalogue figé dans la cible, analysé sans rien écrire ; rapport de l'import |
+| `GET /api/gestion/groupe/copies`, `/{id}` | les copies du groupe ; une copie avec la tâche de la cible |
+| `POST /api/gestion/groupe/copies/{id}/confirm { visibility?, pos?, withCost? }` → 202 | exécution par le worker `media` |
+| `POST /api/gestion/groupe/copies/{id}/cancel` | annulation de 7 jours, aux règles de l'import |
+
+- **La tâche est un `import_job` de la CIBLE**, source `group` : planificateur, écrivain, rejeu sans doublon (référence `<site source>-<article>`)
+  et annulation de l'import (`docs/import-boutique.md`). La cible la voit dans ses imports et peut l'annuler elle-même ; elle ne peut pas
+  la confirmer (404 : seul le directeur confirme).
+- **Copié** : nom, description, catégorie (créée par nom), variantes (taille, couleur, une autre option), prix, code de l'article, visibilité
+  de la source. **Photos RECOPIÉES** sous un nom neuf (`ImportImageFetcher::copyLocal`), jamais partagées. **Jamais le stock.** Codes-barres
+  gardés si la cible ne les porte pas (règle CB-1), sinon écartés et signalés.
+- **Ajout 1** : le coût d'achat n'est copié par défaut que si la SOURCE est le siège ; d'une autre boutique, seulement avec `withCost: true`.
+- **Ajout 2** : articles MASQUÉS par défaut (`visibility: hidden`, `pos: false`) ; l'administrateur de la cible décide de les publier.
+- **Ajout 3** : à la confirmation, chaque administrateur de la cible reçoit une notification de la gestion et un courriel
+  (`group_catalog_copied`, INDISPENSABLE : l'écriture d'un tiers dans son catalogue) ; la copie paraît dans ses imports.
+- Devises différentes : 409 `COPY_CURRENCY_DIFFERS` (aucune conversion). « Prix taxes comprises » différent : ramené par le taux de la cible,
+  comme l'import (taux inconnu : 422). Au plus 5 000 articles ; une seule tâche active par cible (409 `IMPORT_ALREADY_ACTIVE`).
+- **Correspondance** : après l'exécution, le worker écrit dans la base maître le lien article et variante source → copie
+  (`shop_group_item_links`) ; une annulation (du directeur ou de la cible) retire les liens des articles retirés. Elle servira à G-5 et G-6.
+- Refus : 403 `GROUP_COPY_FORBIDDEN` (pas le directeur, ou entré dans une boutique : la garde du mode groupe ferme aussi `/api/gestion/groupe`),
+  404 `GROUP_SHOP_UNKNOWN`, `COPY_NOT_FOUND`, 409 `COPY_NOT_READY`, 422 `VALIDATION_FAILED`, `COPY_TOO_MANY`.
+
 ## Tenir cette fiche à jour
 
 À chaque écran, famille ou liste hors écran ajoutés ; à chaque champ sensible trouvé ; à chaque mode nouveau.

@@ -67,6 +67,7 @@ final class NotificationCatalog
         'memoires_account_invitation' => [self::INDISPENSABLE, null],
         'support_agent_invitation' => [self::INDISPENSABLE, null],
         'site_admin_invitation' => [self::INDISPENSABLE, null],
+        'group_catalog_copied' => [self::INDISPENSABLE, null], // lot G-4 : le directeur du groupe a copié des articles dans le catalogue de la boutique
         'loss_box_plugged' => [self::INDISPENSABLE, null], // lot L6-b : un boîtier vendu est branché dans la boutique, à confirmer ; jamais retenu
         'loss_box_cancelled' => [self::INDISPENSABLE, null], // lot L6-b : la plateforme a annulé l'expédition d'un boîtier déjà branché
         'loss_box_code' => [self::INDISPENSABLE, null], // lot L6-c : le code de l'étiquette d'un boîtier vendu, envoyé une fois, jamais gardé
@@ -122,6 +123,7 @@ final class NotificationCatalog
         'src/LossPrevention/Services/LossBoxPluggedNotifier.php' => ['loss_box_plugged', 'loss_box_cancelled'],
         'src/LossPrevention/Services/LossBoxCodeMailer.php' => ['loss_box_code'],
         'src/Services/Group/GroupInvitationMailer.php' => ['group_invitation'],
+        'src/Services/Group/Copy/GroupCopyNotifier.php' => ['group_catalog_copied'],
         'src/Services/OrderService/OrderMailerService.php' => ['order_confirmation', self::ORDER_TO_SHIP, 'order_notice'],
         'src/Services/OrderService/OrderShipmentService.php' => ['order_shipped'],
         'src/Services/OtpService.php' => ['otp_code'],

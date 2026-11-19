@@ -252,6 +252,15 @@ loss_box_cancelled:
     validity: 'Une question sur ce boîtier ? Répondez à ce courriel ou contactez-nous.'
     ignore: 'Rien n''a été changé dans votre site.'
 
+group_catalog_copied:
+    subject: '%site% : %count% article(s) copiés dans votre catalogue'
+    title: 'Articles copiés dans votre catalogue'
+    greeting: 'Bonjour,'
+    message: 'Le directeur du groupe %group% a copié %count% article(s) dans le catalogue de votre boutique. Ils sont masqués : ni en ligne, ni en caisse, tant que vous ne les publiez pas. Le stock n''est pas copié.'
+    button: 'Ouvrir vos imports'
+    validity: 'Vous pouvez annuler cette copie pendant 7 jours depuis vos imports : les articles que rien n''utilise sont retirés.'
+    ignore: 'Si vous ne connaissez pas ce groupe, contactez-nous.'
+
 loss_box_plugged:
     subject: '%site% : votre boîtier est branché'
     title: 'Votre boîtier est branché'

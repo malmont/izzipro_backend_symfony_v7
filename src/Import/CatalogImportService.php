@@ -27,6 +27,9 @@ use Symfony\Component\Messenger\MessageBusInterface;
  */
 class CatalogImportService
 {
+    /** Lot G-4 : articles au plus dans une copie entre boutiques du groupe */
+    public const GROUP_MAX_PRODUCTS = 5000;
+
     public const MAX_BYTES = 20 * 1024 * 1024;
     public const CANCEL_DAYS = 7;
     /** Un import resté « en cours » plus longtemps est tenu pour interrompu : il peut être annulé, le site n'est pas bloqué */
@@ -50,7 +53,24 @@ class CatalogImportService
         private readonly ContentAuditRecorder $audit,
         #[Autowire('%kernel.project_dir%')] private readonly string $projectDir,
         private readonly ?\App\Security\Entry\EntryContext $entry = null,
+        private readonly ?\App\Services\Group\Copy\GroupCopyRepository $groupCopies = null,
     ) {
+    }
+
+    /**
+     * Lot G-4 : le catalogue figé d'une copie de source `group` du site courant (vide pour toute autre tâche)
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function groupProducts(int $id): array
+    {
+        $job = $this->store->find($id);
+        if ($job === null || $job['source'] !== ImportJobStore::SOURCE_GROUP) {
+            return [];
+        }
+        $path = $this->directory() . '/' . basename((string) $job['stored_name']);
+
+        return is_file($path) ? (array) json_decode((string) file_get_contents($path), true, 512, \JSON_THROW_ON_ERROR) : [];
     }
 
     /** Dépose un fichier et l'analyse. @return array<string, mixed> la vue de l'import */
@@ -92,13 +112,49 @@ class CatalogImportService
     }
 
     /**
+     * Lot G-4 : une copie depuis une autre boutique du groupe, sur le site COURANT (la cible). Le catalogue source, lu par le service du
+     * groupe, est figé ici en JSON (même forme que la lecture d'un fichier Shopify) puis analysé sans rien écrire, comme un dépôt. Les
+     * photos sont des noms de fichiers locaux (`local:…`), recopiés à l'exécution.
+     *
+     * @param list<array<string, mixed>> $products
+     * @return array<string, mixed>
+     */
+    public function createFromProducts(string $label, array $products, ?string $by): array
+    {
+        if ($this->store->activeId() !== null) {
+            throw new ImportException('IMPORT_ALREADY_ACTIVE', 409, ['importId' => $this->store->activeId()]);
+        }
+        if ($products === [] || count($products) > self::GROUP_MAX_PRODUCTS) {
+            throw new ImportException($products === [] ? 'IMPORT_NOTHING_TO_IMPORT' : 'IMPORT_TOO_MANY_ROWS', $products === [] ? 409 : 422, ['maxRows' => self::GROUP_MAX_PRODUCTS]);
+        }
+        $stored = bin2hex(random_bytes(16)) . '.json';
+        (new Filesystem())->mkdir($this->directory(), 0750);
+        $path = $this->directory() . '/' . $stored;
+        file_put_contents($path, (string) json_encode($products, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR));
+        try {
+            $id = $this->store->create(ImportJobStore::SOURCE_GROUP, ImportJobStore::KIND_CATALOG, mb_substr($label, 0, 255), $stored, (string) hash_file('sha256', $path), count($products), $by);
+        } catch (\Doctrine\DBAL\Exception\UniqueConstraintViolationException) {
+            @unlink($path);
+            throw new ImportException('IMPORT_ALREADY_ACTIVE', 409, ['importId' => $this->store->activeId()]);
+        }
+        $plan = $this->planner->plan(ImportJobStore::SOURCE_GROUP, $products);
+        $report = $this->planner->report($plan, $this->categoryNames()) + ['currency' => $this->currency(), 'sitePricesIncludeTax' => $this->taxes->pricesIncludeTax()];
+        $this->store->move($id, ImportJobStore::UPLOADED, ImportJobStore::ANALYSED, ['report' => $report, 'analysed_at' => true]);
+
+        return $this->view($this->job($id));
+    }
+
+    /**
      * Confirme un import analysé et le met en file.
      *
      * @param array<string, mixed> $body { visibility?: as_source|hidden, pos?: bool, pricesIncludeTax?: bool }
      */
-    public function confirm(int $id, array $body, ?string $by): array
+    public function confirm(int $id, array $body, ?string $by, array $extra = []): array
     {
         $job = $this->job($id);
+        if (($job['source'] === ImportJobStore::SOURCE_GROUP) !== array_key_exists('withoutCost', $extra)) {
+            throw new ImportException('IMPORT_NOT_FOUND', 404); // une copie du groupe ne se confirme que par le service du groupe, et lui seul
+        }
         $errors = [];
         $visibility = $body['visibility'] ?? 'as_source';
         if (!in_array($visibility, self::VISIBILITIES, true)) {
@@ -118,6 +174,9 @@ class CatalogImportService
             'priceFactor' => $this->priceFactor($fileInclusive, $siteInclusive),
             // lot AG-3b : confirmé par une agence entrée dans le site, l'import n'écrit pas le coût d'achat (il donne la marge du client)
             'withoutCost' => $this->entry?->active() ?? false];
+        if (array_key_exists('withoutCost', $extra)) {
+            $options['withoutCost'] = $options['withoutCost'] || (bool) $extra['withoutCost']; // lot G-4 : coût copié selon la source et le choix
+        }
         if (($job['report']['products']['importable'] ?? 0) < 1) {
             throw new ImportException('IMPORT_NOTHING_TO_IMPORT', 409);
         }
@@ -148,7 +207,9 @@ class CatalogImportService
         }
         $result = ['created' => 0, 'variants' => 0, 'stockUnits' => 0, 'barcodes' => 0, 'categoriesCreated' => 0, 'imagesStored' => 0, 'imagesFailed' => 0, 'skipped' => 0, 'failed' => 0, 'failures' => []];
         try {
-            $parsed = (new ShopifyProductCsv())->read($this->directory() . '/' . $job['stored_name']);
+            $parsed = $job['source'] === ImportJobStore::SOURCE_GROUP
+                ? ['error' => null, 'products' => (array) json_decode((string) file_get_contents($this->directory() . '/' . basename((string) $job['stored_name'])), true, 512, \JSON_THROW_ON_ERROR)]
+                : (new ShopifyProductCsv())->read($this->directory() . '/' . $job['stored_name']);
             if ($parsed['error'] !== null) {
                 throw new \RuntimeException('fichier illisible : ' . $parsed['error']);
             }
@@ -180,7 +241,7 @@ class CatalogImportService
                 $result['barcodes'] += $written['barcodes'];
                 $result['categoriesCreated'] += $written['categoryCreated'] ? 1 : 0;
                 foreach (array_slice($item['images'], 0, self::MAX_IMAGES_PER_PRODUCT) as $url) {
-                    $fetched = $this->images->fetch($url);
+                    $fetched = $job['source'] === ImportJobStore::SOURCE_GROUP ? $this->images->copyLocal($url) : $this->images->fetch($url);
                     if ($fetched['file'] === null) {
                         ++$result['imagesFailed'];
                         if (count($result['failures']) < 200) {
@@ -312,6 +373,14 @@ class CatalogImportService
         $result['cancel'] = ['removed' => $removed, 'kept' => $kept, 'categoriesRemoved' => $categoriesRemoved, 'by' => $by];
         $this->store->saveResult($id, $result);
         $this->audit->record('import_job', $id, 'cancel', [], ['removed' => $removed, 'kept' => count($kept), 'categoriesRemoved' => $categoriesRemoved, 'by' => $by], ['status']);
+        // lot G-4 : une copie du groupe annulée (par le directeur ou par la boutique elle-même) : les liens des articles retirés partent
+        if ($job['source'] === ImportJobStore::SOURCE_GROUP && $this->groupCopies !== null) {
+            $site = (string) $this->tenants->getCurrentTenantCode();
+            $linked = $this->groupCopies->linkedTargetProducts($site);
+            $alive = $linked === [] ? [] : array_map('intval', $this->emProvider->getEntityManager()->getConnection()->fetchFirstColumn(
+                'SELECT id FROM product WHERE id = ANY(?::int[])', ['{' . implode(',', $linked) . '}']));
+            $this->groupCopies->forgetTargetProducts($site, array_values(array_diff($linked, $alive)));
+        }
 
         return $this->view($this->job($id));
     }
