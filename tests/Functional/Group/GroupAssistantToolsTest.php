@@ -109,7 +109,8 @@ class GroupAssistantToolsTest extends WebTestCase
         $this->assertSame(1, $jobs());
 
         // un code inconnu ou la boutique elle-même : refusés avant toute proposition
-        $this->answer([['propose_group_copy', ['source' => MV_TEST_TENANT2_CODE, 'target' => MV_TEST_TENANT2_CODE]], ['propose_group_invitation', ['site' => MV_TEST_TENANT2_CODE]]]);
+        $this->answer([['propose_group_copy', ['source' => MV_TEST_TENANT2_CODE, 'target' => MV_TEST_TENANT2_CODE]], ['propose_group_invitation', ['site' => MV_TEST_TENANT2_CODE]],
+            ['propose_group_copy', ['target' => 'inconnue-' . $this->tag]]]);
         $body = $this->chat($director);
         $this->assertSame([], $body['actions']);
     }
