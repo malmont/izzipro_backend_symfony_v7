@@ -30,7 +30,7 @@ Cocher dans l'ordre, sur le site du magasin (jamais sur demo, qui reste en test)
    ticket, le paiement dans le tableau de bord Stripe du compte connecté, la commission de la plateforme ; annuler la vente
    (remboursement carte, Interac présenté sur le lecteur) ; vérifier le remboursement chez Stripe et le rapport X.
 8. **Surveillance** : `GET /api/pos/health` (administrateur) à l'état `ok` ou `info` ; alertes activées pour le contact du
-   site (fiche Entreprise, panneau « Paiements de caisse et surveillance (caisse) ») ; `POS_ALERT_PLATFORM_EMAIL` configurée.
+   site (fiche Entreprise, panneau « Paiements de caisse et surveillance (caisse) ») ; adresse des alertes de la plateforme réglée (page Plateforme, « Alertes de la plateforme », avec un courriel d'essai ; sinon `POS_ALERT_PLATFORM_EMAIL`).
 9. **Réglages de conservation** : durée du pays (Canada 6 ans) ; garde de modification en mode « observation » pendant la
    recette ; **passage à « blocage » : décision du propriétaire après la recette** (fiche Entreprise, panneau « Conservation des
    données de vente (caisse) »), puis vérifier qu'une modification d'une vente archivée est refusée dans EasyAdmin.

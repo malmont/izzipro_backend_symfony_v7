@@ -518,6 +518,8 @@
         "POST /admin/plateforme/agences/{id}/limites",
         "POST /admin/plateforme/agences/{id}/rattacher",
         "POST /admin/plateforme/agences/{id}/role",
+        "POST /admin/plateforme/alertes",
+        "POST /admin/plateforme/alertes/essai",
         "POST /admin/plateforme/boutique",
         "POST /admin/plateforme/demande/{id}/{decision}",
         "POST /admin/plateforme/droit/{id}/{action}",

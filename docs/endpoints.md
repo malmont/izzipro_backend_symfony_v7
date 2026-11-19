@@ -995,7 +995,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/shared-media` | aucune règle | `Controller\SharedMediaApiController\SharedMediaApiController::list` |
 | GET, HEAD | `/uploads/{path}` | aucune règle | `Controller\Storage\BucketSimulatorController::serve` |
 
-## Administration (EasyAdmin) (128)
+## Administration (EasyAdmin) (130)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -1065,6 +1065,8 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | POST | `/admin/plateforme/agences/{id}/rattacher` | ROLE_SUPER_ADMIN | `Controller\Admin\PlatformAgenciesAdminController::attach` |
 | POST | `/admin/plateforme/agences/{id}/role` | ROLE_SUPER_ADMIN | `Controller\Admin\PlatformAgenciesAdminController::member` |
 | GET | `/admin/plateforme/agences` | ROLE_SUPER_ADMIN | `Controller\Admin\PlatformAgenciesAdminController::index` |
+| POST | `/admin/plateforme/alertes/essai` | ROLE_SUPER_ADMIN | `Controller\Admin\PlatformConsoleAdminController::alertEmailTest` |
+| POST | `/admin/plateforme/alertes` | ROLE_SUPER_ADMIN | `Controller\Admin\PlatformConsoleAdminController::alertEmail` |
 | POST | `/admin/plateforme/boutique` | ROLE_SUPER_ADMIN | `Controller\Admin\PlatformConsoleAdminController::shop` |
 | POST | `/admin/plateforme/demande/{id}/{decision}` | ROLE_SUPER_ADMIN | `Controller\Admin\PlatformConsoleAdminController::request` |
 | POST | `/admin/plateforme/droit/{id}/{action}` | ROLE_SUPER_ADMIN | `Controller\Admin\PlatformConsoleAdminController::act` |

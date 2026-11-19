@@ -43,6 +43,7 @@ class PlatformConsoleAdminController extends AbstractController
         private readonly ?\App\LossPrevention\UseCase\LossShipmentUseCase $lossShipments = null, // lot L6-b : boîtiers à expédier
         private readonly ?\App\Services\Platform\OfferPayments\OfferPaymentsRepository $offerPayments = null, // lot PROVISION-3 : paiements des offres
         private readonly ?\App\Services\Platform\OfferPayments\OfferReconciler $offerReconciler = null,
+        private readonly ?\App\Services\Platform\PlatformAlertRecipient $alertRecipient = null, // adresse des alertes de la plateforme (19/11/2026)
     ) {
     }
 
@@ -109,6 +110,29 @@ class PlatformConsoleAdminController extends AbstractController
         });
     }
 
+    /** L'adresse qui reçoit les alertes de la plateforme (19/11/2026) : vide = le réglage est retiré, la variable du serveur reprend la main */
+    #[Route('/admin/plateforme/alertes', name: 'admin_plateforme_alert_email', methods: ['POST'])]
+    public function alertEmail(Request $request): Response
+    {
+        return $this->action($request, function () use ($request) {
+            $email = trim((string) $request->request->get('email', ''));
+            ($this->alertRecipient ?? throw new \DomainException('Réglage indisponible.'))->set($email, $this->getUser()?->getUserIdentifier());
+            $this->addFlash('success', $email === '' ? 'Réglage retiré : la variable du serveur sert de secours, sinon rien ne part.' : 'Adresse des alertes de la plateforme enregistrée.');
+        });
+    }
+
+    /** Un courriel d'essai à l'adresse en vigueur, 3 par heure au plus */
+    #[Route('/admin/plateforme/alertes/essai', name: 'admin_plateforme_alert_email_test', methods: ['POST'])]
+    public function alertEmailTest(Request $request): Response
+    {
+        return $this->action($request, function () {
+            $result = ($this->alertRecipient ?? throw new \DomainException('Réglage indisponible.'))->sendTest($this->getUser()?->getUserIdentifier());
+            $this->addFlash($result['sent'] ? 'success' : 'danger', $result['sent']
+                ? sprintf('Courriel d\'essai envoyé à %s (encore %d possible(s) cette heure).', (string) $result['masked'], $result['remaining'])
+                : 'Courriel d\'essai non envoyé : vérifiez le compte expéditeur de la plateforme (MAILER_DSN).');
+        });
+    }
+
     #[Route('/admin/plateforme', name: 'admin_plateforme', methods: ['GET'])]
     public function index(Request $request): Response
     {
@@ -134,6 +158,7 @@ class PlatformConsoleAdminController extends AbstractController
             // lot L6-b : l'aperçu d'une expédition, montré une fois après « Aperçu », avec le formulaire de confirmation
             'lossShipmentPreview' => $request->getSession()->getFlashBag()->get('loss_shipment_preview')[0] ?? null,
             'requests' => $this->requests->listPending(),
+            'alertRecipient' => $this->alertRecipient?->state(),
             'offerRetries' => $this->offerPayments?->allRetries() ?? [],
             'offerEvents' => $this->offerPayments?->recentEvents(50) ?? [],
             'events' => $this->repository->events($tenant !== '' ? $tenant : null, 50),

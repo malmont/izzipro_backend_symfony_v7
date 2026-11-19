@@ -13,7 +13,7 @@ use Symfony\Component\Console\Output\OutputInterface;
 
 /**
  * Courriel du jour des incidents de la plateforme (lot INC-1a, 18/11/2026, `docs/incidents-et-signalements.md`) : incidents nouveaux des
- * dernières 24 heures et incidents revenus après correction, à l'adresse de la plateforme (variable `POS_ALERT_PLATFORM_EMAIL`, posée
+ * dernières 24 heures et incidents revenus après correction, à l'adresse des alertes de la plateforme (`PlatformAlertRecipient` : réglage de la page Plateforme, sinon `POS_ALERT_PLATFORM_EMAIL`, posée
  * hors dépôt ; sans elle, rien ne part). Aucun courriel quand il n'y a rien. Purge ensuite (occurrences de plus de 90 jours, incidents
  * corrigés ou ignorés depuis plus d'un an). Minuteur : `ops/systemd/platform-incidents-digest.timer` (07:00 UTC).
  * Lot INC-3 : il porte aussi les signalements reçus sans réponse depuis 48 heures, et la purge efface les captures d'écran plus vieilles que
@@ -22,7 +22,8 @@ use Symfony\Component\Console\Output\OutputInterface;
 #[AsCommand(name: 'app:platform:incidents-digest', description: 'Courriel du jour des incidents de la plateforme, puis purge')]
 class PlatformIncidentsDigestCommand extends Command
 {
-    public function __construct(private readonly PlatformIncidentService $incidents, private readonly EmailSenderService $mailer, private readonly PlatformBugReportService $reports)
+    public function __construct(private readonly PlatformIncidentService $incidents, private readonly EmailSenderService $mailer, private readonly PlatformBugReportService $reports,
+        private readonly \App\Services\Platform\PlatformAlertRecipient $recipient)
     {
         parent::__construct();
     }
@@ -39,8 +40,8 @@ class PlatformIncidentsDigestCommand extends Command
         $dry = (bool) $input->getOption('dry-run');
         if ($total === 0) {
             $output->writeln('Aucun incident nouveau ni revenu, aucun signalement en attente : aucun courriel.');
-        } elseif (($to = self::recipient()) === null) {
-            $output->writeln('<comment>Adresse de la plateforme absente (POS_ALERT_PLATFORM_EMAIL) : aucun courriel.</comment>');
+        } elseif (($to = $this->recipient->get()) === null) {
+            $output->writeln('<comment>Adresse des alertes de la plateforme absente (page Plateforme, sinon POS_ALERT_PLATFORM_EMAIL) : aucun courriel.</comment>');
         } elseif (!$dry) {
             $subject = sprintf('Incidents de la plateforme : %d nouveaux, %d revenus, %d signalements en attente', count($digest['new']), count($digest['reopened']), count($digest['unanswered']));
             $sent = $this->mailer->sendPlatformEmail($to, $subject, 'emails/platform_incidents_digest.html.twig', ['digest' => $digest]);
@@ -56,11 +57,4 @@ class PlatformIncidentsDigestCommand extends Command
         return Command::SUCCESS;
     }
 
-    /** L'adresse de la plateforme, la même que celle des alertes de la caisse (`PosHealthService::platformRecipient`) */
-    private static function recipient(): ?string
-    {
-        $email = $_ENV['POS_ALERT_PLATFORM_EMAIL'] ?? $_SERVER['POS_ALERT_PLATFORM_EMAIL'] ?? getenv('POS_ALERT_PLATFORM_EMAIL');
-
-        return is_string($email) && filter_var(trim($email), FILTER_VALIDATE_EMAIL) ? trim($email) : null;
-    }
 }
