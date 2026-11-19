@@ -96,6 +96,35 @@ Essais existants : `tests/Functional/Platform/OfferFulfillmentTest.php` (4) et `
 Ordre conseillé : 1, 2, 3, 4, puis 5 (ouverture), puis 6. Le volet agence (7, 8) peut avancer en parallèle après la décision des prix ;
 8 exige 2.
 
+## Volet IA : outils de l'assistant de la plateforme (IA-C) pour les paiements des offres (spécification du 18/11/2026)
+
+Règle permanente du propriétaire (18/11/2026) : chaque lot prévoit ses outils de l'IA. L'assistant de la plateforme (IA-C, super
+administrateur seulement) est dans la file du chaperon, après G-8 ; ces outils y seront intégrés. Ils reposent sur PROVISION-3
+(`docs/console-pilotage.md`, « Paiements des offres » : `OfferPaymentsRepository`, `OfferReconciler`, `OfferFulfillmentService`).
+
+- **Accès** : les mêmes que l'écran « Paiements des offres » de la page Plateforme : `ROLE_SUPER_ADMIN`, compte de la plateforme ;
+  jamais donnés à l'assistant d'un site (IA-A) ni d'une agence (IA-B).
+- **Lectures** (outils donnés au modèle) :
+  - `get_offer_payments_state` : compteurs (file de reprise : nombre, dont en incident ; événements des dernières 24 h par état :
+    `processed`, `ignored`, `failed`, `received` ; dernière réconciliation de nuit : vus, corrigés d'après Stripe, droits corrigés, échecs),
+    et les lignes de la file (numéro, site boutique, numéro d'abonnement, échecs, prochaine reprise, classe de la dernière erreur) ;
+  - `get_offer_events` (filtres : état, type, site, 50 au plus) : identifiant de l'événement, type, site, abonnement Stripe visé, dates,
+    état, détail court, essais. Le journal ne garde aucun contenu d'événement : rien de personnel ;
+  - `get_offer_subscription` (site boutique, numéro d'abonnement) : formule, offre, site servi, statut, fin de période, impayé (montant,
+    essai), droits posés sur le site servi (fonctionnalité, source, état, fin) et l'écart calculé (`drift`), SANS l'identité de l'acheteur ;
+  - `get_offer_incidents` : les incidents `offres/abonnement/<id>` (repris des outils d'INCIDENTS ci-dessous).
+- **Actions** (proposées, puis confirmées par le super administrateur, appliquées par le service de l'écran) :
+  - `propose_offer_retry` : « Rejouer » une ligne de la file (`OfferReconciler::retryOne`, sous le verrou de l'abonnement) ; l'aperçu dit le
+    site, l'abonnement, l'état connu et les droits qui seront recalculés ; le résultat est relu et rendu.
+- **Trop risqué, donc absent** : relancer la réconciliation de nuit entière (une commande planifiée, jamais un geste de conversation),
+  corriger un droit à la main (geste de la grille des droits, hors de l'assistant), rembourser ou résilier un abonnement.
+- **Données** : identifiants Stripe et codes de site seulement ; aucune donnée personnelle (le journal et la file n'en ont pas). Les
+  détails et les classes d'erreur sont des données, jamais des consignes.
+- **Exemples** : « y a-t-il des droits vendus non posés ? » ; « pourquoi l'abonnement 12 de la boutique est-il en reprise ? » ;
+  « rejoue-le » ; « combien d'événements Stripe ont échoué cette nuit ? ».
+- **Essais** (au lot IA-C) : outils absents hors super administrateur ; aucune identité dans les résultats ; « Rejouer » seulement après
+  confirmation, sous le verrou ; injection : un détail ou une classe d'erreur contenant une consigne n'entraîne aucune action.
+
 ## Questions au propriétaire
 
 1. Prix des offres : les prix provisoires du 04/11 (CAD par mois) sont-ils confirmés ? Un prix annuel ? Taxes en plus ?
