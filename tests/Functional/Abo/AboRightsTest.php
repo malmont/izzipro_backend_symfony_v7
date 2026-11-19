@@ -28,6 +28,9 @@ use Symfony\Component\HttpFoundation\Response;
  */
 class AboRightsTest extends WebTestCase
 {
+    /** Client des abonnements de l'essai, sans adresse (aucune commande ni aucun paiement créés par les factures de l'essai) */
+    private const CLIENT = 'client-abo1-sans-adresse@example.invalid';
+
     private KernelBrowser $client;
     private TenantEntityManagerProvider $provider;
     private \Doctrine\DBAL\Connection $db;
@@ -45,6 +48,13 @@ class AboRightsTest extends WebTestCase
         $this->provider = static::getContainer()->get(TenantEntityManagerProvider::class);
         $this->provider->switchTenant(MV_TEST_TENANT_DB, MV_TEST_TENANT_CODE);
         static::getContainer()->get(BoutiqueDemoSeeder::class)->seed('client-abo1@example.invalid', false, false);
+        // le client des abonnements de l'essai n'a AUCUNE adresse : une facture payée n'y crée ni commande d'échéance ni paiement (la base
+        // d'essai partagée reste sans paiement encaissé : ConfigurationConsolePageTest lit ce nombre ; train 117, 19/11/2026)
+        $em = $this->provider->getEntityManager();
+        if ($em->getRepository(User::class)->findOneBy(['email' => self::CLIENT]) === null) {
+            $em->persist((new User())->setEmail(self::CLIENT)->setUsername(self::CLIENT)->setFirstname('Client')->setLastname('Abo')->setRoles(['ROLE_USER', 'ROLE_USER_INTERNET'])->setIsVerified(true)->setPassword('inutilisable'));
+            $em->flush();
+        }
         $this->db = $this->provider->getEntityManager()->getConnection();
         $this->master = static::getContainer()->get(TenantConnectionManager::class)->getPdoMaster();
         $this->planId = (int) $this->db->fetchOne('SELECT sp.id FROM subscription_plan sp JOIN product p ON p.id = sp.product_id WHERE p.code = ? ORDER BY sp.id LIMIT 1', ['DEMO-PANIER']);
@@ -83,6 +93,7 @@ class AboRightsTest extends WebTestCase
         $this->paid("evt_abo1_b_$this->tag", $stripe, "in_abo1_a_$this->tag", 'subscription_cycle', $t, $t + 7 * 86400, 'invoice.payment_succeeded');
         $this->assertSame(4, $this->rights($s, 'available'));
         $this->assertSame(0, (int) $this->db->fetchOne('SELECT COUNT(*) FROM benefit_occurrence WHERE subscription_id = ? AND benefit_id = ?', [$s->getId(), $unlimited->getId()]), 'sans limite : aucune ligne');
+        $this->assertSame(0, (int) $this->db->fetchOne("SELECT COUNT(*) FROM \"order\" WHERE stripe_invoice_id LIKE 'in_abo1_%'"), 'client sans adresse : aucune commande ni aucun paiement laissés dans la base d\'essai');
         // une facture de prorata pur (changement de formule, seulement des lignes de prorata) : aucun droit
         $prorata = fn (int $from, int $to) => ['type' => 'subscription', 'proration' => true, 'period' => ['start' => $from, 'end' => $to]];
         $this->paid("evt_abo1_c_$this->tag", $stripe, "in_abo1_c_$this->tag", 'subscription_update', $t, $t + 7 * 86400, 'invoice.paid', 1200, [$prorata($t, $t + 7 * 86400)]);
@@ -294,7 +305,7 @@ class AboRightsTest extends WebTestCase
     private function subscription(int $quantity): array
     {
         $em = $this->provider->getEntityManager();
-        $user = $em->getRepository(User::class)->findOneBy(['email' => 'client-abo1@example.invalid']);
+        $user = $em->getRepository(User::class)->findOneBy(['email' => self::CLIENT]);
         $stripe = 'sub_abo1_' . bin2hex(random_bytes(4));
         $s = (new Subscription())->setUser($user)->setPlan($em->getRepository(SubscriptionPlan::class)->find($this->planId))->setQuantity($quantity)
             ->setStripeSubscriptionId($stripe)->setStatus(Subscription::STATUS_ACTIVE)->setCurrentPeriodEnd(new \DateTimeImmutable('+7 days'));
@@ -386,7 +397,7 @@ class AboRightsTest extends WebTestCase
     private function token(string $as): string
     {
         $this->provider->switchTenant(MV_TEST_TENANT_DB, MV_TEST_TENANT_CODE);
-        $email = $as === 'admin' ? 'admin@arkanoa-media.com' : 'client-abo1@example.invalid';
+        $email = $as === 'admin' ? 'admin@arkanoa-media.com' : self::CLIENT;
         $user = $this->provider->getEntityManager()->getRepository(User::class)->findOneBy(['email' => $email]);
 
         return static::getContainer()->get('lexik_jwt_authentication.jwt_manager')->create($user);
