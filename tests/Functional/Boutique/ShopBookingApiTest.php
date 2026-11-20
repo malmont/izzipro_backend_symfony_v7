@@ -41,12 +41,22 @@ class ShopBookingApiTest extends WebTestCase
     public function testTheListServesOnlyTheShopBookingsUpcomingFirst(): void
     {
         [$soon, $later, $past, $mv, $book] = [$this->booking('+2 days'), $this->booking('+9 days', 'confirmed'), $this->booking('-3 days', 'cancelled'), $this->booking('+1 day', 'pending', true), $this->booking('+1 day', 'pending', false, 'livre-1')];
+        $step = $this->booking('+1 day');
+        $this->em()->getConnection()->executeStatement('UPDATE reservation SET step_number = 2, total_steps = 5 WHERE id = ?', [$step]); // séance MV dont le biographe a été supprimé
         $admin = $this->token(['ROLE_ADMIN']);
         $list = $this->call('GET', '/api/site/reservations-boutique?page=1&limit=50', $admin);
         $mine = array_values(array_filter($list['items'], fn (array $b) => str_starts_with((string) $b['clientEmail'], 'cmdweb1-' . $this->tag)));
         $this->assertSame([$soon, $later, $past], array_column($mine, 'id'), 'à venir d\'abord (le plus proche en tête), puis les passés ; jamais un entretien MV');
         $this->assertNotContains($mv, array_column($list['items'], 'id'));
         $this->assertNotContains($book, array_column($list['items'], 'id'));
+        $this->assertNotContains($step, array_column($list['items'], 'id'), 'une séance (numéro d\'étape) sans livre ni biographe reste un entretien MV');
+        $this->call('GET', "/api/site/reservations-boutique/$step", $admin, 404);
+        $this->assertCount(1, $this->call('GET', '/api/site/reservations-boutique?limit=1', $admin)['items'], 'limit sans page : la première page');
+
+        // le directeur entré : ni courriel, ni téléphone, ni notes du client
+        $this->assertSame(['id', 'serviceId', 'serviceName', 'forfaitName', 'date', 'slot', 'guests', 'clientName', 'status', 'createdAt'],
+            array_keys(ShopBookingService::forAudience($mine[0], \App\Services\OrderService\OrderDeskView::DIRECTOR)));
+        $this->assertSame($mine[0], ShopBookingService::forAudience($mine[0], \App\Services\OrderService\OrderDeskView::LIMITED));
         $this->assertSame((string) $list['total'], $this->client->getResponse()->headers->get('X-Total-Count'));
         $this->assertSame(['id', 'serviceId', 'serviceName', 'forfaitName', 'date', 'slot', 'guests', 'clientName', 'clientEmail', 'clientPhone', 'notes', 'status', 'createdAt'], array_keys($mine[0]));
 

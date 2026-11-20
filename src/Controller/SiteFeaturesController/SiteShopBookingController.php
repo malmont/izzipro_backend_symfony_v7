@@ -13,7 +13,7 @@ use Symfony\Component\Routing\Annotation\Route;
 /**
  * Lot CMD-WEB-1 (20/11/2026) : les rendez-vous de la BOUTIQUE pour la gestion web (jamais un entretien de Mémoires Vivantes : 404).
  * Droits (security.yaml, garde de l'Assistance, garde du mode) : administrateur du site, agent d'Assistance, agence pendant une assistance
- * « clients » ; le directeur entré lit, il ne confirme ni n'annule (garde du mode, 403 MODE_FORBIDDEN).
+ * « clients » ; le directeur entré lit (sans courriel, téléphone ni notes du client), il ne confirme ni n'annule (garde du mode, 403 MODE_FORBIDDEN).
  * - GET `?status=pending|confirmed|cancelled&from=&to=&page=&limit=` → liste (à venir d'abord) ; en-têtes X-Total-Count, X-Page, X-Limit
  * - GET `/{id}` → le rendez-vous ; 404 RESERVATION_NOT_FOUND
  * - POST `/{id}/confirmer`, `/{id}/annuler` → `{ reservation, changed, emailRequested }` ; 409 RESERVATION_CANCELLED (confirmer un annulé)
@@ -28,21 +28,22 @@ class SiteShopBookingController extends AbstractController
     #[Route('', name: 'api_site_shop_bookings', methods: ['GET'])]
     public function list(Request $request): JsonResponse
     {
-        $paging = ListPage::fromRequest($request) ?? ListPage::fromRequest(new Request(['page' => 1]));
+        // sans `page`, la première page (et `limit` s'il est donné)
+        $paging = ListPage::fromRequest($request) ?? ListPage::fromRequest(new Request(['page' => 1, 'limit' => $request->query->get('limit')]));
         try {
             $found = $this->bookings->list(self::text($request, 'status'), self::text($request, 'from'), self::text($request, 'to'), $paging->offset(), $paging->limit);
         } catch (ShopBookingException $e) {
             return $this->json($e->body(), $e->status);
         }
 
-        return $this->json(['items' => $found['items'], 'total' => $found['total']], 200, $paging->headers($found['total']));
+        return $this->json(['items' => array_map(fn (array $b) => $this->forReader($b), $found['items']), 'total' => $found['total']], 200, $paging->headers($found['total']));
     }
 
     #[Route('/{id}', name: 'api_site_shop_booking', requirements: ['id' => '\d+'], methods: ['GET'])]
     public function one(int $id): JsonResponse
     {
         try {
-            return $this->json($this->bookings->one($id));
+            return $this->json($this->forReader($this->bookings->one($id)));
         } catch (ShopBookingException $e) {
             return $this->json($e->body(), $e->status);
         }
@@ -68,6 +69,11 @@ class SiteShopBookingController extends AbstractController
         } catch (ShopBookingException $e) {
             return $this->json($e->body(), $e->status);
         }
+    }
+
+    private function forReader(array $booking): array
+    {
+        return ShopBookingService::forAudience($booking, \App\Services\OrderService\OrderDeskView::audience($this->getUser()));
     }
 
     private static function text(Request $request, string $key): ?string

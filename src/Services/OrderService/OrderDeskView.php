@@ -9,8 +9,9 @@ use Symfony\Component\Security\Core\User\UserInterface;
 /**
  * Lot CMD-WEB-1 (20/11/2026, contrat validé par le chef) : ce qu'un lecteur reçoit de la fiche d'une commande et de la vue « À traiter »
  * (`OrderDeskService`), construit par LISTE BLANCHE (une clé nouvelle de la fiche n'est jamais servie sans être ajoutée ici).
- * - `full` : un compte administrateur du site (super administrateur compris), la fiche entière comme `/admin/commandes/{id}` ;
- * - `limited` : l'agent d'Assistance, l'opérateur entré par jeton (agence pendant une assistance, plateforme) : ni identifiant Stripe, ni
+ * - `full` : un compte administrateur du site, et le super administrateur (son compte, y compris quand il entre sur un site : c'est le même
+ *   compte), la fiche entière comme `/admin/commandes/{id}` ;
+ * - `limited` : l'agent d'Assistance, l'agence entrée (pendant une assistance) : ni identifiant Stripe, ni
  *   adresse de reçu, ni contenu brut du journal ; la carte en « marque •••• 4 derniers chiffres » ; aucune action (les gestes et leurs
  *   droits sont le lot CMD-WEB) ;
  * - `director` : le directeur entré, en plus : ni courriel ni adresse du client, ni lien d'étiquette (qui porte l'adresse) ; il pilote,
@@ -51,6 +52,14 @@ final class OrderDeskView
         $director = $audience === self::DIRECTOR;
         $order = self::pick($sheet['order'] ?? [], self::ORDER_KEYS);
         $order['orderItems'] = array_map(fn (array $i) => self::pick($i, self::ITEM_KEYS), (array) ($order['orderItems'] ?? []));
+        // les niveaux internes aussi, clé par clé (une clé ajoutée plus tard n'est jamais servie sans être nommée ici)
+        $order['carrier'] = is_array($order['carrier'] ?? null) ? self::pick($order['carrier'], ['id', 'name', 'kind', 'isPickup']) : null;
+        $order['shipment'] = is_array($order['shipment'] ?? null) ? self::pick($order['shipment'], ['carrier', 'trackingNumber', 'trackingUrl']) : null;
+        $order['returns'] = array_map(fn (array $r) => self::pick($r, ['id', 'createdAt', 'amountCents'])
+            + ['lines' => array_map(fn (array $l) => self::pick($l, ['orderItemId', 'name', 'quantity', 'amountCents']), (array) ($r['lines'] ?? []))], (array) ($order['returns'] ?? []));
+        if (isset($order['cashRegister'])) {
+            $order['cashRegister'] = self::pick((array) $order['cashRegister'], ['id', 'name']);
+        }
         $order['hasShippingAddress'] = ($sheet['order']['shippingAdress'] ?? null) !== null;
         if (!$director) {
             $order['shippingAdress'] = $sheet['order']['shippingAdress'] ?? null;

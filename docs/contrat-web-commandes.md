@@ -34,8 +34,8 @@ La fiche porte `order`, `statusId`, `statusLabel`, `currency`, `money`, `payment
 
 | Lecteur | Ce qu'il reçoit |
 |---|---|
-| Administrateur du site (son compte, super administrateur compris) | La fiche entière. |
-| Agent d'Assistance, agence entrée pendant une assistance « commandes », entrée de la plateforme par jeton | Vue LIMITÉE, décrite sous le tableau. |
+| Administrateur du site (son compte), et le super administrateur, y compris quand il entre sur un site (c'est le même compte) | La fiche entière. |
+| Agent d'Assistance, agence entrée pendant une assistance « commandes » | Vue LIMITÉE, décrite sous le tableau. |
 | Directeur entré | La vue limitée, avec trois retraits de plus, décrits sous le tableau. |
 
 Ce que retire la vue limitée :
@@ -59,12 +59,14 @@ Une clé nouvelle de la fiche n'est jamais servie au lecteur limité tant qu'ell
 ## 2. Rendez-vous de la boutique
 
 Il s'agit des prestations réservées depuis la vitrine : l'écran EasyAdmin « Réservations de Prestations ». La table `reservation` porte
-aussi les entretiens de Mémoires Vivantes (livre ou biographe). Ces routes ne les servent JAMAIS : la réponse est 404 sans dire pourquoi.
+aussi les entretiens de Mémoires Vivantes. Un entretien est une ligne qui a un livre, un biographe, un numéro de séance ou un chapitre :
+c'est le critère du courriel, plus le chapitre. Ces routes ne servent JAMAIS ces lignes : la réponse est 404 sans dire pourquoi.
 
 ### `GET /api/site/reservations-boutique`
 
-Paramètres : `status=pending|confirmed|cancelled`, `from=AAAA-MM-JJ`, `to=AAAA-MM-JJ`, `page=`, `limit=`. Les rendez-vous à venir
-viennent d'abord, le plus proche en tête ; viennent ensuite les rendez-vous passés, le plus récent en tête. La réponse est
+Paramètres : `status=pending|confirmed|cancelled`, `from=AAAA-MM-JJ`, `to=AAAA-MM-JJ`, `page=`, `limit=` (sans `page`, c'est la
+première page). Les rendez-vous à venir viennent d'abord, le plus proche en tête ; viennent ensuite les rendez-vous passés, le plus
+récent en tête. « À venir » se juge sur le jour du MAGASIN. La réponse est
 `{ items[], total }`, avec les en-têtes `X-Total-Count`, `X-Page` et `X-Limit` (50 par défaut, 200 au plus).
 
 Un rendez-vous a cette forme :
@@ -74,6 +76,8 @@ Un rendez-vous a cette forme :
   "guests": 1, "clientName": "Ana Lima", "clientEmail": "ana@…", "clientPhone": "+1 …", "notes": null, "status": "pending",
   "createdAt": "2026-11-20 09:12" }
 ```
+
+Le directeur entré reçoit les rendez-vous sans `clientEmail`, `clientPhone` ni `notes` : c'est la minimisation de la fiche commande.
 
 Les erreurs sont 422 `STATUS_INVALID` et 422 `DATE_INVALID` (avec `field`).
 
@@ -92,7 +96,8 @@ La réponse est `{ reservation, changed, emailRequested }`.
   n'a donc rien à rembourser. Si un lien de paiement apparaît, l'essai `ShopBookingApiTest::testABookingCarriesNoPayment` casse, et la
   garde 409 `RESERVATION_PAID` est alors à poser (décision du chef).
 - **Un seul code** : les boutons Confirmer et Annuler d'EasyAdmin passent par le même service (`ShopBookingService::changeStatus`). La
-  ligne y est verrouillée, et chaque changement est écrit au journal du site (ressource `reservation`).
+  ligne y est verrouillée, et chaque changement est écrit au journal du site (ressource `reservation`), dans la même transaction que le
+  changement. Pour le directeur entré, l'écran EasyAdmin est en lecture seule : ses boutons et son formulaire sont fermés.
 
 ## 3. `GET /api/payments`
 
@@ -115,7 +120,7 @@ réponse est 422, avec la violation sur `lienCv`. Un champ vide est permis. Les 
 | | Admin | Agent d'Assistance | Agence entrée (assistance) | Directeur entré |
 |---|---|---|---|---|
 | Commandes : à traiter, fiche | tout | vue limitée | section `commandes`, vue limitée | vue sans courriel ni adresse |
-| Rendez-vous : liste, fiche | oui | oui | section `clients` | oui |
+| Rendez-vous : liste, fiche | oui | oui | section `clients` | oui, sans courriel, téléphone ni notes |
 | Rendez-vous : confirmer, annuler | oui | oui | section `clients` en modification | non (403 `MODE_FORBIDDEN`) |
 | `/api/payments` | toutes sources | non | comme avant | comme avant |
 

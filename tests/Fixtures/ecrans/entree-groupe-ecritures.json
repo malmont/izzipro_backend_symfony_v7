@@ -211,7 +211,7 @@
     "EA ProductVariantListController": "permise (actions ordinaires seulement)",
     "EA RechercheCrudController": "permise (actions ordinaires seulement)",
     "EA RentalPackCrudController": "permise (actions ordinaires seulement)",
-    "EA ReservationCrudController": "permise (actions ordinaires seulement)",
+    "EA ReservationCrudController": "lecture seule : rights",
     "EA ReviewCrudController": "permise (actions ordinaires seulement)",
     "EA ReviewSettingCrudController": "permise (actions ordinaires seulement)",
     "EA SaleUnitCrudController": "permise (actions ordinaires seulement)",

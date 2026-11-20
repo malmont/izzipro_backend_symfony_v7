@@ -422,6 +422,8 @@ class EntryModeGuardSubscriber implements EventSubscriberInterface
         'CashRegisterReportCrudController' => 'cash', 'TransactionCaisseCrudController' => 'cash', 'TransactionCaisseListController' => 'cash',
         'TransactionTypeCrudController' => 'cash', 'TypeCashCrudController' => 'cash', 'PosAuditLogCrudController' => 'cash',
         'EasyPostConfigurationCrudController' => 'keys', 'GooglePlacesConfigCrudController' => 'keys',
+        // lot CMD-WEB-1 : le directeur lit les rendez-vous, il ne les confirme, n'annule ni ne modifie (le formulaire change le statut et écrit au client)
+        'ReservationCrudController' => 'rights',
     ];
 
     /** Lot G-1 : la décision pour une action d'un écran CRUD d'EasyAdmin servie au directeur ; null = servie */

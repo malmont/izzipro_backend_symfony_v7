@@ -79,7 +79,11 @@ class ReservationCrudController extends BaseTenantCrudController
             return $this->redirect($context->getReferrer() ?: $this->adminUrlGenerator->setController(self::class)->setAction('index')->generateUrl());
         }
 
-        $this->changeStatus($reservation, 'confirmed');
+        if (!$this->changeStatus($reservation, 'confirmed')) {
+            $this->addFlash('info', sprintf('Réservation #%d déjà confirmée : aucun courriel renvoyé.', $reservation->getId()));
+
+            return $this->redirect($context->getReferrer() ?: $this->adminUrlGenerator->setController(self::class)->setAction('index')->generateUrl());
+        }
         $this->addFlash('success', sprintf('✅ Réservation #%d de %s confirmée ! Un email a été envoyé à %s.', $reservation->getId(), $reservation->getClientName(), $reservation->getClientEmail()));
 
         return $this->redirect($context->getReferrer() ?: $this->adminUrlGenerator->setController(self::class)->setAction('index')->generateUrl());
@@ -99,7 +103,11 @@ class ReservationCrudController extends BaseTenantCrudController
             return $this->redirect($context->getReferrer() ?: $this->adminUrlGenerator->setController(self::class)->setAction('index')->generateUrl());
         }
 
-        $this->changeStatus($reservation, 'cancelled');
+        if (!$this->changeStatus($reservation, 'cancelled')) {
+            $this->addFlash('info', sprintf('Réservation #%d déjà annulée : aucun courriel renvoyé.', $reservation->getId()));
+
+            return $this->redirect($context->getReferrer() ?: $this->adminUrlGenerator->setController(self::class)->setAction('index')->generateUrl());
+        }
         $this->addFlash('info', sprintf('ℹ️ Réservation #%d de %s annulée. Un email a été envoyé à %s.', $reservation->getId(), $reservation->getClientName(), $reservation->getClientEmail()));
 
         return $this->redirect($context->getReferrer() ?: $this->adminUrlGenerator->setController(self::class)->setAction('index')->generateUrl());
@@ -110,16 +118,18 @@ class ReservationCrudController extends BaseTenantCrudController
      * courriel une seule fois) ; comme avant : toutes les lignes de l'écran (entretiens de Mémoires Vivantes compris), et un rendez-vous
      * annulé peut être reconfirmé.
      */
-    private function changeStatus(Reservation $reservation, string $status): void
+    /** @return bool l'état a changé (un courriel est parti) */
+    private function changeStatus(Reservation $reservation, string $status): bool
     {
         if ($this->bookings === null) {
             $reservation->setStatus($status);
             $this->emProvider->getEntityManager()->flush();
             $this->mailerService->sendStatusChangeEmail($reservation, $status);
 
-            return;
+            return true;
         }
-        $this->bookings->changeStatus((int) $reservation->getId(), $status, false, (string) $this->getUser()?->getUserIdentifier(), 'fr', null, true);
+
+        return $this->bookings->changeStatus((int) $reservation->getId(), $status, false, (string) $this->getUser()?->getUserIdentifier(), 'fr', null, true)['changed'];
     }
 
     public function createEditForm(EntityDto $entityDto, KeyValueStore $formOptions, AdminContext $context): FormInterface

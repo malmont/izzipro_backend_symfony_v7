@@ -29,6 +29,7 @@ class ShopBookingService
         private readonly ReservationMailerService $mailer,
         private readonly ContentAuditRecorder $audit,
         private readonly LoggerInterface $logger,
+        private readonly \App\Services\CaisseService\StoreClock $clock,
     ) {
     }
 
@@ -38,7 +39,7 @@ class ShopBookingService
         if ($status !== null && !in_array($status, self::STATUSES, true)) {
             throw new ShopBookingException(422, 'STATUS_INVALID', 'État attendu : pending, confirmed ou cancelled.', 'status');
         }
-        $page = $this->repository()->shopPage($status, self::day($from, 'from'), self::day($to, 'to'), $offset, $limit);
+        $page = $this->repository()->shopPage($status, self::day($from, 'from'), self::day($to, 'to'), $this->clock->day(new \DateTimeImmutable('now', new \DateTimeZone('UTC'))), $offset, $limit);
 
         return ['items' => array_map(self::present(...), $page['items']), 'total' => $page['total']];
     }
@@ -81,6 +82,8 @@ class ShopBookingService
             if ($before !== $status) {
                 $reservation->setStatus($status);
                 $em->flush();
+                // le journal dans la même transaction : un journal qui échoue défait le changement (jamais un état changé sans trace)
+                $this->audit->record('reservation', $id, $status === self::CONFIRMED ? 'confirm' : 'cancel', ['status' => $before], ['status' => $status, 'by' => $by]);
             }
             $connection->commit();
         } catch (\Throwable $e) {
@@ -88,9 +91,6 @@ class ShopBookingService
             throw $e;
         }
         $changed = $before !== $status;
-        if ($changed) {
-            $this->audit->record('reservation', $id, $status === self::CONFIRMED ? 'confirm' : 'cancel', ['status' => $before], ['status' => $status, 'by' => $by]);
-        }
         $emailRequested = false;
         if ($changed && (string) $reservation->getClientEmail() !== '') {
             try {
@@ -112,6 +112,12 @@ class ShopBookingService
             'date' => $r->getReservationDate()?->format('Y-m-d'), 'slot' => $r->getReservationSlot(), 'guests' => $r->getNumberOfGuests(),
             'clientName' => $r->getClientName(), 'clientEmail' => $r->getClientEmail(), 'clientPhone' => $r->getClientPhone(), 'notes' => $r->getNotes(),
             'status' => $r->getStatus(), 'createdAt' => $r->getCreatedAt()?->format('Y-m-d H:i')];
+    }
+
+    /** Le directeur entré pilote, il ne sert pas le client : ni courriel, ni téléphone, ni notes du client (minimisation, comme la fiche commande) */
+    public static function forAudience(array $booking, string $audience): array
+    {
+        return $audience === \App\Services\OrderService\OrderDeskView::DIRECTOR ? array_diff_key($booking, array_flip(['clientEmail', 'clientPhone', 'notes'])) : $booking;
     }
 
     private static function day(?string $value, string $field): ?\DateTimeImmutable

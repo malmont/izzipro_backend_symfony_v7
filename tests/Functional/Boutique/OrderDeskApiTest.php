@@ -134,6 +134,9 @@ class OrderDeskApiTest extends WebTestCase
         $this->assertNull(EntryModeGuardSubscriber::groupDecision('GET', '/api/site/reservations-boutique/1'));
         $this->assertSame('rights', EntryModeGuardSubscriber::groupDecision('POST', '/api/site/reservations-boutique/1/confirmer'));
         $this->assertSame('rights', EntryModeGuardSubscriber::groupDecision('POST', '/api/site/reservations-boutique/1/annuler'));
+        // … ni par l'écran EasyAdmin (son formulaire change le statut et écrit au client) : lecture seule
+        $this->assertSame('rights', EntryModeGuardSubscriber::groupScreenDecision(\App\Controller\Admin\ReservationCrudController::class, 'edit'));
+        $this->assertNull(EntryModeGuardSubscriber::groupScreenDecision(\App\Controller\Admin\ReservationCrudController::class, 'index'));
     }
 
     /** @return array<string, mixed> */
