@@ -61,7 +61,8 @@ Hors serveur : rien de planifié côté Next (vérifié par le chef) ; Stripe et
 - backup-daily, le nettoyage Docker, `ops/tech-metrics-host.sh` ne peuvent pas tourner dans le conteneur : ils restent en systemd.
 - Chacun écrit son passage (une ligne : nom, début, fin, résultat) dans un fichier lu par l'application, ou par une commande qui l'enregistre
   dans `scheduled_task_run` ; la page les montre comme les autres, en lecture.
-- **Sauvegarde : alerte si elle n'a pas réussi depuis plus de 26 h** (la plus importante).
+- **Sauvegarde : alerte si elle n'a pas réussi depuis plus de 26 h** (la plus importante) ; et, quand la copie HORS du serveur existera
+  (lot des clés et services tiers), la même alerte sur la copie externe et un **essai de restauration mensuel**.
 - **Nettoyage Docker** passé en minuteur systemd, fichiers dans `ops/systemd/`, installation autorisée par le propriétaire :
   `docker image prune -af --filter until=168h` chaque jour (7 jours au lieu de 24 h), l'image d'avant un changement d'IMAGE étiquetée
   « keep » et exclue ; `docker builder prune -f --keep-storage 5GB` chaque semaine. Le retour arrière d'une bascule n'a pas besoin
@@ -104,9 +105,10 @@ surveillance seulement, aucun lancement depuis l'écran).
 ## 5. Risques
 0. **La sauvegarde n'est pas une vraie sauvegarde** (vérifié le 20/11/2026, lecture seule) : `backup.sh` ne fait que `pg_dump`, `tar` et
    `find`, sans aucun envoi ailleurs ; les copies vont dans `/home/arkanoa/backups/data` (14 jours), sur le MÊME disque que le serveur.
-   Un disque ou un serveur perdu emporte les bases et leurs sauvegardes. À décider par le propriétaire : une copie hors du serveur,
-   chiffrée, et un essai de restauration régulier (surveillés par TACHES-3). Le même dossier garde d'anciennes copies de `.env` en clair
-   (de septembre et d'octobre) : à ranger ou à supprimer.
+   Un disque ou un serveur perdu emporte les bases et leurs sauvegardes. **Décision du propriétaire (20/11/2026)** : la copie HORS du
+   serveur fait partie du lot de branchement des clés et services tiers, avant la campagne QA. TACHES-3 la surveillera dès qu'elle
+   existera : alerte après 26 h sans copie externe réussie, essai de restauration mensuel. Le même dossier garde d'anciennes copies de
+   `.env` en clair : décision du propriétaire attendue, ne pas y toucher.
 1. Un seul worker du planificateur : s'il s'arrête, TOUTES les tâches s'arrêtent → bandeau, battement, alerte (TACHES-4) ; pendant la
    migration, l'ancien minuteur reste jusqu'au passage vérifié du nouveau.
 2. Deux exécutions pendant la bascule d'une tâche (ancien et nouveau) → le verrou de TACHES-1 en évite le chevauchement.
