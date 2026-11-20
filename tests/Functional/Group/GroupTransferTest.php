@@ -245,6 +245,32 @@ class GroupTransferTest extends WebTestCase
     }
 
     /** Relecture G-5, passe 2 : la commande d'un transfert se reçoit mais ne se modifie pas ; un envoi bloqué (verrou libre) s'annule entièrement */
+    /** Lot G-5c (demande de MAUI) : l'administrateur voit ce qu'il envoie (noms lus dans la source), les noms des sites, et la marque de la commande d'arrivée */
+    public function testTheLinesCarryTheNamesReadInTheSourceAndTheArrivalOrderIsMarked(): void
+    {
+        [, $headVariant] = $this->setUpGroup('created');
+        $transfer = $this->call('POST', '/api/gestion/groupe/transferts', $this->body($headVariant, 2), 'siege', 201);
+        $name = (string) $this->pdo(MV_TEST_TENANT_DB)->query("SELECT p.name FROM product_variant v JOIN product p ON p.id = v.product_id WHERE v.id = $headVariant")->fetchColumn();
+        $product = (int) $this->pdo(MV_TEST_TENANT_DB)->query("SELECT product_id FROM product_variant WHERE id = $headVariant")->fetchColumn();
+        $names = fn (string $code): string => (string) $this->master->query("SELECT name FROM tenants WHERE code = '$code'")->fetchColumn();
+
+        $toSend = array_column($this->call('GET', '/api/site/group-transfers', null, 'siege', 200)['transfers'], null, 'id')[$transfer['id']];
+        $this->assertSame([MV_TEST_TENANT_CODE, MV_TEST_TENANT2_CODE, $names(MV_TEST_TENANT_CODE), $names(MV_TEST_TENANT2_CODE)], [$toSend['source'], $toSend['target'], $toSend['sourceName'], $toSend['targetName']]);
+        $line = $toSend['lines'][0];
+        $this->assertSame([1, $headVariant, 2], [$line['line'], $line['sourceVariantId'], $line['quantity']], 'les champs d\'avant restent');
+        $this->assertSame(['id' => $product, 'name' => $name], $line['product']);
+        $this->assertSame($headVariant, $line['variant']['id']);
+        $this->assertArrayHasKey('size', $line['variant']);
+        $this->assertArrayNotHasKey('unitCostCents', $line, 'jamais de coût pour la source');
+        $this->assertSame(['id' => $product, 'name' => $name], $this->call('GET', '/api/gestion/groupe/transferts/' . $transfer['id'], null, 'siege', 200)['lines'][0]['product'], 'le directeur aussi');
+
+        $sent = $this->call('POST', '/api/site/group-transfers/' . $transfer['id'] . '/send', null, 'siege', 200);
+        $rows = $this->call('GET', '/api/commandes/lignes/a-recevoir?page=1&limit=200', null, 'boutique', 200);
+        $arrival = array_values(array_filter($rows['items'] ?? $rows, static fn (array $l): bool => ($l['commande']['id'] ?? null) === $sent['targetOrderId']));
+        $this->assertNotSame([], $arrival);
+        $this->assertSame([true, 'transfer'], [$arrival[0]['commande']['groupTransfer'], $arrival[0]['source']], 'la marque de la commande d\'arrivée, en plus de la source de la ligne');
+    }
+
     public function testTheTransferOrderIsLockedAndAStuckSendingIsCancelled(): void
     {
         [$groupId, $headVariant] = $this->setUpGroup('created');
