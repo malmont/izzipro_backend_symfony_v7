@@ -260,6 +260,13 @@ class AboAgendaTest extends WebTestCase
         $this->assertStringContainsString('Professeur absent', (string) $this->getMailerMessage()->getHtmlBody());
         $this->assertSame('available', $this->status($second));
         $this->assertSame('SLOT_CANCELLED', $this->json('POST', $team, ['benefitId' => $yoga->getId(), 'slotId' => $later], 409)['code']);
+        // un créneau déjà chargé dans le gestionnaire se lit annulé après l'annulation (relu, pas l'exemplaire « ouvert » gardé en mémoire)
+        $direct = $this->slot($yoga, '+9 days', 4);
+        $held = $this->prov()->getEntityManager()->getRepository(BenefitSlot::class)->find($direct);
+        $this->assertTrue($held->isOpen());
+        static::getContainer()->get(AboAgendaService::class)->cancelSlot($direct, 'Salle fermée', 'essai');
+        $after = $this->prov()->getEntityManager()->getRepository(BenefitSlot::class)->find($direct);
+        $this->assertSame([BenefitSlot::STATUS_CANCELLED, 'Salle fermée'], [$after->getStatus(), $after->getCancelReason()]);
 
         // le passage horaire ne perd jamais un droit planifié, même échu
         $again = $this->json('POST', $team, ['benefitId' => $yoga->getId(), 'slotId' => $soon], 201)['appointment']['occurrenceId'];
@@ -345,6 +352,17 @@ class AboAgendaTest extends WebTestCase
         $this->answer([['propose_move_occurrence', ['subscriptionId' => $s->getId(), 'occurrenceId' => $occ, 'slotId' => $other]]]);
         $this->assertSame([], $this->chat('Déplace son rendez-vous')['actions']);
         $this->assertStringContainsString('CANCEL_DEADLINE_PASSED', (string) json_encode(FakeLandingAiClient::$requests[1]['messages'][2]['content']));
+    }
+
+    /** Le menu d'EasyAdmin range une entrée MenuItem::linkTo() (non dépréciée) sous son écran, comme linkToCrud : jamais montrée d'office */
+    public function testALinkToMenuEntryIsFilteredByItsScreenLikeALinkToCrudEntry(): void
+    {
+        $dashboard = static::getContainer()->get(\App\Controller\Admin\DashboardController::class);
+        $target = new \ReflectionMethod($dashboard, 'menuTarget');
+        foreach ([\App\Controller\Admin\BenefitSlotRuleCrudController::class, \App\Controller\Admin\BenefitSlotCrudController::class] as $crud) {
+            $this->assertSame('admin.agenda', \App\Services\Screens\ScreenRegistry::adminCrud($crud));
+            $this->assertSame('admin.agenda', $target->invoke($dashboard, \EasyCorp\Bundle\EasyAdminBundle\Config\MenuItem::linkTo($crud, 'x')));
+        }
     }
 
     // ---- aides ------------------------------------------------------------------------------------------------------------------------

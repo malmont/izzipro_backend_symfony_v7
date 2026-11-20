@@ -192,7 +192,9 @@ class DashboardController extends AbstractDashboardController
         if ($dto->getType() === \EasyCorp\Bundle\EasyAdminBundle\Dto\MenuItemDto::TYPE_DASHBOARD) {
             return 'admin.accueil';
         }
-        if ($dto->getType() === \EasyCorp\Bundle\EasyAdminBundle\Dto\MenuItemDto::TYPE_CRUD) {
+        // MenuItem::linkTo() (type `controller`, la forme qui remplace linkToCrud depuis EasyAdmin 4.29) se range comme un écran CRUD :
+        // sans cela l'entrée n'aurait pas d'écran et serait toujours montrée (20/11/2026)
+        if (in_array($dto->getType(), [\EasyCorp\Bundle\EasyAdminBundle\Dto\MenuItemDto::TYPE_CRUD, \EasyCorp\Bundle\EasyAdminBundle\Dto\MenuItemDto::TYPE_CONTROLLER], true)) {
             $controller = $params[\EasyCorp\Bundle\EasyAdminBundle\Config\Option\EA::CRUD_CONTROLLER_FQCN] ?? null;
             if (!is_string($controller) || $controller === '') {
                 $entity = $params[\EasyCorp\Bundle\EasyAdminBundle\Config\Option\EA::ENTITY_FQCN] ?? null;
@@ -731,8 +733,8 @@ class DashboardController extends AbstractDashboardController
         yield MenuItem::linkToCrud('Prestations des formules', 'fas fa-list-check', \App\Abo\Entity\PlanBenefit::class);
         yield MenuItem::linkToCrud('Abonnements', 'fas fa-id-card', Subscription::class);
         // lot ABO-2 : l'agenda des prestations
-        yield MenuItem::linkToCrud('Règles de créneaux', 'fas fa-calendar-week', \App\Abo\Entity\BenefitSlotRule::class);
-        yield MenuItem::linkToCrud('Créneaux', 'fas fa-calendar-day', \App\Abo\Entity\BenefitSlot::class);
+        yield MenuItem::linkTo(BenefitSlotRuleCrudController::class, 'Règles de créneaux', 'fas fa-calendar-week');
+        yield MenuItem::linkTo(BenefitSlotCrudController::class, 'Créneaux', 'fas fa-calendar-day');
         yield MenuItem::linkToCrud('Atouts (icône + phrase)', 'fa fa-star', Feature::class);
         yield MenuItem::linkToCrud('Cartes « Explorer »', 'fa fa-th-large', ExploreCard::class);
 

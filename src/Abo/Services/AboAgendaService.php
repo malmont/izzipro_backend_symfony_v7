@@ -382,8 +382,12 @@ class AboAgendaService
             return $released;
         });
         $this->audit?->record('benefit_slot', (string) $slotId, 'cancel', null, ['reason' => $reason, 'released' => count($affected)], ['abonnements']); // avant les courriels
-        $em->clear(BenefitSlot::class);
+        // le créneau tel que le SQL ci-dessus l'a laissé (annulé, motif) : un exemplaire déjà chargé dans le gestionnaire est relu, jamais
+        // laissé « ouvert » pour la suite de la requête (remplace clear(BenefitSlot::class), déprécié)
         $slot = $em->getRepository(BenefitSlot::class)->find($slotId);
+        if ($slot !== null) {
+            $em->refresh($slot);
+        }
         $bySubscription = [];
         foreach ($affected as $r) {
             $bySubscription[(int) $r['subscription_id']] = ($bySubscription[(int) $r['subscription_id']] ?? 0) + 1;
