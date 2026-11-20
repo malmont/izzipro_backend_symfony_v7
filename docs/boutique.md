@@ -1138,7 +1138,9 @@ ajustent et répondent, mais ne créent rien. Les formules de la plateforme et d
 
 - **Compte Stripe** : une vente de la boutique d'un site extérieur sans compte connecté actif est REFUSÉE (seul un site interne de la
   plateforme encaisse sur le compte de la plateforme) ; jusqu'à ABO-CONF, un abonnement passait alors sur le compte de la plateforme.
-  Décision du propriétaire : en réel, la souscription est refusée (409 `STRIPE_ACCOUNT_REQUIRED`) ; en test, rien ne change.
+  Décision du propriétaire, CODÉE (ABO-CONF, `SubscriptionService::assertCanSellLive`) : en réel (clé du serveur `sk_live`/`rk_live`), un
+  site extérieur sans compte connecté actif voit la souscription refusée (409 `STRIPE_ACCOUNT_REQUIRED`, texte pour l'abonné) ; un site
+  interne de la plateforme encaisse comme avant ; en test, rien ne change. Le commerçant en est prévenu à la création d'une formule.
 - **Mode Stripe par site** : la boutique et les abonnements suivent le mode de la clé du serveur (test ou réel pour tous les sites à la
   fois) ; la caisse a son propre réglage test / réel PAR SITE (`Entreprise.posStripeMode`, clés réelles à part, compte réel distinct,
   passage en réel par le super administrateur, journal `STRIPE_MODE_CHANGED`). Au passage en réel, la boutique et les abonnements doivent

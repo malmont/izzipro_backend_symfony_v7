@@ -166,6 +166,41 @@ class AboCatalogTest extends WebTestCase
         $this->assertSame(2900, (int) $this->db->fetchOne('SELECT price FROM subscription_plan WHERE id = ?', [$plan->getId()]));
     }
 
+    /**
+     * Décision A du propriétaire (19/11/2026) : en RÉEL, un site extérieur sans compte Stripe connecté actif ne vend pas d'abonnement
+     * (409 STRIPE_ACCOUNT_REQUIRED) ; un site interne de la plateforme encaisse ; en test, rien ne change. La formule prévient le commerçant.
+     */
+    public function testWithoutAConnectedAccountASiteSellsNoSubscriptionInLiveMode(): void
+    {
+        $service = static::getContainer()->get(\App\Services\SubscriptionService\SubscriptionService::class);
+        $internal = static::getContainer()->get(TenantConnectionManager::class)->isTenantInternal(MV_TEST_TENANT_CODE);
+        $configs = $this->db->fetchAllAssociative('SELECT id, is_active FROM stripe_config');
+        $key = $_ENV['STRIPE_SECRET_KEY'] ?? null;
+        try {
+            $this->db->executeStatement('UPDATE stripe_config SET is_active = false');
+            $this->provider->getEntityManager()->clear();
+            $service->assertCanSellLive(); // en test : rien ne change
+            $this->assertSame($internal ? [] : ['STRIPE_ACCOUNT_REQUIRED'], array_column(static::getContainer()->get(AboCatalogService::class)->warnings(), 'code'), 'le commerçant est prévenu');
+            $_ENV['STRIPE_SECRET_KEY'] = 'sk_live_cle_factice_de_l_essai'; // le mode réel, simulé pour cet essai seulement
+            try {
+                $service->assertCanSellLive();
+                $this->assertTrue($internal, 'un site extérieur sans compte connecté est refusé en réel');
+            } catch (\App\Services\SubscriptionService\SubscriptionException $e) {
+                $this->assertFalse($internal, 'un site interne de la plateforme encaisse');
+                $this->assertSame([409, 'STRIPE_ACCOUNT_REQUIRED'], [$e->getStatusCode(), $e->code()]);
+            }
+        } finally {
+            if ($key === null) {
+                unset($_ENV['STRIPE_SECRET_KEY']);
+            } else {
+                $_ENV['STRIPE_SECRET_KEY'] = $key;
+            }
+            foreach ($configs as $c) {
+                $this->db->executeStatement('UPDATE stripe_config SET is_active = ? WHERE id = ?', [$c['is_active'], $c['id']], [\PDO::PARAM_BOOL, \PDO::PARAM_INT]);
+            }
+        }
+    }
+
     // ---- aides ------------------------------------------------------------------------------------------------------------------------
 
     private function answer(array $uses): void
