@@ -149,6 +149,7 @@ cash:
         STALE_BALANCE: 'Balance entered %days% days ago: update it for an accurate projection.'
         RECORDED_EXPENSES_INCLUDED: 'Expenses recorded in the app (supplier orders, shipping, expense reports, advertising) count on their date, as if paid that day.'
         TAXES_INCLUDED: 'Receipts include collected taxes, which will be paid back: plan them as a "Taxes" movement.'
+        LOAN_MAY_OVERLAP_MOVEMENTS: 'A manual "Loan" planned movement exists next to a recorded loan: its instalments may be counted twice. Keep one or the other; nothing is deleted without you.'
         NO_SALES_HISTORY: 'No sales in the last 30 days: no receipts average.'
 # Period simulator (lot B1b-2, 11/11/2026, docs/simulateur-gestion.md)
 simulation:
@@ -496,6 +497,8 @@ sequences:
         periods_calendar_set: 'Change the period split'
         product_cost_set: 'Set another purchase cost'
         price_set: 'Change other prices'
+        loan_create: 'Add another loan'
+        loan_prepayment: 'Add another early repayment'
     figure_values:
         tier:
             full: 'Full AI'
@@ -802,6 +805,76 @@ conversation:
             planned:
                 title: '%category%'
                 text: 'Planned amount for "%category%" (leave empty to keep it, 0 to clear it).'
+        loan_create:
+            title: 'Add a loan'
+            label:
+                title: 'Label'
+                text: 'What should this loan be called? (equipment loan, start-up loan…) The lender''s name is entered on the loans screen.'
+            amount:
+                title: 'Amount borrowed'
+                text: 'How much did you borrow?'
+            rate:
+                title: 'Annual rate'
+                text: 'What is the annual interest rate, as a percentage? (0 for an interest-free loan)'
+            durationMonths:
+                title: 'Duration in months'
+                text: 'Over how many months is the loan repaid?'
+            frequencyMonths:
+                title: 'Instalment frequency'
+                text: 'Do you repay every month or every quarter?'
+            disbursedOn:
+                title: 'Payout date'
+                text: 'On what date was the money paid into your account?'
+            firstDueOn:
+                title: 'First instalment'
+                text: 'On what date is the first instalment due?'
+            type:
+                title: 'Repayment type'
+                text: 'Equal instalments (the most common case) or constant principal?'
+            fees:
+                title: 'Arrangement fees'
+                text: 'Any arrangement fees? They count on the payout date.'
+            insuranceAmount:
+                title: 'Insurance per instalment'
+                text: 'A fixed insurance paid with each instalment? Insurance as a percentage is entered on the loans screen.'
+            instalment:
+                title: 'First instalment to pay'
+            creditCost:
+                title: 'Total cost of credit'
+            lastDueOn:
+                title: 'Last instalment'
+            overlap:
+                title: 'To check'
+            overlapNote: 'You have a planned "loan" movement in the cash position: remove it if it holds this loan''s instalments, so they are not counted twice.'
+            options:
+                frequency:
+                    1: 'Every month'
+                    3: 'Every quarter'
+                type:
+                    annuity: 'Equal instalments'
+                    constant_capital: 'Constant principal'
+        loan_prepayment:
+            title: 'Repay early'
+            loanId:
+                title: 'Loan'
+                text: 'Which loan are you partly repaying?'
+            date:
+                title: 'Repayment date'
+                text: 'On what date is this early repayment made?'
+            amount:
+                title: 'Amount repaid'
+                text: 'How much principal are you repaying on top of the instalments?'
+            fees:
+                title: 'Early repayment fees'
+                text: 'Does the bank charge fees for this repayment?'
+            remainingBefore:
+                title: 'Outstanding principal today'
+            instalmentAfter:
+                title: 'Next instalment'
+            creditCostAfter:
+                title: 'Total cost of credit'
+            saved:
+                title: 'Charges saved'
         price_set:
             title: 'Change the selling price of items'
             scope:
@@ -966,6 +1039,7 @@ prices:
 # Management AI console (lot W2, 13/11/2026): analysis titles, figure labels, server texts; docs/console-gestion.md
 console:
     analyses:
+        loans_overview: 'Loans and cost of credit'
         period_result: 'Result of a period'
         sales_overview: 'Sales and margin'
         year_overview: 'The business year'
@@ -979,6 +1053,13 @@ console:
         lexique_term: 'A notion explained'
         screen_guide: 'Screen guide'
     figures:
+        loansCount: 'Loans'
+        remainingCapital: 'Outstanding principal'
+        nextInstalmentAmount: 'Next instalment'
+        nextInstalmentDate: 'Next instalment date'
+        creditCost: 'Total cost of credit'
+        chargesToDate: 'Cost of credit incurred so far'
+        chargesLeft: 'Cost of credit still to come'
         revenue: 'Sales'
         orders: 'Orders'
         cogs: 'Cost of goods sold'
@@ -1073,6 +1154,11 @@ console:
             low: 'Cautious'
     # Table columns (lot W2-d): `columns: [{ key, label, unit }]`
     columns:
+        rate: 'Annual rate'
+        nextDate: 'Next instalment'
+        nextAmount: 'Instalment amount'
+        creditCost: 'Total cost of credit'
+        lastDate: 'Last instalment'
         month: 'Month'
         sales: 'Sales'
         grossMargin: 'Gross margin'
@@ -1110,6 +1196,7 @@ console:
         resultats: 'Periods and results'
         reglages: 'Settings'
     screens:
+        prets: 'Loans'
         gestion_home: 'Management home'
         sequences: 'Where I stand: sequences'
         sequences_detail: 'A sequence and its steps'

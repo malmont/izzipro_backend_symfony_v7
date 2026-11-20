@@ -71,6 +71,7 @@ final class ConsoleScreens
         'tresorerie' => ['theme' => 'argent', 'analyses' => [['cash.projection', ['days' => 90]]]], // l'écran montre le point bas sur 14 et 90 jours et le solde dans 90 jours
         'frais-fixes' => ['theme' => 'argent', 'analyses' => ['cash.projection', 'year.overview']],
         'notes-de-frais' => ['theme' => 'argent', 'params' => ['periodId' => 'id'], 'analyses' => ['budget.status', 'period.result']],
+        'prets' => ['theme' => 'argent', 'params' => ['loanId' => 'id'], 'analyses' => ['loans.overview', ['cash.projection', ['days' => 90]]]], // lot FIS-1
         // Périodes et résultats
         'periodes' => ['theme' => 'resultats', 'params' => ['page' => 'page']],
         'periode' => ['theme' => 'resultats', 'params' => ['periodId' => 'id'], 'analyses' => ['period.result', 'sales.overview']],

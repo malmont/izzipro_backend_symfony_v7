@@ -6,6 +6,7 @@ use App\Entity\Collections;
 use App\Gestion\Lexique\LexiqueCatalog;
 use App\Gestion\Lexique\LexiqueTexts;
 use App\Gestion\Lexique\ScreenGuides;
+use App\Gestion\Loan\GestionLoanService;
 use App\Gestion\Pricing\CoefficientRule;
 use App\Gestion\Services\GestionAdviceService;
 use App\Gestion\Services\GestionBudgetService;
@@ -17,6 +18,7 @@ use App\Gestion\Services\HomeTilesService;
 use App\Gestion\Services\MissingCostQuery;
 use App\Gestion\Services\PeriodCalendar;
 use App\Gestion\Services\PeriodResultCalculator;
+use App\Services\BoutiqueSettingsService\TenantCurrencyProvider;
 use App\Services\TenantEntityManagerProvider;
 use Symfony\Contracts\Translation\TranslatorInterface;
 
@@ -59,6 +61,7 @@ class AnalysisCatalog
         'lexique.term' => ['params' => ['term'], 'required' => ['term'], 'screen' => 'lexique', 'route' => 'GET /api/gestion/lexique/{term}'],
         // le guide de l'écran d'où vient la question : `screen` est donné par le serveur (le contexte), jamais par le modèle (lot A-4)
         'screen.guide' => ['params' => ['screen'], 'required' => ['screen'], 'screen' => 'ecran', 'route' => 'GET /api/gestion/ecrans/{screen}/guide'],
+        'loans.overview' => ['params' => [], 'required' => [], 'screen' => 'prets', 'route' => 'GET /api/gestion/prets'], // lot FIS-1
     ];
 
     /**
@@ -73,6 +76,7 @@ class AnalysisCatalog
         'articles.vs_similar' => ['name' => 'text', 'cost' => 'money', 'price' => 'money', 'purchased' => 'count', 'sold' => 'count', 'displayedCoefficient' => 'ratio', 'obtainedCoefficient' => 'ratio'],
         'articles.new' => ['name' => 'text', 'cost' => 'money', 'price' => 'money', 'coefficient' => 'ratio', 'proposedCoefficient' => 'ratio', 'verdict' => 'text', 'similarCount' => 'count', 'similarSoldShare' => 'percent'],
         'advice.current' => ['title' => 'text', 'effect' => 'money', 'confidence' => 'text'],
+        'loans.overview' => ['label' => 'text', 'remaining' => 'money', 'rate' => 'percent', 'nextDate' => 'text', 'nextAmount' => 'money', 'creditCost' => 'money', 'lastDate' => 'text'],
     ];
     /** Champs d'une ligne dont la valeur est un CODE : jeu de libellés (`console.values.*`) qui le rédige */
     public const CODED = ['verdict' => 'verdict', 'status' => 'budget', 'confidence' => 'confidence'];
@@ -99,6 +103,8 @@ class AnalysisCatalog
         private readonly GestionAdviceService $advices,
         private readonly LexiqueTexts $lexique,
         private readonly ScreenGuides $guides,
+        private readonly GestionLoanService $loans,
+        private readonly TenantCurrencyProvider $currency,
     ) {
     }
 
@@ -223,6 +229,7 @@ class AnalysisCatalog
             'advice.current' => $this->currentAdvice($locale),
             'lexique.term' => $this->lexiqueTerm($params, $locale),
             'screen.guide' => ['figures' => [], 'guide' => $this->guides->guide((string) $params['screen'], $locale)],
+            'loans.overview' => $this->loansOverview($locale),
         };
         $rows = $result['rows'] ?? [];
         $total = $result['total'] ?? count($rows);
@@ -359,6 +366,49 @@ class AnalysisCatalog
             $this->figure('endAmount', $series['end']['amount'] ?? null, 'money', $locale, [], $horizon),
             $this->figure('endDate', $series['end']['date'] ?? null, 'date', $locale, [], $horizon),
             $this->coded('cashStatus', $p['status'] ?? null, 'cash', $locale),
+        ]];
+    }
+
+    /**
+     * Prêts du site (lot FIS-1) : les chiffres de l'écran des prêts. Les totaux ne réunissent que les prêts dans la devise du site (un prêt
+     * dans une autre devise reste dans le tableau, avec ses propres montants). Ni le prêteur ni les notes ne sont rendus : l'IA ne reçoit
+     * aucune donnée qui pourrait nommer une personne ; le libellé est celui que le gérant a donné à la fiche.
+     */
+    private function loansOverview(string $locale): array
+    {
+        $today = $this->calendar->today()->format('Y-m-d');
+        $site = $this->currency->code();
+        $loans = $this->loans->list($today);
+        $remaining = $cost = $paidCharges = 0;
+        $next = null;
+        $rows = [];
+        foreach ($loans as $l) {
+            $n = $l['nextInstalment'];
+            // un prêt dans une autre devise : ses montants ne sont jamais écrits comme s'ils étaient dans la devise du site (la console les
+            // met en forme dans celle-ci) ; il reste au tableau avec sa devise, son taux et ses dates
+            $own = $l['currency'] === $site;
+            $rows[] = ['loanId' => $l['id'], 'label' => $l['label'], 'currency' => $l['currency'], 'remaining' => $own ? $l['remainingToday'] : null, 'rate' => round($l['ratePpm'] / 10000, 2),
+                'nextDate' => $n['date'] ?? null, 'nextAmount' => $own ? ($n['total'] ?? null) : null, 'creditCost' => $own ? $l['totals']['creditCost'] : null, 'lastDate' => $l['lastDueOn']];
+            if ($l['currency'] !== $site) {
+                continue;
+            }
+            $remaining += $l['remainingToday'];
+            $cost += $l['totals']['creditCost'];
+            if ($n !== null && ($next === null || $n['date'] < $next['date'])) {
+                $next = $n;
+            }
+        }
+        // charges déjà courues jusqu'à aujourd'hui (au prorata), et celles qui restent : le coût du crédit, découpé dans le temps
+        $charges = $loans === [] ? null : $this->loans->chargesBetween('1900-01-01', $today);
+
+        return ['rows' => $rows, 'figures' => [
+            $this->figure('loansCount', count($loans), 'count', $locale),
+            $this->figure('remainingCapital', $loans === [] ? null : $remaining, 'money', $locale),
+            $this->figure('nextInstalmentAmount', $next['total'] ?? null, 'money', $locale),
+            $this->figure('nextInstalmentDate', $next['date'] ?? null, 'date', $locale),
+            $this->figure('creditCost', $loans === [] ? null : $cost, 'money', $locale),
+            $this->figure('chargesToDate', $charges['total'] ?? null, 'money', $locale),
+            $this->figure('chargesLeft', $charges === null ? null : max(0, $cost - $charges['total']), 'money', $locale),
         ]];
     }
 

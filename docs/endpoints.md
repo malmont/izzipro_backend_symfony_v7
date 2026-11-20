@@ -261,7 +261,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (712)
+## Boutique et commun (715)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -465,10 +465,6 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/api/gestion/groupe/copies` | ROLE_ADMIN | `Gestion\Controller\GestionGroupCopyController::list` |
 | POST | `/api/gestion/groupe/copies` | ROLE_ADMIN | `Gestion\Controller\GestionGroupCopyController::create` |
 | GET | `/api/gestion/groupe/resultat` | ROLE_ADMIN | `Gestion\Controller\GestionGroupResultController::result` |
-| POST | `/api/gestion/groupe/transferts/{id}/cancel` | ROLE_ADMIN | `Gestion\Controller\GestionGroupTransferController::cancel` |
-| GET | `/api/gestion/groupe/transferts/{id}` | ROLE_ADMIN | `Gestion\Controller\GestionGroupTransferController::show` |
-| GET | `/api/gestion/groupe/transferts` | ROLE_ADMIN | `Gestion\Controller\GestionGroupTransferController::list` |
-| POST | `/api/gestion/groupe/transferts` | ROLE_ADMIN | `Gestion\Controller\GestionGroupTransferController::create` |
 | GET | `/api/gestion/ia` | ROLE_ADMIN | `Gestion\Controller\GestionAiController::usage` |
 | GET | `/api/gestion/journee` | ROLE_ADMIN | `Gestion\Controller\GestionDayController::overview` |
 | POST | `/api/gestion/lexique/{key}/quiz/{question}` | ROLE_ADMIN | `Gestion\Controller\GestionLexiqueController::answer` |
@@ -577,6 +573,15 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/api/gestion/preparation/estimations` | ROLE_ADMIN | `Gestion\Controller\GestionPreparationController::estimations` |
 | POST | `/api/gestion/preparation/simulation` | ROLE_ADMIN | `Gestion\Controller\GestionPreparationController::simulate` |
 | POST | `/api/gestion/preparation/valider` | ROLE_ADMIN | `Gestion\Controller\GestionPreparationController::validate` |
+| POST | `/api/gestion/prets/apercu` | ROLE_ADMIN | `Gestion\Controller\GestionLoanController::preview` |
+| GET | `/api/gestion/prets/exercice` | ROLE_ADMIN | `Gestion\Controller\GestionLoanController::financialYear` |
+| DELETE | `/api/gestion/prets/{id}/remboursements/{index}` | ROLE_ADMIN | `Gestion\Controller\GestionLoanController::removePrepayment` |
+| POST | `/api/gestion/prets/{id}/remboursements` | ROLE_ADMIN | `Gestion\Controller\GestionLoanController::addPrepayment` |
+| DELETE | `/api/gestion/prets/{id}` | ROLE_ADMIN | `Gestion\Controller\GestionLoanController::delete` |
+| GET | `/api/gestion/prets/{id}` | ROLE_ADMIN | `Gestion\Controller\GestionLoanController::get` |
+| PATCH | `/api/gestion/prets/{id}` | ROLE_ADMIN | `Gestion\Controller\GestionLoanController::update` |
+| GET | `/api/gestion/prets` | ROLE_ADMIN | `Gestion\Controller\GestionLoanController::list` |
+| POST | `/api/gestion/prets` | ROLE_ADMIN | `Gestion\Controller\GestionLoanController::create` |
 | POST | `/api/gestion/prix/annuler` | ROLE_ADMIN | `Gestion\Controller\GestionPriceController::undo` |
 | POST | `/api/gestion/prix/apercu` | ROLE_ADMIN | `Gestion\Controller\GestionPriceController::preview` |
 | POST | `/api/gestion/prix/appliquer` | ROLE_ADMIN | `Gestion\Controller\GestionPriceController::apply` |
@@ -878,8 +883,6 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | POST | `/api/site/group-same-company/{id}/refuse` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\SiteFeaturesController\SiteGroupSameCompanyController::refuse` |
 | DELETE | `/api/site/group-same-company` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\SiteFeaturesController\SiteGroupSameCompanyController::remove` |
 | GET | `/api/site/group-same-company` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\SiteFeaturesController\SiteGroupSameCompanyController::show` |
-| POST | `/api/site/group-transfers/{id}/send` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\SiteFeaturesController\SiteGroupTransferController::send` |
-| GET | `/api/site/group-transfers` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\SiteFeaturesController\SiteGroupTransferController::list` |
 | GET | `/api/site/help/{key}` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\HelpController\HelpController::page` |
 | GET | `/api/site/help` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\HelpController\HelpController::list` |
 | GET | `/api/site/imports/archive/orders` | ROLE_ADMIN | `Import\Controller\SiteImportController::archiveOrders` |

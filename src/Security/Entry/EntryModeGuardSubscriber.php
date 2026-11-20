@@ -85,6 +85,9 @@ class EntryModeGuardSubscriber implements EventSubscriberInterface
         // lot ABO-1 : la pause, la reprise et la résiliation d'un abonnement passent par Stripe ; des droits offerts donnent de la valeur
         // sans paiement. « Utiliser » un droit (et son annulation) reste un geste ordinaire de la boutique.
         ['#^/api/site/abonnements/[^/]+/(pause|reprise|resiliation|droits)(/|$)#', [], 'payment'],
+        // lot FIS-1 (décision du chef, 19/11/2026) : les prêts sont en LECTURE SEULE pour le directeur (créer, modifier, supprimer un prêt
+        // sont des écritures des comptes de la boutique) ; l'aperçu, qui n'écrit rien, reste ouvert
+        ['#^/api/gestion/prets(/(?!apercu$)[^/]+.*)?$#', ['POST', 'PUT', 'PATCH', 'DELETE'], 'payment'],
         ['#^/api/site/features/.+/(request|trial|enable|disable)(/|$)#', [], 'modules'],
         ['#^/api/site/features/?$#', ['PUT', 'PATCH', 'POST'], 'modules'],
         // les mêmes gestes de module dans EasyAdmin (« Mon site »)

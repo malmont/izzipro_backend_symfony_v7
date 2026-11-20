@@ -47,7 +47,9 @@ class LexiqueApiTest extends WebTestCase
     ];
     private const ADDED_KEYS = ['tresorerie', 'taxes', 'stock-dormant', 'budget', 'cout-d-achat', 'stock-bas', 'semblables', 'verdict',
         // prévention des pertes (14/11/2026) : notions du module, sans chiffre du site
-        'constat', 'montant-en-jeu', 'ecart-de-caisse', 'regle-de-detection', 'regle-par-personne', 'notice-salaries', 'preuve', 'decision-constat', 'exercice-pertes'];
+        'constat', 'montant-en-jeu', 'ecart-de-caisse', 'regle-de-detection', 'regle-par-personne', 'notice-salaries', 'preuve', 'decision-constat', 'exercice-pertes',
+        // prêts de la gestion (lot FIS-1)
+        'capital-restant-du', 'cout-du-credit', 'charges-financieres'];
     /** Notions de la prévention des pertes : la console ne lit aucune donnée du module, même sur un site qui l'a */
     private const LOSS_KEYS = ['constat', 'montant-en-jeu', 'ecart-de-caisse', 'regle-de-detection', 'regle-par-personne', 'notice-salaries', 'preuve', 'decision-constat', 'exercice-pertes'];
 
@@ -87,7 +89,7 @@ class LexiqueApiTest extends WebTestCase
         $en = $this->get('/api/gestion/lexique?locale=en');
         $this->assertSame(['version', 'entries'], array_keys($fr));
         $this->assertSame(array_merge(self::MOBILE_KEYS, self::ADDED_KEYS), array_column($fr['entries'], 'key'));
-        $this->assertSame([54, 71, LexiqueCatalog::keys()], [count(self::MOBILE_KEYS), count($fr['entries']), array_column($en['entries'], 'key')]);
+        $this->assertSame([54, 74, LexiqueCatalog::keys()], [count(self::MOBILE_KEYS), count($fr['entries']), array_column($en['entries'], 'key')]);
         // Prévention des pertes : aucune analyse liée, aucun écran, aucune illustration chiffrée ; `site` vaut null ; les textes ne disent
         // que ce que fait le système (aucune accusation, la décision est celle du gérant)
         $files0 = ['fr' => Yaml::parseFile(static::getContainer()->getParameter('kernel.project_dir') . '/translations/lexique.fr.yaml'), 'en' => Yaml::parseFile(static::getContainer()->getParameter('kernel.project_dir') . '/translations/lexique.en.yaml')];
@@ -460,7 +462,7 @@ class LexiqueApiTest extends WebTestCase
         $this->assertArrayNotHasKey('lesson', $answer, 'la marque reste au serveur');
         // Ce que le modèle a lu à l'appel 1 : le lexique (clé, terme, synonymes) et l'analyse lexique.term, 11e du catalogue
         $first = $payload(0);
-        $this->assertSame([71, ['key' => 'taux-de-marque', 'term' => 'Taux de marque', 'synonymes' => ['taux de marge']], 12], [count($first['lexique']), array_column($first['lexique'], null, 'key')['taux-de-marque'], count($first['analyses'])]);
+        $this->assertSame([74, ['key' => 'taux-de-marque', 'term' => 'Taux de marque', 'synonymes' => ['taux de marge']], 13], [count($first['lexique']), array_column($first['lexique'], null, 'key')['taux-de-marque'], count($first['analyses'])]);
         $this->assertContains('lexique.term', array_column($first['analyses'], 'key'));
         $this->assertStringContainsString('une question de DÉFINITION', (string) FakeLandingAiClient::$requests[0]['system']);
         $schema = FakeLandingAiClient::$requests[0]['output_config']['format']['schema']['properties']['analyses']['items'];
@@ -613,7 +615,7 @@ class LexiqueApiTest extends WebTestCase
         $dir = static::getContainer()->getParameter('kernel.project_dir') . '/translations';
         $files = ['fr' => Yaml::parseFile("$dir/ecrans.fr.yaml"), 'en' => Yaml::parseFile("$dir/ecrans.en.yaml")];
         $this->assertSame(array_keys($files['fr']), array_keys($files['en']));
-        $this->assertCount(48, $guides->codes(), 'les 36 écrans relevés dans l\'application web, les 5 de la prévention des pertes (lot L1-b), celui de ses exercices (lot EX-1), ceux des pièces et de l\'installation (lots L2-a et L2-b), la liste des rapports (lot DOC-2), les boîtiers (lot L3-a), les impressions de puces (lot L3-c) et les alertes de sortie (lot L5-d)');
+        $this->assertCount(49, $guides->codes(), 'les 36 écrans relevés dans l\'application web, les 5 de la prévention des pertes (lot L1-b), celui de ses exercices (lot EX-1), ceux des pièces et de l\'installation (lots L2-a et L2-b), la liste des rapports (lot DOC-2), les boîtiers (lot L3-a), les impressions de puces (lot L3-c) et les alertes de sortie (lot L5-d), les prêts (lot FIS-1)');
         $linked = 0;
         foreach (array_keys(ConsoleScreens::SCREENS) as $code) {
             $this->assertTrue($guides->has($code), "$code : un guide (le sien, ou celui de l'écran du web qu'il reprend)");
@@ -713,7 +715,7 @@ class LexiqueApiTest extends WebTestCase
             $this->assertSame(1, (int) $conn()->fetchOne("SELECT COUNT(*) FROM gestion_conversation_message WHERE conversation_id = ? AND content::jsonb ->> 'lesson' = 'true'", [$a['conversationId']]));
             $this->assertStringContainsString('« screen.guide » explique l\'écran', (string) FakeLandingAiClient::$requests[0]['system']);
             $this->assertStringContainsString('choisis « screen.guide » SEUL', (string) FakeLandingAiClient::$requests[0]['system']);
-            $this->assertSame([12, true], [count($payload(0)['analyses']), in_array('screen.guide', array_column($payload(0)['analyses'], 'key'), true)]);
+            $this->assertSame([13, true], [count($payload(0)['analyses']), in_array('screen.guide', array_column($payload(0)['analyses'], 'key'), true)]);
             // sans écran : pas de guide ; le serveur demande une précision
             $b = $this->post('/api/gestion/console/messages', ['text' => "C'est quoi cet écran ?"], 202);
             FakeLandingAiClient::$queue = [$this->reply(['kind' => 'analyses', 'clarification' => '', 'analyses' => [['key' => 'screen.guide'] + $none]])];

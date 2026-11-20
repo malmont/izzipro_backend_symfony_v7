@@ -152,6 +152,7 @@ cash:
         STALE_BALANCE: 'Solde saisi il y a %days% jours : mettez-le à jour pour une projection juste.'
         RECORDED_EXPENSES_INCLUDED: "Les dépenses saisies dans l'application (commandes fournisseurs, frais de port, notes de frais, publicité) sont comptées à leur date, comme si elles étaient payées ce jour-là."
         TAXES_INCLUDED: 'Les encaissements comprennent les taxes perçues, qui seront reversées : prévoyez-les en mouvement « Taxes et impôts ».'
+        LOAN_MAY_OVERLAP_MOVEMENTS: 'Un mouvement prévu « Emprunt » saisi à la main existe à côté d''un prêt enregistré : ses échéances risquent d''être comptées deux fois. Gardez l''un ou l''autre ; rien n''est supprimé sans vous.'
         NO_SALES_HISTORY: 'Aucune vente sur les 30 derniers jours : pas de moyenne des encaissements.'
 # Simulateur de période (lot B1b-2, 11/11/2026, docs/simulateur-gestion.md)
 simulation:
@@ -500,6 +501,8 @@ sequences:
         periods_calendar_set: 'Changer le découpage'
         product_cost_set: 'Poser un autre coût d''achat'
         price_set: 'Changer d''autres prix'
+        loan_create: 'Ajouter un autre prêt'
+        loan_prepayment: 'Ajouter un autre remboursement anticipé'
     figure_values:
         tier:
             full: 'IA complète'
@@ -806,6 +809,76 @@ conversation:
             planned:
                 title: '%category%'
                 text: 'Montant prévu pour le poste « %category% » (laisser vide pour ne pas le changer, 0 pour l''effacer).'
+        loan_create:
+            title: 'Ajouter un prêt'
+            label:
+                title: 'Libellé'
+                text: 'Comment appeler ce prêt ? (prêt d''équipement, prêt de démarrage…) Le nom du prêteur se saisit sur l''écran des prêts.'
+            amount:
+                title: 'Montant emprunté'
+                text: 'Quel montant avez-vous emprunté ?'
+            rate:
+                title: 'Taux annuel'
+                text: 'Quel est le taux d''intérêt annuel, en pourcentage ? (0 pour un prêt sans intérêt)'
+            durationMonths:
+                title: 'Durée en mois'
+                text: 'Sur combien de mois le prêt est-il remboursé ?'
+            frequencyMonths:
+                title: 'Rythme des échéances'
+                text: 'Remboursez-vous chaque mois ou chaque trimestre ?'
+            disbursedOn:
+                title: 'Date du déblocage'
+                text: 'À quelle date l''argent a-t-il été versé sur votre compte ?'
+            firstDueOn:
+                title: 'Première échéance'
+                text: 'À quelle date tombe la première échéance ?'
+            type:
+                title: 'Type de remboursement'
+                text: 'Des échéances constantes (le cas le plus courant) ou un capital constant ?'
+            fees:
+                title: 'Frais de dossier'
+                text: 'Des frais de dossier ? Ils comptent le jour du déblocage.'
+            insuranceAmount:
+                title: 'Assurance par échéance'
+                text: 'Une assurance fixe payée avec chaque échéance ? Une assurance en pourcentage se saisit sur l''écran des prêts.'
+            instalment:
+                title: 'Première échéance à payer'
+            creditCost:
+                title: 'Coût total du crédit'
+            lastDueOn:
+                title: 'Dernière échéance'
+            overlap:
+                title: 'À vérifier'
+            overlapNote: 'Vous avez un mouvement prévu « prêt » dans la trésorerie : retirez-le si ce sont les échéances de ce prêt, pour ne pas les compter deux fois.'
+            options:
+                frequency:
+                    1: 'Chaque mois'
+                    3: 'Chaque trimestre'
+                type:
+                    annuity: 'Échéances constantes'
+                    constant_capital: 'Capital constant'
+        loan_prepayment:
+            title: 'Rembourser par anticipation'
+            loanId:
+                title: 'Prêt'
+                text: 'Quel prêt remboursez-vous en partie ?'
+            date:
+                title: 'Date du remboursement'
+                text: 'À quelle date ce remboursement anticipé est-il fait ?'
+            amount:
+                title: 'Montant remboursé'
+                text: 'Quel montant de capital remboursez-vous en plus des échéances ?'
+            fees:
+                title: 'Frais de remboursement anticipé'
+                text: 'La banque prend-elle des frais pour ce remboursement ?'
+            remainingBefore:
+                title: 'Capital restant dû aujourd''hui'
+            instalmentAfter:
+                title: 'Échéance suivante'
+            creditCostAfter:
+                title: 'Coût total du crédit'
+            saved:
+                title: 'Charges économisées'
         price_set:
             title: 'Changer le prix de vente d''articles'
             scope:
@@ -970,6 +1043,7 @@ prices:
 # Console IA de la gestion (lot W2, 13/11/2026) : titres des analyses, libellés des chiffres, textes du serveur ; docs/console-gestion.md
 console:
     analyses:
+        loans_overview: 'Prêts et coût du crédit'
         period_result: 'Résultat d''une période'
         sales_overview: 'Ventes et marge'
         year_overview: 'L''année de l''entreprise'
@@ -983,6 +1057,13 @@ console:
         lexique_term: 'Une notion expliquée'
         screen_guide: 'Guide de l''écran'
     figures:
+        loansCount: 'Prêts'
+        remainingCapital: 'Capital restant dû'
+        nextInstalmentAmount: 'Prochaine échéance'
+        nextInstalmentDate: 'Date de la prochaine échéance'
+        creditCost: 'Coût total du crédit'
+        chargesToDate: 'Coût du crédit déjà couru'
+        chargesLeft: 'Coût du crédit à venir'
         revenue: 'Ventes'
         orders: 'Commandes'
         cogs: 'Coût des articles vendus'
@@ -1077,6 +1158,11 @@ console:
             low: 'Prudente'
     # Colonnes des tableaux (lot W2-d) : `columns: [{ key, label, unit }]`
     columns:
+        rate: 'Taux annuel'
+        nextDate: 'Prochaine échéance'
+        nextAmount: 'Montant de l''échéance'
+        creditCost: 'Coût total du crédit'
+        lastDate: 'Dernière échéance'
         month: 'Mois'
         sales: 'Ventes'
         grossMargin: 'Marge brute'
@@ -1114,6 +1200,7 @@ console:
         resultats: 'Périodes et résultats'
         reglages: 'Réglages'
     screens:
+        prets: 'Prêts'
         gestion_home: 'Accueil de la gestion'
         sequences: 'Où j''en suis : les séquences'
         sequences_detail: 'Une séquence et ses étapes'

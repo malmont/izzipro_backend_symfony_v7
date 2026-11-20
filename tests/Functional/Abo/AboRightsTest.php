@@ -186,6 +186,10 @@ class AboRightsTest extends WebTestCase
         $this->assertNotSame($locked, $use['use']['occurrenceId'], 'la ligne tenue par un autre geste est sautée');
         $other->rollBack();
         $other = null;
+        // l'historique garde le droit utilisé et la limite de son annulation : « Annuler l'utilisation » après un rechargement
+        $used = $use['subscription']['history'][0];
+        $this->assertSame(['used', $use['use']['occurrenceId']], [$used['type'], $used['occurrenceId']]);
+        $this->assertLessThanOrEqual(2, abs(strtotime($used['undoUntil']) - strtotime($use['use']['undoUntil'])), 'la limite des 24 h');
         $line = $use['subscription']['balance'][0];
         $this->assertSame([2, 1, false], [$line['available'], $line['used'], $line['unlimited']]);
         $this->json('POST', $base . '/utilisations', ['benefitId' => $quota->getId()], 201);

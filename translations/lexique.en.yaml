@@ -443,3 +443,15 @@ exercice-pertes:
     term: 'Exercise (loss prevention)'
     definition: 'A fictitious finding you launch yourself to see what a finding looks like and how to respond to it. It is marked "Exercise", does not touch the register, concerns no real person and counts in no figure. You delete it whenever you want.'
     synonyms: 'practice mode, practice exercise'
+capital-restant-du:
+    term: 'Outstanding principal'
+    definition: 'What you still have to repay on the amount borrowed, after the instalments already paid and early repayments. It goes down with each instalment by the share of principal it contains.'
+    synonyms: 'balance owed, outstanding balance'
+cout-du-credit:
+    term: 'Total cost of credit'
+    definition: 'What the loan costs you on top of the money borrowed: interest, insurance and arrangement fees, from the first to the last day. Principal repaid is not part of it.'
+    synonyms: 'cost of credit, cost of the loan'
+charges-financieres:
+    term: 'Financial charges'
+    definition: 'The interest, insurance and fees of your loans, counted in the result in proportion to the days of each period. Principal repaid only affects the cash position.'
+    synonyms: 'finance costs'

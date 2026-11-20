@@ -690,3 +690,22 @@ pertes_impressions:
             label: 'Imprimante simulée'
             text: 'En mode exercice, le boîtier simulé a son imprimante : elle joue ses scénarios sans aucun matériel.'
     next: 'Choisissez les pièces à étiqueter, puis lancez le travail.'
+prets:
+    purpose: 'Vos prêts : chaque emprunt avec son échéancier calculé, le capital qu''il vous reste à rembourser et ce que le crédit vous coûte. Les échéances entrent dans la trésorerie, les intérêts dans le résultat.'
+    points:
+        capital-restant:
+            label: 'Capital restant dû'
+            text: 'Ce qu''il vous reste à rembourser aujourd''hui sur le montant emprunté, après les échéances passées et les remboursements anticipés.'
+        echeancier:
+            label: 'Échéancier'
+            text: 'Chaque échéance, avec sa part de capital, d''intérêts et d''assurance. Il est recalculé quand vous ajoutez un remboursement anticipé.'
+        cout-du-credit:
+            label: 'Coût total du crédit'
+            text: 'Les intérêts, l''assurance et les frais de dossier, du premier au dernier jour du prêt. Le capital remboursé n''en fait pas partie : c''est l''argent emprunté que vous rendez.'
+        dans-le-resultat:
+            label: 'Dans le résultat'
+            text: 'Seules les charges du prêt (intérêts, assurance, frais) diminuent le résultat, au prorata des jours de chaque période. Les frais de dossier comptent le jour du déblocage.'
+        dans-la-tresorerie:
+            label: 'Dans la trésorerie'
+            text: 'Le déblocage entre sur le compte ; chaque échéance entière en sort, capital compris. Si vous aviez saisi les échéances en mouvement prévu, retirez-le pour ne pas les compter deux fois.'
+    next: 'Ajoutez vos prêts avec les chiffres de l''offre de la banque, puis vérifiez l''échéancier contre son tableau d''amortissement.'

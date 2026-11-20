@@ -55,6 +55,7 @@ class GestionCashService
         private readonly ContentAuditRecorder $audit,
         private readonly TranslatorInterface $translator,
         private readonly ?TenantCurrencyProvider $currency = null,
+        private readonly ?\App\Gestion\Loan\GestionLoanService $loans = null, // lot FIS-1 : échéances des prêts
     ) {
     }
 
@@ -351,6 +352,17 @@ class GestionCashService
                 }
             }
         }
+        // lot FIS-1 : prêts (déblocage en entrée ; échéances, frais et remboursements anticipés en sortie), rangés sous « prêt »
+        foreach ($this->loans?->cashFlows($fromKey, $endKey) ?? [] as $f) {
+            $byCategory['loan'] ??= ['in' => 0, 'out' => 0];
+            if ($f['direction'] === 'in') {
+                $mvIn[$f['date']] = ($mvIn[$f['date']] ?? 0) + $f['amount'];
+                $byCategory['loan']['in'] += $f['amount'];
+            } else {
+                $mvOut[$f['date']] = ($mvOut[$f['date']] ?? 0) + $f['amount'];
+                $byCategory['loan']['out'] += $f['amount'];
+            }
+        }
         $recorded = $this->recordedExpenses($fromKey, $endKey);
         $yesterdayKey = $today->modify('-1 day')->format('Y-m-d');
         $actual = $fromKey <= $yesterdayKey ? $this->receiptsByDay($fromKey, $yesterdayKey)['days'] : [];
@@ -390,6 +402,9 @@ class GestionCashService
         }
         $caveats[] = $this->caveat('RECORDED_EXPENSES_INCLUDED', $locale);
         $caveats[] = $this->caveat('TAXES_INCLUDED', $locale);
+        if ($this->loans?->mayOverlapMovements() ?? false) {
+            $caveats[] = $this->caveat('LOAN_MAY_OVERLAP_MOVEMENTS', $locale); // lot FIS-1 : rien n'est supprimé, le gérant choisit
+        }
         if ($average['orders'] === 0) {
             $caveats[] = $this->caveat('NO_SALES_HISTORY', $locale);
         }
@@ -420,6 +435,9 @@ class GestionCashService
             foreach ($this->conn()->fetchAllAssociative('SELECT direction, amount_cents, start_date, recurrence, end_date FROM gestion_cash_movement') as $r) {
                 $n = count(self::occurrences((string) $r['start_date'], (string) $r['recurrence'], $r['end_date'], $from, $endDate));
                 $amount += ($r['direction'] === 'in' ? 1 : -1) * $n * (int) $r['amount_cents'];
+            }
+            foreach ($this->loans?->cashFlows($from, $endDate) ?? [] as $f) {
+                $amount += ($f['direction'] === 'in' ? 1 : -1) * $f['amount']; // lot FIS-1
             }
             $amount -= array_sum($this->recordedExpenses($from, $endDate)['days']);
             $yesterday = $today->modify('-1 day')->format('Y-m-d');
@@ -636,6 +654,9 @@ class GestionCashService
         foreach ($this->conn()->fetchAllAssociative('SELECT direction, amount_cents, start_date, recurrence, end_date FROM gestion_cash_movement') as $r) {
             $n = count(self::occurrences((string) $r['start_date'], (string) $r['recurrence'], $r['end_date'], $from, $to));
             $totals[$r['direction'] === 'in' ? 'in' : 'out'] += $n * (int) $r['amount_cents'];
+        }
+        foreach ($this->loans?->cashFlows($from, $to) ?? [] as $f) {
+            $totals[$f['direction'] === 'in' ? 'in' : 'out'] += $f['amount']; // lot FIS-1 : les échéances sont des attendus du rapprochement
         }
 
         return $totals;

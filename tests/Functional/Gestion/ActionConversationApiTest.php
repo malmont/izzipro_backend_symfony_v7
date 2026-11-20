@@ -1158,7 +1158,7 @@ class ActionConversationApiTest extends WebTestCase
         // Catalogue : la constante et le service disent la même liste ; chaque clé tient dans la colonne `kind` et a ses textes fr et en
         $this->em();
         $catalog = static::getContainer()->get(ActionCatalog::class);
-        $this->assertSame(['expense.create', 'supplier.create', 'shipping.create', 'budget.put', 'cash.balance.create', 'cash.movement.create', 'trip.create', 'fiscal_year.set', 'periods.calendar.set', 'product.cost.set', 'period.close', 'price.set'], ActionCatalog::KEYS);
+        $this->assertSame(['expense.create', 'supplier.create', 'shipping.create', 'budget.put', 'cash.balance.create', 'cash.movement.create', 'trip.create', 'fiscal_year.set', 'periods.calendar.set', 'product.cost.set', 'period.close', 'price.set', 'loan.create', 'loan.prepayment'], ActionCatalog::KEYS);
         $this->assertSame(ActionCatalog::KEYS, $catalog->keys());
         $translator = static::getContainer()->get('translator');
         foreach (ActionCatalog::KEYS as $key) {

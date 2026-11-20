@@ -123,6 +123,7 @@ l'analyse. Chaque chiffre a un identifiant unique dans une réponse : `a1.revenu
 | `articles.vs_similar` | un article face à ses semblables de la même saison : part vendue, délai, marge obtenue, rabais | lot IA-ACT-5 |
 | `articles.new` | les articles nouveaux de la période, chacun avec son bilan face à ses semblables et son verdict | lot IA-ACT-5 |
 | `advice.current` | les conseils du guide du jour, tels quels | conseils, `GET /api/gestion/conseils` |
+| `loans.overview` | les prêts : capital restant dû, prochaine échéance, coût total du crédit, déjà couru et à venir ; ni prêteur ni notes (lot FIS-1, `docs/prets-gestion.md`) | prêts, `GET /api/gestion/prets` |
 
 ## 3. Comment une réponse se fabrique
 
@@ -227,7 +228,7 @@ code a un thème, des paramètres admis et des analyses par défaut ; un écran 
 | `accueil` | `period.result`, `advice.current` | `gestion.home` → `sales.overview` (aujourd'hui), `advice.current`, `period.result` ; `sequences` ; `sequences.detail` (`key`, `instance`) ; `conseils` (`adviceId`) → `advice.current` ; `conversations` (`kind`) ; `conversation` (`conversationId`) |
 | `achats` | `budget.status`, `articles.new`, `articles.missing_cost` | `commandes` (`periodId`, `commandeId`) → `budget.status`, `articles.new` ; `a-recevoir` → `stock.overview`, `articles.new` ; `a-classer` → `articles.missing_cost`, `articles.new` ; `fournisseurs` ; `frais-de-port` (`periodId`) → `budget.status`, `period.result` ; `transporteurs` ; `voyages` (`page`), `voyages.suivi` (`tripId`) → `budget.status` ; `articles` (`filter`, `from`, `to`) → `articles.missing_cost`, `articles.new` ; `documents.scan` (`type`, `documentId`) → `articles.new`, `budget.status` |
 | `ventes` | `sales.overview`, `stock.overview` | `prix` (`adviceId`) → `articles.new`, `articles.missing_cost` ; `promotions` (`adviceId`) ; `locations.prix` (`adviceId`), `locations` (`range`) → `sales.overview` ; `publicite` (`page`, `channel`), `publicite.campagne` (`campaignId`), `campagnes.new` (`fromCampaignId`) → `sales.overview`, `budget.status` |
-| `argent` | `cash.projection`, `budget.status` | `tresorerie` → `cash.projection` ; `frais-fixes` → `cash.projection`, `year.overview` ; `notes-de-frais` (`periodId`) → `budget.status`, `period.result` |
+| `argent` | `cash.projection`, `budget.status` | `tresorerie` → `cash.projection` ; `frais-fixes` → `cash.projection`, `year.overview` ; `notes-de-frais` (`periodId`) → `budget.status`, `period.result` ; `prets` (`loanId`) → `loans.overview`, `cash.projection` (90 jours) |
 | `resultats` | `period.result`, `year.overview` | `periodes` (`page`) ; `periode` (`periodId`) → `period.result`, `sales.overview` ; `periode.budget` (`periodId`) → `budget.status` ; `periode.simulation` (`periodId`) → `period.result`, `budget.status` ; `preparation` → `period.result`, `cash.projection`, `budget.status` ; `statistiques` (`range`, `source`, `periodId`) → `sales.overview` ; `statistiques.annee` (`year`, `pricePercent`) → `year.overview` |
 | `reglages` | `year.overview`, `articles.missing_cost` | `reglages` ; `reprise` |
 
