@@ -85,7 +85,11 @@ class PaymentsPagingTest extends WebTestCase
         $this->assertContains('Completed', array_column($en, 'paymentStatus'));
         $this->assertNotContains('Completed', array_column($fr, 'paymentStatus'));
         $this->assertSame(array_column($en, 'id'), array_column($fr, 'id'));
-        $this->assertSame(array_column($fr, 'paymentStatus'), array_column($this->get('/api/payments?orderSource=1&locale=fr&page=1&limit=200', $admin), 'paymentStatus'), 'par page aussi');
+        $paged = array_column($this->get('/api/payments?orderSource=1&locale=fr&page=1&limit=200', $admin), 'paymentStatus', 'id');
+        $whole = array_column($fr, 'paymentStatus', 'id');
+        ksort($paged);
+        ksort($whole);
+        $this->assertSame($whole, $paged, 'par page aussi (même langue, ligne par ligne : la liste entière n\'a pas d\'ordre)');
         $this->assertSame($none, $this->get('/api/payments?orderSource=1&locale=de', $admin), 'une langue inconnue est ignorée');
     }
 
