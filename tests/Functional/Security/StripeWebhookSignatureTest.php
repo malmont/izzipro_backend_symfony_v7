@@ -78,12 +78,19 @@ class StripeWebhookSignatureTest extends KernelTestCase
             $this->assertNull($this->bookService($stripe)->handleCheckoutCompleted(self::SESSION, $forged));
             $this->assertSame('pending', $status(), 'le contenu de l\'événement n\'est jamais cru');
         }
-        // Stripe en panne : rien d'écrit, et l'erreur remonte pour que Stripe renvoie l'événement
+        // Stripe en panne PASSAGÈRE : rien d'écrit, l'erreur remonte et le webhook répond 503 (Stripe renvoie l'événement)
+        $outage = new \Stripe\Exception\ApiConnectionException('Stripe injoignable');
         try {
-            $this->bookService(new \RuntimeException('Stripe injoignable'))->handleCheckoutCompleted(self::SESSION, $forged);
+            $this->bookService($outage)->handleCheckoutCompleted(self::SESSION, $forged);
             $this->fail('la panne doit remonter');
         } catch (\App\MemoiresVivantes\Services\BookPaymentRetryLater) {
         }
+        $controller = self::rebuild($this->controller('test'), ['handleBookCheckoutCompletedUseCase' => new \App\MemoiresVivantes\UseCase\Payment\HandleBookCheckoutCompletedUseCase($this->bookService($outage))]);
+        $retry = $controller->handleWebhook(Request::create('/api/stripe/webhook', 'POST', [], [], [], ['CONTENT_TYPE' => 'application/json'],
+            (string) json_encode(['type' => 'checkout.session.completed', 'data' => ['object' => ['id' => self::SESSION, 'metadata' => ['tenant_code' => MV_TEST_TENANT_CODE]]]])));
+        $this->assertSame(503, $retry->getStatusCode(), 'panne passagère : 503, Stripe réessaiera');
+        // Erreur DURABLE (compte révoqué) : rien d'écrit, mais pas de 503 (Stripe ne réessaie pas pendant 3 jours)
+        $this->assertNull($this->bookService(\Stripe\Exception\PermissionException::factory('compte révoqué', 403))->handleCheckoutCompleted(self::SESSION, $forged));
         $this->assertSame('pending', $status());
 
         // Lien régénéré : le livre porte un NOUVEAU lien, le client a payé l'ANCIEN, que Stripe rattache à ce livre : payé (l'argent est encaissé)
@@ -116,7 +123,11 @@ class StripeWebhookSignatureTest extends KernelTestCase
         try {
             $controller = $this->controller('dev');
             $payload = (string) json_encode(['id' => 'evt_signe', 'object' => 'event', 'type' => 'type.inconnu', 'data' => ['object' => ['id' => 'obj_1', 'object' => 'thing']]]);
-            $sign = static fn (string $secret): string => 't=' . time() . ',v1=' . hash_hmac('sha256', time() . '.' . $payload, $secret);
+            $sign = static function (string $secret) use ($payload): string {
+                $t = time();
+
+                return 't=' . $t . ',v1=' . hash_hmac('sha256', $t . '.' . $payload, $secret);
+            };
             foreach (['whsec_essai_plateforme', 'whsec_essai_connect'] as $secret) {
                 $ok = $controller->handleWebhook(Request::create('/api/stripe/webhook', 'POST', [], [], [], ['CONTENT_TYPE' => 'application/json', 'HTTP_STRIPE_SIGNATURE' => $sign($secret)], $payload));
                 $this->assertSame(200, $ok->getStatusCode(), "signé avec $secret : accepté");
