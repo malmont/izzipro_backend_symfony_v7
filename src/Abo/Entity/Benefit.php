@@ -52,6 +52,10 @@ class Benefit
     #[ORM\Column(name: 'default_staff_user_id', nullable: true)]
     private ?int $defaultStaffUserId = null;
 
+    /** Lot ABO-3b : la prestation se rend chez le client (l'intervenant voit alors l'adresse de l'intervention) */
+    #[ORM\Column(name: 'at_customer', options: ['default' => false])]
+    private bool $atCustomer = false;
+
     #[ORM\Column]
     private bool $active = true;
 
@@ -87,6 +91,8 @@ class Benefit
     public function setLocation(?string $location): static { $l = trim(strip_tags((string) $location)); $this->location = $l !== '' ? mb_substr($l, 0, self::LOCATION_LENGTH) : null; return $this->touch(); }
     public function getDefaultStaffUserId(): ?int { return $this->defaultStaffUserId; }
     public function setDefaultStaffUserId(?int $id): static { $this->defaultStaffUserId = $id !== null && $id > 0 ? $id : null; return $this->touch(); }
+    public function isAtCustomer(): bool { return $this->atCustomer; }
+    public function setAtCustomer(bool $on): static { $this->atCustomer = $on; return $this->touch(); }
     public function isActive(): bool { return $this->active; }
     public function setActive(bool $active): static { $this->active = $active; return $this->touch(); }
     public function getPosition(): int { return $this->position; }

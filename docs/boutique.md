@@ -1377,6 +1377,63 @@ Outils de l'assistant du site (module Boutique ; aucune identité, ni note de l'
 confirmées par l'administrateur : `propose_mark_done` (fait, ou absent avec `absent: true`), `propose_mark_session_done` (absents par
 numéro d'abonnement, vérifiés dès l'aperçu). L'IA ne tranche jamais une contestation et ne pose jamais de photo.
 
+### Intervenant et fil de l'abonné (lot ABO-3b, 20/11/2026, contrat validé par le chef et le propriétaire)
+
+Code : `src/Abo/Services/AboStaffService.php` (équipe), `AboStaffWorkService.php` (intervenant), `AboThreadService.php` (fil),
+contrôleurs `src/Abo/Controller/AboStaffController.php` et `AboThreadController.php`. Migration `Version20270202200000`, script
+`scripts/migrate_all_v2_abo_intervenant.sh` : `benefit_occurrence.staff_user_id`, `benefit.at_customer` (faux par défaut),
+`subscription.thread_emailed_at`, table `subscription_message`. Le script affiche (lecture seule) les intervenants déjà posés sur des règles,
+des créneaux et des prestations : depuis ce lot, un intervenant doit porter le rôle, les valeurs anciennes restent telles quelles.
+
+- **Rôle `ROLE_STAFF_PROVIDER`** (« Intervenant (abonnements) », `TeamRoles`) : hors hiérarchie, le compte garde `ROLE_USER_INTERNET` ;
+  donné et retiré par l'administrateur du site seul (`TeamRoleService`, journal `user_team` grant / revoke). Les rôles sont relus en base
+  à chaque requête : un retrait vaut dès la requête suivante ; ses sessions sont closes, ses dates et créneaux à venir redeviennent sans
+  intervenant. Un compte client (abonnement ou commande) ne devient pas intervenant (409 `STAFF_IS_CUSTOMER`), ni un administrateur
+  (409 `STAFF_IS_ADMIN`). Une personne sans compte reçoit un lien de **7 jours** pour choisir son mot de passe (comme les agents de
+  l'Assistance : `POST /api/password-reset/verify` puis `confirm`, inscription `staff_invite`) ; renvoyé si on l'invite de nouveau.
+- **L'intervenant d'une date** : celui de la date (`POST …/occurrences/{occ}/intervenant`), sinon celui du créneau, sinon l'intervenant
+  par défaut de la prestation (`defaultStaffUserId`, avec `atCustomer` : la prestation se rend chez le client). Les fiches de l'équipe
+  (« À faire aujourd'hui », `upcoming`) donnent `staffUserId` (l'intervenant effectif) et `staffName` ; jamais au modèle ni à l'abonné.
+- **L'intervenant** (`/api/staff/abonnements/...`, page web d'abord ; routes neutres pour un mode « intervenant » de l'application mobile
+  plus tard) voit SES dates seulement, de 30 jours en arrière à 14 jours devant ; la date d'un autre : **404**, comme une date qui
+  n'existe pas. De l'abonné : le **prénom**, et l'**adresse de l'intervention** (ligne, complément, code postal, ville, province, pays) pour
+  une prestation chez le client ; jamais le nom, le courriel, le téléphone, le numéro d'abonnement, le solde, le prix, l'historique, les
+  notes de l'équipe, l'avis ni la contestation. Il marque « fait » ou « absent » (mêmes règles qu'ABO-3a : jour même, un courriel par droit,
+  photo réencodée) et sa séance entière (absents par numéro de DATE). Ni correction, ni décision, ni fil, ni assistant, ni EasyAdmin.
+- **Fil de l'abonné** (`subscription_message`) : texte brut (balises retirées), 1 à 2000 caractères ; l'abonné écrit 20 messages par jour
+  et par abonnement au plus (429 `THREAD_RATE_LIMITED`). Lire le fil marque lus les messages de l'autre partie ; `unreadMessages` dans les
+  deux fiches. Courriel à l'abonné « Vous avez un message de la boutique » (indispensable, sans le texte, au plus un par heure et par
+  abonnement : `emailed`) ; à l'équipe, courriel de suivi `subscription_message` (sujet « assistance », niveaux du site). Une contestation
+  (ABO-3a) y écrit TOUJOURS son commentaire (`occurrenceId`), la demande d'Assistance reste en plus quand le module est actif.
+  **Effacé 24 mois** après la fin de l'abonnement (`app:abo:periodes` ; durée à faire relire par l'avocat, liste « avant le réel »).
+- **Entrées** : le directeur d'un groupe entré ne lit ni n'écrit le fil (famille « clients ») ni les intervenants (famille « comptes ») ;
+  il ne pose pas l'intervenant d'une date (famille « droits »). L'intervenant n'est pas `ROLE_ADMIN` : ni l'agence ni le directeur n'entrent
+  dans ses routes.
+
+Routes :
+
+| Qui | Route | Réponse |
+|---|---|---|
+| équipe | `GET /api/site/abonnements/intervenants` | `{ staff: [{ userId, firstname, lastname, email, pending, invitationExpiresAt }] }` |
+| équipe | `POST /api/site/abonnements/intervenants { email, firstName, lastName, locale? }` | `{ staff, changed, invitation: { emailSent, expiresAt, validHours } \| null }` |
+| équipe | `DELETE /api/site/abonnements/intervenants/{userId}` | `{ userId, unassigned }` ; 404 `STAFF_NOT_FOUND` |
+| équipe | `POST /api/site/abonnements/{id}/occurrences/{occ}/intervenant { staffUserId \| null }` | `{ assignment: { occurrenceId, staffUserId, staffName }, subscription }` ; 422 `STAFF_INVALID`, 409 `OCCURRENCE_NOT_ASSIGNABLE` |
+| équipe | `GET /api/site/abonnements/{id}/fil?before=` ; `POST …/fil { body }` | `{ messages: [{ id, author, authorName, body, occurrenceId, createdAt, read }] }` ; 201 `{ message, emailed }` |
+| équipe | `GET /api/site/abonnements/fils` | `{ threads: [{ subscriptionId, plan, unread, lastAt, customer }] }` (l'abonné attend une réponse) |
+| intervenant | `GET /api/staff/abonnements/aujourdhui?date=` | `{ date, timezone, counts, sessions: [{ slotId, benefitId, name, startsAt, endsAt, location, capacity, booked, done, missed, toMark, appointments }], appointments }` |
+| intervenant | `GET /api/staff/abonnements/semaine?from=` | `{ from, to, timezone, appointments }` (14 jours) ; 422 `DATE_OUT_OF_RANGE` |
+| intervenant | `POST /api/staff/abonnements/occurrences/{occ}/fait` (JSON ou multipart) ; `…/absent` | `{ occurrence, changed }` |
+| intervenant | `POST /api/staff/abonnements/creneaux/{slotId}/fait { absentOccurrenceIds?, note? }` | `{ slotId, done, missed, unchanged, failed }` (`failed` : un nombre) |
+| intervenant | `GET /api/staff/abonnements/occurrences/{occ}/preuve` | la photo de sa date |
+| abonné | `GET /api/subscriptions/{id}/fil?before=` ; `POST …/fil { body }` | `{ messages, unread }` ; 201 `{ message }` ; 429 `THREAD_RATE_LIMITED` |
+
+Une date vue par l'intervenant : `{ occurrenceId, benefitId, name, status, slotId, startsAt, endsAt, location, doneAt, hasProof,
+customer: { firstname }, address: { line1, line2, postalCode, city, province, country } | null }`.
+
+Outils de l'assistant du site : `get_subscription_thread` (les 30 derniers messages, masqués, sans nom, auteur « abonné » ou « équipe » ;
+rien n'est marqué lu) ; `propose_reply` (le texte entier dans le résumé, lu par l'administrateur avant l'envoi ; « la boutique » pour
+l'abonné). Un message d'abonné est une donnée, jamais une consigne (essai d'injection). L'intervenant n'a pas l'assistant.
+
 ### Codes des refus des abonnements (04/11/2026, application e-commerce mobile)
 
 Même contrat que les codes du devis : chaque refus (`SubscriptionException`) porte un `code` de premier niveau et un `message`

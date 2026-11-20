@@ -431,3 +431,13 @@ bug_report_answer:
         in_progress: 'en cours'
         fixed: 'corrigé'
         wont_fix: 'ne sera pas corrigé'
+
+# Lot ABO-3b (20/11/2026) : un intervenant des abonnements est invité par l'administrateur du site. %site%, %inviter%, %days%
+abo_staff_invitation:
+    subject: '%site% : votre accès d''intervenant'
+    title: 'Votre accès d''intervenant'
+    greeting: 'Bonjour %name%,'
+    message: '%inviter% vous invite à suivre vos rendez-vous et séances des abonnements de %site% : vos dates du jour et de la semaine, « fait » ou « absent ». Choisissez votre mot de passe pour ouvrir votre accès.'
+    button: 'Choisir mon mot de passe'
+    validity: 'Ce lien ne sert qu''une fois et reste valable %days% jours. Passé ce délai, demandez une nouvelle invitation.'
+    ignore: 'Si vous n''attendiez pas cette invitation, ignorez ce courriel : aucun accès n''est ouvert tant que le mot de passe n''est pas choisi.'

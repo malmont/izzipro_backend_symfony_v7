@@ -114,7 +114,9 @@ class BenefitService
     public function benefitView(Benefit $benefit, string $locale): array
     {
         return ['id' => (int) $benefit->getId(), 'kind' => $benefit->getKind(), 'names' => $benefit->getNames(), 'name' => $benefit->getName($locale), 'descriptions' => $benefit->getDescriptions(),
-            'durationMinutes' => $benefit->getDurationMinutes(), 'location' => $benefit->getLocation(), 'active' => $benefit->isActive(), 'position' => $benefit->getPosition()];
+            'durationMinutes' => $benefit->getDurationMinutes(), 'location' => $benefit->getLocation(), 'active' => $benefit->isActive(), 'position' => $benefit->getPosition(),
+            // lot ABO-3b (écran de l'équipe seulement : jamais la grille publique) : chez le client, intervenant par défaut
+            'atCustomer' => $benefit->isAtCustomer(), 'defaultStaffUserId' => $benefit->getDefaultStaffUserId()];
     }
 
     /**
@@ -140,6 +142,24 @@ class BenefitService
         }
         if (array_key_exists('location', $data)) {
             $benefit->setLocation($data['location'] !== null ? (string) $data['location'] : null);
+        }
+        // lot ABO-3b : la prestation se rend chez le client ; l'intervenant par défaut porte le rôle d'intervenant
+        if (array_key_exists('atCustomer', $data)) {
+            if (!is_bool($data['atCustomer'])) {
+                throw new AboException(422, 'MUST_BE_BOOLEAN', 'atCustomer : vrai ou faux.', 'atCustomer');
+            }
+            $benefit->setAtCustomer($data['atCustomer']);
+        }
+        if (array_key_exists('defaultStaffUserId', $data)) {
+            $staff = $data['defaultStaffUserId'];
+            if ($staff !== null && !is_int($staff)) {
+                throw new AboException(422, 'STAFF_INVALID', 'Intervenant : un compte qui porte le rôle d\'intervenant, ou null.', 'defaultStaffUserId');
+            }
+            $user = $staff !== null ? $this->emProvider->getEntityManager()->find(\App\Entity\User::class, $staff) : null;
+            if ($staff !== null && (!$user instanceof \App\Entity\User || !in_array(\App\Security\TeamRoles::STAFF_PROVIDER, $user->getRoles(), true))) {
+                throw new AboException(422, 'STAFF_INVALID', 'Intervenant : un compte qui porte le rôle d\'intervenant (« Intervenants » du suivi des abonnements).', 'defaultStaffUserId');
+            }
+            $benefit->setDefaultStaffUserId($staff);
         }
         if (array_key_exists('active', $data)) {
             if (!is_bool($data['active'])) {

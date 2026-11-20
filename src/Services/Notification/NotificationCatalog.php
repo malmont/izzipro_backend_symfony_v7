@@ -43,6 +43,8 @@ final class NotificationCatalog
     public const POS_HEALTH_ALERT = 'pos_health_alert';
     public const WEEKLY_DIGEST = 'weekly_digest';
     /** Le courriel qui réunit les courriels de suivi retenus d'un sujet ; son sujet est celui des courriels qu'il porte */
+    /** Lot ABO-3b : un abonné a écrit dans le fil de son abonnement (à l'adresse du site) */
+    public const SUBSCRIPTION_MESSAGE = 'subscription_message';
     public const FOLLOWUP_SUMMARY = 'followup_summary';
 
     /** @var array<string, array{0: string, 1: ?string}> type de courriel → [famille, sujet] */
@@ -87,6 +89,10 @@ final class NotificationCatalog
         // lot ABO-3a : « prestation faite », au client ; comme tout courriel à un client, hors des niveaux (§ 1) ; l'abonné le coupe lui-même
         // (`subscription.done_emails`, PATCH /api/subscriptions/{id}/courriels)
         'subscription_done' => [self::INDISPENSABLE, null],
+        // lot ABO-3b : « Vous avez un message » à l'abonné (sans le texte, un par heure au plus), l'invitation d'un intervenant ; à l'équipe, un abonné a écrit
+        'subscription_thread' => [self::INDISPENSABLE, null],
+        'abo_staff_invitation' => [self::INDISPENSABLE, null],
+        self::SUBSCRIPTION_MESSAGE => [self::FOLLOWUP, self::TOPIC_SUPPORT],
         'pos_receipt' => [self::INDISPENSABLE, null],
         'booking_customer' => [self::INDISPENSABLE, null], // accusé de réservation, réservation confirmée, annulée ou modifiée
         'customer_message' => [self::INDISPENSABLE, null], // message écrit par un client : contact, formulaire à étapes, financement (décision A du propriétaire)
@@ -143,7 +149,9 @@ final class NotificationCatalog
         'src/Services/Platform/PlatformAlertRecipient.php' => ['platform_alert_test'],
         'src/Incident/Services/BugReportMailer.php' => ['platform_bug_report_answer'],
         'src/Services/ReservationService/ReservationMailerService.php' => ['booking_customer', self::BOOKING_NEW, 'customer_message'], // customer_message : demande d'un formulaire à étapes
-        'src/Services/SubscriptionService/SubscriptionMailer.php' => ['subscription_notice', 'subscription_done'],
+        'src/Services/SubscriptionService/SubscriptionMailer.php' => ['subscription_notice', 'subscription_done', 'subscription_thread'],
+        'src/Abo/Services/AboStaffService.php' => ['abo_staff_invitation'],
+        'src/Abo/Services/AboThreadService.php' => [self::SUBSCRIPTION_MESSAGE],
         'src/Support/Services/SupportAgentService.php' => ['support_agent_invitation'],
         'src/Support/Services/SupportMailer.php' => ['support_reply'],
         'src/UseCase/AccountUseCase/AdminEraseCustomerAccountUseCase.php' => ['account_deleted_notice'],

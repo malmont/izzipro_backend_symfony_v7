@@ -129,6 +129,10 @@ class EntryModeGuardSubscriber implements EventSubscriberInterface
         // lot ABO-3a (décision du chef, 20/11/2026) : le directeur lit « À faire aujourd'hui », les contestations et les preuves ; il ne marque
         // rien (fait, absent, séance entière), ne corrige ni ne tranche (une contestation, un courriel à l'abonné, un droit rendu)
         ['#^/api/site/abonnements/([^/]+/occurrences|creneaux/[^/]+/fait)(/|$)#', ['POST', 'PUT', 'PATCH', 'DELETE'], 'rights'],
+        // lot ABO-3b (contrat validé par le chef, 20/11/2026) : le fil de l'abonné ni lu ni écrit par le directeur (les messages des clients) ;
+        // les intervenants (des comptes de la boutique, comme les agents de l'Assistance) ni lus, ni invités, ni retirés par lui
+        ['#^/api/site/abonnements/([^/]+/fil|fils)(/|$)#', [], 'customers'],
+        ['#^/api/site/abonnements/intervenants(/|$)#', [], 'accounts'],
         ['#^/admin/taxes/verifier(/|$)#', ['POST'], 'rights'],
         ['#^/api/(apps/join|app/activate)(/|$)#', [], 'keys'],
         // le boîtier réel de la prévention des pertes (jumelage, clé, révocation, appareils) ; l'exercice simulé reste ouvert

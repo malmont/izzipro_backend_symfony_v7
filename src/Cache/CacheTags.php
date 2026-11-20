@@ -474,6 +474,7 @@ final class CacheTags
         \App\Abo\Entity\BenefitSlotRule::class,
         \App\Abo\Entity\BenefitSlot::class,
         \App\Abo\Entity\SubscriptionAboEvent::class,
+        \App\Abo\Entity\SubscriptionMessage::class, // lot ABO-3b : le fil de l'abonné, jamais lu du cache
         StripeConfig::class,
         SquareConfig::class,
         EasyPostConfiguration::class,

@@ -23,7 +23,8 @@ class AboFollowUpService
         private readonly ?AboRightsService $rights = null, // lot ABO-1 : solde, à faire, historique
         private readonly ?AboCatalogService $catalog = null, // lot ABO-CONF : le prix que paie l'abonné (son époque), pas celui du jour
         private readonly ?AboAgendaService $agenda = null, // lot ABO-2 : les prochaines dates
-        private readonly ?AboDeliveryService $delivery = null) // lot ABO-3a : les prestations faites ou manquées
+        private readonly ?AboDeliveryService $delivery = null, // lot ABO-3a : les prestations faites ou manquées
+        private readonly ?AboThreadService $thread = null) // lot ABO-3b : messages de l'abonné pas encore lus
     {
     }
 
@@ -110,6 +111,7 @@ class AboFollowUpService
             // lot ABO-3a : les prestations faites ou manquées (90 jours) ; « par qui », la note et l'avis de l'abonné pour l'équipe, jamais pour le modèle
             'delivered' => array_map(fn (array $d) => $withIdentity ? $d : ['ack' => $d['customerAck']] + array_diff_key($d, ['note' => 1, 'customerAck' => 1]), $this->delivery?->delivered($s, $withIdentity, $locale) ?? []),
             'doneEmails' => $s->wantsDoneEmails(),
+            'unreadMessages' => $this->thread?->unreadForTeam($s) ?? 0,
             // lot ABO-DATES : les dates des pauses, rangées en UTC, rendues à l'heure du magasin
             'pauses' => array_map(fn (array $p) => $this->pauseAt($withIdentity ? $p : array_intersect_key($p, array_flip(['from', 'until', 'resumedAt']))), $s->getPauses()),
         ];
