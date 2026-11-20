@@ -475,6 +475,7 @@ Une file et un worker par projet, dans la base Redis 1 (`config/packages/messeng
 | `media` (`messages_media`, sans relance) | `symfony_messenger_worker_media_v2` | vidéos de la médiathèque préparées pour le défilement |
 | `email` (`messages_email`, relances 30 s / 2 min / 8 min) | `symfony_messenger_worker_email_v2` | courriels de tous les sites (09/10/2026) |
 | `pdf` (`messages_pdf`, sans relance) | `symfony_messenger_worker_pdf_v2` | mise en page PDF complète des livres de Mémoires Vivantes demandée avec `async=1` (lot 3, 03/11/2026) : image de l'application, `--memory-limit=384M` (pic observé ~200 Mo), état dans `mv_book.pdf_status` |
+| `scheduler_default` (Symfony Scheduler, sans file Redis ; lot TACHES-0, 20/11/2026) | `symfony_messenger_worker_scheduler_v2` | planificateur des tâches, planning « default » de `src/Scheduler/PlatformSchedule.php` : VIDE jusqu'au lot TACHES-1 (`docs/plan-taches.md`) ; suivi par son battement dans l'écran « Workers » |
 | `failed` (`messages_failed`) | — | messages en échec (inspection) |
 
 Le worker `media` a sa propre image (`docker/worker-media/Dockerfile` : l'image de l'application plus **ffmpeg**) : c'est

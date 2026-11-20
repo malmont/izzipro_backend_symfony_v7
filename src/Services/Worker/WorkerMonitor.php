@@ -24,6 +24,8 @@ class WorkerMonitor
         'email' => ['label' => 'Courriels — tous les sites', 'suffix' => '_email'],
         'pdf' => ['label' => 'Mémoires Vivantes — mise en page PDF', 'suffix' => '_pdf'],
         'gestion_ai' => ['label' => 'Gestion — lecture de documents par IA', 'suffix' => '_gestion_ai'],
+        // lot TACHES-0 : le planificateur des tâches (Symfony Scheduler) ; pas de file Redis (suffixe null) : seul son battement compte
+        'scheduler_default' => ['label' => 'Planificateur des tâches', 'suffix' => null],
     ];
 
     /** Secondes entre deux battements d'un worker au repos */
