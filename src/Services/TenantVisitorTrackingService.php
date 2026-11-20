@@ -43,6 +43,12 @@ class TenantVisitorTrackingService
                 if (!empty($parsed['pass'])) {
                     $this->redis->auth($parsed['pass']);
                 }
+                // Lot CACHE-ETAT : la base de l'adresse (/2 pour les essais). Avant, toujours la base 0 : les essais écrivaient leurs
+                // compteurs de fréquentation dans celle de la production (constaté le 20/11/2026 : 3544 clés de sites d'essai)
+                $database = (int) ltrim((string) ($parsed['path'] ?? ''), '/');
+                if ($database > 0) {
+                    $this->redis->select($database);
+                }
                 $this->redisConnected = true;
             } else {
                 $this->redisConnected = false;

@@ -70,6 +70,22 @@ class CacheStateTest extends WebTestCase
         $this->assertTrue($state->hasItem('worker_heartbeat.email'), 'battement dans cache.state');
     }
 
+    public function testTheTrafficCountersOfTheTestsStayInTheTestDatabase(): void
+    {
+        $code = 'cache-etat-' . bin2hex(random_bytes(3));
+        static::getContainer()->get(\App\Services\TenantVisitorTrackingService::class)->trackVisit($code, '203.0.113.7', 'essai', '/');
+        $url = (string) ($_ENV['REDIS_URL'] ?? $_SERVER['REDIS_URL'] ?? getenv('REDIS_URL'));
+        $count = function (int $database) use ($url, $code): int {
+            $redis = new \Redis();
+            $redis->connect((string) parse_url($url, PHP_URL_HOST), (int) (parse_url($url, PHP_URL_PORT) ?: 6379), 2.0);
+            $redis->select($database);
+
+            return count($redis->keys('tenant:traffic:' . $code . ':*') ?: []);
+        };
+        $this->assertGreaterThan(0, $count(2), 'compteurs écrits dans la base des essais');
+        $this->assertSame(0, $count(0), 'rien dans la base 0 (production)');
+    }
+
     public function testRedisFlushSparesStateAndOnlyAcceptsPostWithItsToken(): void
     {
         foreach (['iz_rl:limiter', 'iz_state:app_join.x', 'iz_workers:workers.restart_requested_timestamp', 'admin_pass_used:abc'] as $key) {
