@@ -99,7 +99,7 @@ class BookPrintApiController extends AbstractController
      */
     #[Route('/books/{id}/print/payment-intent', methods: ['POST'])]
     #[Route('/print/payment-intent', methods: ['POST'])]
-    public function createPaymentIntent(?string $id = null, Request $request = null): JsonResponse
+    public function createPaymentIntent(?string $id = null, ?Request $request = null): JsonResponse
     {
         $data = json_decode($request->getContent(), true) ?: [];
         $bookId = $id ?: ($data['book_id'] ?? null);
@@ -163,7 +163,7 @@ class BookPrintApiController extends AbstractController
      */
     #[Route('/books/{id}/print/order', methods: ['POST'])]
     #[Route('/print/order', methods: ['POST'])]
-    public function createOrder(?string $id = null, Request $request = null): JsonResponse
+    public function createOrder(?string $id = null, ?Request $request = null): JsonResponse
     {
         $data = json_decode($request->getContent(), true) ?: [];
         $bookId = $id ?: ($data['book_id'] ?? null);

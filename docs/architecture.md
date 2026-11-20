@@ -5,7 +5,7 @@ Ce qui est commun à tout le backend. Chaque module a sa fiche (voir « Modules 
 
 ## En bref
 
-- **Symfony 7.4 (LTS), PHP 8.3, PostgreSQL 15, Redis 7**, API Platform 3.4, Doctrine ORM 2.20, EasyAdmin 4.29, dans Docker (`docker-compose.yml`). Une seule application sert
+- **Symfony 7.4 (LTS), PHP 8.4, PostgreSQL 15, Redis 7**, API Platform 3.4, Doctrine ORM 2.20, EasyAdmin 4.29, dans Docker (`docker-compose.yml`). Une seule application sert
   **plusieurs clients (tenants)**, chacun avec **sa propre base**.
 - Frontend : autre dépôt (Next.js, `Izzipro_next`) ; il appelle `/api/*` avec l'en-tête `X-Tenant-Host`. Sa doc :
   `AGENTS.md` et `docs/architecture.md` de ce dépôt-là.
@@ -480,7 +480,8 @@ Une file et un worker par projet, dans la base Redis 1 (`config/packages/messeng
 
 Le worker `media` a sa propre image (`docker/worker-media/Dockerfile` : l'image de l'application plus **ffmpeg**) : c'est
 le seul conteneur qui encode des vidéos, le site n'encode jamais rien. Après une reconstruction de l'image de
-l'application : `docker compose build messenger_worker_media && docker compose up -d --no-deps messenger_worker_media`.
+l'application : reconstruite et contrôlée par `ops/image/verifier-image.sh` à chaque changement d'image, voir
+`docs/mise-en-ligne.md` § 9 (l'image d'avant le 20/11/2026 descend d'une image qui contenait `.env` et la clé JWT).
 
 **Courriels** (worker `email`, 09/10/2026) : tout envoi passe par `TenantMailerFactory` (`createMailer($config)` pour le
 serveur SMTP du site, `createPlatformMailer()` pour celui de la plateforme, `MAILER_DSN`), qui rend un `QueuedMailer` : le

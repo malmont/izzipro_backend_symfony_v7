@@ -1,25 +1,47 @@
-# Ignorer les dossiers liés à Git
-.git
-.gitignore
+# Contexte de construction de l'image (lot PHP84, 20/11/2026). Les motifs valent depuis la racine du contexte : un motif
+# sans « **/ » ne couvre QUE la racine (relecture du lot : `*.sql` laissait passer ops/sql/*.sql). Tout ce qui peut
+# apparaître dans un sous-dossier est donc écrit avec « **/ ».
 
-# Ignorer les dépendances et fichiers temporaires
+# Git, dépendances et fichiers temporaires
+**/.git
+.gitignore
 node_modules/
 vendor/
 var/
-!var/cache
-!var/log
 
-# Ignorer les configurations locales
-# .env
-.env.local
+# SECRETS : jamais dans une image. Elle sera poussée dans un registre (cible Kubernetes) ; celle construite avant ce lot
+# contenait une copie de .env et de la clé privée JWT. Tout est fourni au conteneur à l'exécution (env_file, volumes).
+# Contrôles : ops/image/construire-image.sh (contexte) et ops/image/verifier-image.sh (image), mêmes familles de noms.
+**/.env
+**/.env.*
+**/.envrc
+jwt/
+config/jwt/
+**/config/secrets/
+**/*.pem
+**/*.key
+**/*.p8
+**/*.p12
+**/*.pfx
+**/*.jks
+**/id_rsa*
+**/id_ed25519*
+**/id_ecdsa*
+**/auth.json
+**/*credentials*.json
+**/*service-account*.json
+
+# Données des sites : montées, jamais copiées
+public/uploads/
+public/assets/uploads/
+public/bundles/
+
+# Configurations locales, fichiers système, journaux, sauvegardes et archives
 docker-compose.override.yml
-
-# Ignorer les fichiers système
-.DS_Store
-Thumbs.db
-
-# Ignorer les fichiers de log
-*.log
-
-# Ignorer les sauvegardes SQL
-*.sql
+**/.DS_Store
+**/Thumbs.db
+**/*.log
+**/*.sql
+**/*.zip
+**/*.tar
+**/*.tar.gz

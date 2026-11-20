@@ -16,7 +16,7 @@ class PaymentService
         PaymentMethod $paymentMethod,
         PaymentType $paymentType,
         StatusPayment $statusPayment,
-        \DateTime $paymentDate = null,
+        ?\DateTime $paymentDate = null,
         ?ICreateOrderDTO $orderDTO = null 
     ): Payments {
         $payment = new Payments();

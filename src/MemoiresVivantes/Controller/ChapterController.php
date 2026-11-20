@@ -416,7 +416,7 @@ class ChapterController extends AbstractController
 
     #[Route('/chapters/{id}/photos/layout', methods: ['POST'])]
     #[Route('/chapters/{chapterId}/photos/layout', methods: ['POST'])]
-    public function updatePhotosLayout(?string $id = null, ?string $chapterId = null, Request $request = null): JsonResponse
+    public function updatePhotosLayout(?string $id = null, ?string $chapterId = null, ?Request $request = null): JsonResponse
     {
         $targetId = $id ?: $chapterId;
         $em = $this->emProvider->getEntityManager();
