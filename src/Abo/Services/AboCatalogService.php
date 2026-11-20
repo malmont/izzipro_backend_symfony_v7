@@ -43,6 +43,7 @@ class AboCatalogService
         private readonly TenantCurrencyProvider $currency,
         private readonly ?\App\Services\ContentAuditService\ContentAuditRecorder $audit = null,
         private readonly ?\App\Services\StripeService\StripeService $stripe = null,
+        private readonly ?AboCarrierService $carriers = null, // lot ABO-CONF-b : porteur créé avec sa formule (newProduct)
     ) {
     }
 
@@ -76,12 +77,19 @@ class AboCatalogService
         $old = $creating ? null : $this->auditState($plan);
         $locked = $creating ? null : $this->lockedState($plan);
         $plan ??= (new SubscriptionPlan())->setCurrency($this->currency->code())->setActive(true);
+        [$data, $carrier] = $this->takeNewProduct($data, $creating, false);
+        if ($carrier !== null) {
+            $plan->setProduct($carrier);
+        }
         $this->apply($plan, $data, $creating);
         if ($locked !== null) {
             $this->assertLocked($plan, $locked); // le gel d'abord : un réglage figé se dit 409, avant toute règle de validation
         }
         $this->validatePlan($plan);
-        $em->wrapInTransaction(function () use ($em, $plan, $before, $by, $creating) {
+        $em->wrapInTransaction(function () use ($em, $plan, $before, $by, $creating, $carrier) {
+            if ($carrier !== null) {
+                $em->persist($carrier); // dans la même transaction : formule refusée = aucun produit créé
+            }
             if ($creating) {
                 $em->persist($plan);
             }
@@ -299,6 +307,13 @@ class AboCatalogService
     public function preview(?SubscriptionPlan $plan, array $data, string $locale): array
     {
         $probe = $plan !== null ? clone $plan : (new SubscriptionPlan())->setCurrency($this->currency->code())->setActive(true);
+        // lot ABO-CONF-b : les prestations à venir (même forme que le PUT des prestations) et le porteur à créer, sans rien écrire
+        $benefitRows = $data['benefits'] ?? null;
+        unset($data['benefits']);
+        [$data, $carrier] = $this->takeNewProduct($data, $plan === null, true);
+        if ($carrier !== null) {
+            $probe->setProduct($carrier);
+        }
         $this->apply($probe, $data, $plan === null);
         if ($plan !== null && ($locked = $this->lockedState($plan)) !== null) {
             $this->assertLocked($probe, $locked);
@@ -306,9 +321,15 @@ class AboCatalogService
         $this->validatePlan($probe);
         $priceChange = $plan !== null && array_diff_key($this->priceState($plan), ['stripePriceId' => 1]) !== array_diff_key($this->priceState($probe), ['stripePriceId' => 1]);
 
-        return ['plan' => $this->head($probe, $locale), 'summary' => $this->summary($probe, $locale),
+        $warnings = $this->warnings();
+        $summary = $benefitRows === null ? $this->summary($probe, $locale) : $this->summary($probe, $locale, $this->previewBenefits($probe, $benefitRows, $warnings));
+        if ($carrier !== null) {
+            $summary .= ' ' . (str_starts_with($locale, 'en') ? sprintf('A carrier product will be created: %s.', $carrier->getName()) : sprintf('Un produit porteur sera créé : %s.', $carrier->getName()));
+        }
+
+        return ['plan' => $this->head($probe, $locale), 'summary' => $summary,
             'priceChange' => $priceChange ? ($locale === 'en' ? 'New price for new subscribers only: current subscribers keep theirs.' : 'Nouveau prix pour les nouveaux abonnés seulement : les abonnés en cours gardent le leur.') : null,
-            'warnings' => $this->warnings()];
+            'warnings' => $warnings, 'newProduct' => $carrier !== null ? ['name' => $carrier->getName()] : null];
     }
 
     /** @return array<string, mixed> la fiche d'une formule pour la gestion web : tête, prestations, historique des prix, phrase, avertissements */
@@ -323,7 +344,8 @@ class AboCatalogService
      * « Ce que verra l'abonné », par le serveur (fr ou en) : prix et rythme, essai, engagement, carte, puis les prestations. Exemple :
      * « 49,00 $ par mois. Essai gratuit de 14 jours. Engagement de 3 mois. 4 séances Yoga par mois ; … »
      */
-    public function summary(SubscriptionPlan $plan, string $locale): string
+    /** @param list<\App\Abo\Entity\PlanBenefit>|null $planBenefits les prestations à citer (aperçu) ; null = celles de la formule enregistrée */
+    public function summary(SubscriptionPlan $plan, string $locale, ?array $planBenefits = null): string
     {
         $en = str_starts_with($locale, 'en');
         $amount = self::money($plan->getPrice(), $plan->getCurrency(), $en);
@@ -339,7 +361,7 @@ class AboCatalogService
         if ($plan->getMinimumTerms() > 1) {
             $parts[] = $en ? sprintf('Minimum commitment: %d periods.', $plan->getMinimumTerms()) : sprintf('Engagement de %d périodes.', $plan->getMinimumTerms());
         }
-        foreach ($plan->getId() !== null ? $this->benefits->planBenefits()->forPlan($plan) : [] as $pb) {
+        foreach ($planBenefits ?? ($plan->getId() !== null ? $this->benefits->planBenefits()->forPlan($plan) : []) as $pb) {
             $parts[] = $this->benefits->summary($pb, $locale);
         }
 
@@ -376,6 +398,61 @@ class AboCatalogService
      * @param array<string, mixed> $data
      * @throws AboException 422
      */
+    /**
+     * Lot ABO-CONF-b : `newProduct` à la place de `productId`, à la création seulement. Ni l'un ni l'autre, ou les deux : 422
+     * PRODUCT_CHOICE_REQUIRED.
+     *
+     * @return array{0: array<string, mixed>, 1: ?\App\Entity\Product} les données sans `newProduct`, et le porteur (non persisté)
+     * @throws AboException
+     */
+    private function takeNewProduct(array $data, bool $creating, bool $preview): array
+    {
+        $hasNew = array_key_exists('newProduct', $data);
+        if (!$creating) {
+            if ($hasNew) {
+                throw new AboException(422, 'FIELD_UNKNOWN', 'Le produit porteur se crée avec la formule, pas après.', 'newProduct');
+            }
+
+            return [$data, null];
+        }
+        if ($hasNew === array_key_exists('productId', $data)) {
+            throw new AboException(422, 'PRODUCT_CHOICE_REQUIRED', 'Choisissez un produit porteur existant (productId) OU faites-le créer avec la formule (newProduct).', 'productId');
+        }
+        if (!$hasNew) {
+            return [$data, null];
+        }
+        if ($this->carriers === null || !is_array($data['newProduct'])) {
+            throw new AboException(422, 'PRODUCT_CHOICE_REQUIRED', 'Donnez un nom au produit porteur.', 'newProduct');
+        }
+        $carrier = $this->carriers->draftCarrier($data['newProduct'], !$preview);
+        unset($data['newProduct']);
+
+        return [$data, $carrier];
+    }
+
+    /**
+     * Les prestations d'une formule pas encore enregistrée, pour la phrase de l'aperçu : rien n'est écrit ; une prestation inconnue est
+     * un avertissement (BENEFIT_NOT_FOUND), pas une erreur.
+     *
+     * @param list<array{code: string, text: string}> $warnings
+     * @return list<\App\Abo\Entity\PlanBenefit>
+     */
+    private function previewBenefits(SubscriptionPlan $probe, mixed $rows, array &$warnings): array
+    {
+        $out = [];
+        foreach (is_array($rows) ? array_values($rows) : [] as $i => $row) {
+            $benefit = is_array($row) ? $this->benefits->benefits()->find((int) ($row['benefitId'] ?? 0)) : null;
+            if ($benefit === null) {
+                $warnings[] = ['code' => 'BENEFIT_NOT_FOUND', 'text' => sprintf('Prestation n° %d introuvable : elle ne sera pas citée.', (int) (is_array($row) ? ($row['benefitId'] ?? 0) : 0)), 'field' => "benefits[$i].benefitId"];
+                continue;
+            }
+            $quantity = isset($row['quantity']) && is_numeric($row['quantity']) ? max(1, (int) $row['quantity']) : null;
+            $out[] = (new \App\Abo\Entity\PlanBenefit())->setPlan($probe)->setBenefit($benefit)->setQuantity($quantity);
+        }
+
+        return $out;
+    }
+
     private function apply(SubscriptionPlan $plan, array $data, bool $creating): void
     {
         foreach (array_keys($data) as $key) {

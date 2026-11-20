@@ -312,7 +312,7 @@ final class ScreenRegistry
         ['#^/api/site/imports/[^/]+/(customers|invitations)$#', 'imports.clients'],
         ['#^/api/site/imports(/|$)#', 'imports'],
         ['#^/api/site/abonnements/formules/[^/]+/abonnes$#', 'abonnements'], // l'identité des abonnés : la vente
-        ['#^/api/site/abonnements/(formules|prestations)(/|$)#', 'abonnements.formules'], // lot ABO-CONF
+        ['#^/api/site/abonnements/(formules|prestations|produits)(/|$)#', 'abonnements.formules'], // lot ABO-CONF ; produits porteurs (ABO-CONF-b)
         ['#^/api/site/abonnements(/|$)#', 'abonnements'], // lot ABO-0
         ['#^/api/site/storefront(/preview)?$#', '@public'],
         ['#^/api/site/storefront/#', 'site.ouverture'],

@@ -64,7 +64,7 @@ class PosOfflinePackService
         $products = [];
         $prices = [];
         foreach ($em->getRepository(Product::class)->findBy(['isPos' => true], ['id' => 'ASC']) as $product) {
-            if (!$product->isSaleEnabled() || $product->isRentalEnabled()) {
+            if (!$product->isSellableAlone() || $product->isRentalEnabled()) { // lot ABO-CONF-b : jamais un porteur « abonnement seulement »
                 continue;
             }
             $variants = [];

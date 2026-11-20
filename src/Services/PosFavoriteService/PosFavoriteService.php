@@ -209,7 +209,7 @@ class PosFavoriteService
 
     public static function sellable(?Product $product): bool
     {
-        return $product !== null && $product->isPos() === true && $product->isSaleEnabled() && !$product->isRentalEnabled();
+        return $product !== null && $product->isPos() === true && $product->isSellableAlone() && !$product->isRentalEnabled(); // lot ABO-CONF-b
     }
 
     // ---------------------------------------------------------------- interne

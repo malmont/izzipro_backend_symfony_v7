@@ -97,6 +97,11 @@ final class CartQuoteCalculator
                 $errors[] = CartQuoteException::error("$path.booking", 'NOT_RENTABLE', 'ce produit ne se loue pas');
                 continue;
             }
+            if (!$isRental && $product->isSaleEnabled() && $product->isSubscriptionOnly()) {
+                // lot ABO-CONF-b : un produit porteur à prix 0 ne s'achète jamais seul (panier, commande, caisse en ligne et hors ligne)
+                $errors[] = CartQuoteException::error($path, 'SUBSCRIPTION_ONLY', 'ce produit se vend par abonnement seulement');
+                continue;
+            }
             if (!$isRental && !$product->isSaleEnabled()) {
                 $errors[] = CartQuoteException::error($path, 'NOT_SELLABLE', 'ce produit ne se vend pas');
                 continue;

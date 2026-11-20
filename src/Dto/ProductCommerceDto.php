@@ -22,9 +22,11 @@ final class ProductCommerceDto
     {
         return [
             'kind' => $product->getKind(),
-            'sale' => ['enabled' => $product->isSaleEnabled()],
+            // lot ABO-CONF-b : un porteur « abonnement seulement » ne s'achète pas seul (prix 0 ou vente coupée) ; la fiche mène à la grille
+            // des formules, et son stock n'est pas une rupture
+            'sale' => ['enabled' => $product->isSellableAlone()],
             'rental' => ['enabled' => $product->isRentalEnabled()] + ($product->isRentalEnabled() ? self::bookingConfig($product, $locale) : []),
-            'subscription' => ['enabled' => $product->isSubscriptionEnabled()],
+            'subscription' => ['enabled' => $product->isSubscriptionEnabled(), 'only' => $product->isSubscriptionOnly()],
             'customizable' => $product->hasCustomizationConfig(), // d'après les combinaisons saisies, pas la case
             'pricing' => self::pricing($product, $currency),
             'vehicleDetails' => $product instanceof VehicleProduct ? self::vehicleDetails($product) : null,

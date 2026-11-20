@@ -1070,6 +1070,23 @@ class Product implements TranslatableInterface, DemoContentInterface
         return $this->subscriptionEnabled;
     }
 
+    /**
+     * Lot ABO-CONF-b (20/11/2026, exigence du chef) : un produit porteur d'abonnement qui ne se vend PAS seul. Vrai si l'abonnement est
+     * activé et que la vente directe est coupée (porteur créé avec sa formule) ou que son prix vaut 0. Jamais d'achat seul à 0 : le devis
+     * du panier et de la caisse le refuse (SUBSCRIPTION_ONLY), la caisse hors ligne et les favoris l'écartent, la fiche le dit
+     * (`sale.enabled` faux, `subscription.only` vrai : la fiche mène à la grille des formules, et « sans stock » n'est pas une rupture).
+     */
+    public function isSubscriptionOnly(): bool
+    {
+        return $this->subscriptionEnabled && (!$this->saleEnabled || (float) $this->price <= 0.0);
+    }
+
+    /** Vendable seul (panier, caisse) : mode « vente » activé et pas « abonnement seulement » */
+    public function isSellableAlone(): bool
+    {
+        return $this->saleEnabled && !$this->isSubscriptionOnly();
+    }
+
     public function getRatingAverage(): ?float { return $this->ratingAverage; }
     public function setRatingAverage(?float $average): self { $this->ratingAverage = $average; return $this; }
     public function getRatingCount(): int { return $this->ratingCount; }

@@ -59,7 +59,7 @@ class ProductContractApiTest extends WebTestCase
         $this->assertSame('standard', $body['kind']);
         $this->assertSame(['enabled' => true], $body['sale']);
         $this->assertTrue($body['rental']['enabled']);
-        $this->assertSame(['enabled' => false], $body['subscription']);
+        $this->assertSame(['enabled' => false, 'only' => false], $body['subscription']); // lot ABO-CONF-b : « abonnement seulement » (porteur à 0 ou vente coupée)
         $this->assertFalse($body['customizable'], 'case cochée sans aucune combinaison : pas de bouton Personnaliser (09/10/2026)');
         $this->assertNull($body['vehicleDetails']);
         $this->assertSame(['currency' => 'EUR', 'regular' => 199950, 'amount' => 145000], array_intersect_key($body['pricing'], array_flip(['currency', 'regular', 'amount'])));
