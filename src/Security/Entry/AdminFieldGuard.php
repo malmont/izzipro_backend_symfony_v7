@@ -33,6 +33,8 @@ final class AdminFieldGuard implements AuthorizationCheckerInterface
         'admin.taxes' => ['orderTaxes'],
         // relecture d'AG-3c : le résumé de la réponse (commandes, clients, chiffres), son issue et la clé de mémoire
         'admin.ia' => ['promptExcerpt', 'user', 'summary', 'outcome', 'memoryKey'],
+        // lot ABO-3b : la prestation chez le client et son intervenant par défaut (comme `EntryModeGuardSubscriber::BENEFIT_STAFF_FIELDS`)
+        'admin.boutique-pages' => EntryModeGuardSubscriber::BENEFIT_STAFF_FIELDS,
     ];
 
     /** Le champ (ou `association.champ`) est-il fermé à l'opérateur sur cet écran ? Sert à l'affichage, à la recherche et au tri */

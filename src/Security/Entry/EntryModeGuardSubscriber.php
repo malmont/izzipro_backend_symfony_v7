@@ -133,6 +133,8 @@ class EntryModeGuardSubscriber implements EventSubscriberInterface
         // les intervenants (des comptes de la boutique, comme les agents de l'Assistance) ni lus, ni invités, ni retirés par lui
         ['#^/api/site/abonnements/([^/]+/fil|fils)(/|$)#', [], 'customers'],
         ['#^/api/site/abonnements/intervenants(/|$)#', [], 'accounts'],
+        // ... et les routes de l'intervenant, que son rôle ne porte de toute façon pas (fermées ici aussi, par prudence)
+        ['#^/api/staff/abonnements(/|$)#', [], 'rights'],
         ['#^/admin/taxes/verifier(/|$)#', ['POST'], 'rights'],
         ['#^/api/(apps/join|app/activate)(/|$)#', [], 'keys'],
         // le boîtier réel de la prévention des pertes (jumelage, clé, révocation, appareils) ; l'exercice simulé reste ouvert
@@ -418,6 +420,9 @@ class EntryModeGuardSubscriber implements EventSubscriberInterface
     private const EA_READS = ['index', 'detail'];
     /** Lot G-1 : champs de la fiche du site (API et EasyAdmin) que le directeur ne voit ni n'écrit : devise, terminal et paiements Stripe */
     // (décision du chef : l'adresse qui reçoit les commandes, et celle des demandes, sont fermées : rediriger les commandes revient à les détourner)
+    /** Lot ABO-3b : champs d'une prestation que l'agence n'écrit pas (API et EasyAdmin, `AdminFieldGuard`) */
+    public const BENEFIT_STAFF_FIELDS = ['atCustomer', 'defaultStaffUserId'];
+
     public const GROUP_SHEET_CLOSED = '/^(pos(Terminal|TapToPay|Bluetooth|Stripe)|currency$|stripe|email$|formSubmissionsEmail$)/i';
     /** Lot G-1b : les seules actions d'un écran CRUD servies au directeur d'un groupe */
     public const GROUP_EA_ACTIONS = ['index', 'detail', 'new', 'edit', 'delete', 'autocomplete', 'renderFilters'];
@@ -719,6 +724,14 @@ class EntryModeGuardSubscriber implements EventSubscriberInterface
         if ($target === 'site.reglages' && preg_match('#^/api/entreprise(/|$)#', $path) === 1 && in_array($request->getMethod(), self::WRITE, true)) {
             $body = json_decode((string) $request->getContent(), true);
             if (is_array($body) && array_filter(array_map('strval', array_keys($body)), [SiteSheetClosedFields::class, 'closed']) !== []) {
+                return 'field';
+            }
+        }
+        // lot ABO-3b (décision du chef, 20/11/2026) : montrer l'adresse des abonnés à un intervenant, ou lui confier une prestation, reste un
+        // geste du commerçant ; l'agence écrit le reste d'une prestation
+        if ($target === 'abonnements.formules' && preg_match('#^/api/site/abonnements/prestations(/|$)#', $path) === 1 && in_array($request->getMethod(), self::WRITE, true)) {
+            $body = json_decode((string) $request->getContent(), true);
+            if (is_array($body) && array_intersect(self::BENEFIT_STAFF_FIELDS, array_keys($body)) !== []) {
                 return 'field';
             }
         }

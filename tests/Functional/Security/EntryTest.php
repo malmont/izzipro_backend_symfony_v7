@@ -118,6 +118,11 @@ class EntryTest extends WebTestCase
         foreach (['commandeCostCents', 'commandeQuantity', 'commandeAttachedAt', 'commandeCostEstimated', 'commande'] as $field) {
             $this->assertSame([403, 'cost'], $this->reason('PUT', '/api/products/1', $token, ['name' => 'Article', $field => 1]), $field);
         }
+        // lot ABO-3b (décision du chef) : ni « chez le client » ni l'intervenant par défaut d'une prestation (l'adresse des abonnés à un intervenant)
+        $this->assertSame([403, 'field'], $this->reason('POST', '/api/site/abonnements/prestations', $token, ['kind' => 'service', 'names' => ['fr' => 'Ménage'], 'atCustomer' => true]));
+        $this->assertSame([403, 'field'], $this->reason('PATCH', '/api/site/abonnements/prestations/1', $token, ['defaultStaffUserId' => 1]));
+        $this->assertTrue(\App\Security\Entry\AdminFieldGuard::hidden('admin.boutique-pages', 'atCustomer'));
+        $this->assertTrue(\App\Security\Entry\AdminFieldGuard::hidden('admin.boutique-pages', 'defaultStaffUserId'));
         $this->client->getCookieJar()->clear();
         $this->client->request('POST', 'https://' . MV_TEST_TENANT2_HOST . '/api/site/imports', ['kind' => 'customers', 'source' => 'shopify'], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT2_HOST, 'HTTP_ACCEPT' => 'application/json', 'HTTP_AUTHORIZATION' => 'Bearer ' . $token]);
         $this->assertSame([403, 'kind'], [$this->client->getResponse()->getStatusCode(), json_decode((string) $this->client->getResponse()->getContent(), true)['reason'] ?? null]);
