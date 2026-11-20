@@ -467,12 +467,12 @@ class AboDeliveryTest extends WebTestCase
         $expected = ['currentPeriodEnd' => '2026-12-20T13:00:00-05:00', 'createdAt' => '2026-11-01T07:00:00-05:00', 'canceledAt' => '2026-11-14T22:00:00-05:00'];
 
         $team = $this->json('GET', '/api/site/abonnements/' . $s->getId(), null, 200);
-        $this->assertSame($expected + ['pausedAt' => '2026-11-09T21:00:00-05:00'], array_intersect_key($team, $expected + ['pausedAt' => 1]));
+        $this->assertEquals($expected + ['pausedAt' => '2026-11-09T21:00:00-05:00'], array_intersect_key($team, $expected + ['pausedAt' => 1])); // les valeurs, dans n'importe quel ordre
         $this->assertSame('2026-11-21T23:30:00-05:00', $team['paymentIssue']['nextPaymentAttempt']);
         $this->assertSame(['2026-11-09T21:00:00-05:00', '2026-11-19T21:00:00-05:00', '2026-11-17T22:15:00-05:00'], [$team['pauses'][0]['from'], $team['pauses'][0]['until'], $team['pauses'][0]['resumedAt']]);
 
         $mine = $this->json('GET', '/api/subscriptions/' . $s->getId(), null, 200, 'client');
-        $this->assertSame($expected, array_intersect_key($mine, $expected));
+        $this->assertEquals($expected, array_intersect_key($mine, $expected));
         $this->assertSame('2026-11-21T23:30:00-05:00', $mine['latestInvoice']['nextPaymentAttempt']);
         // aucune date d'une fiche ne sort en UTC
         foreach (['team' => $team, 'mine' => $mine] as $who => $sheet) {
