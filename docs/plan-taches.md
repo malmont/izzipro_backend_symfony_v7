@@ -117,12 +117,18 @@ surveillance seulement, aucun lancement depuis l'écran).
 5. L'ancienne v1 (arrêtée le 19/11, `restart=no`) : ses conteneurs et son volume `app_db_data` restent ; leur suppression est une
    décision du propriétaire, après une sauvegarde de sa base. Elle ne consommait plus rien d'utile (aucune requête en 24 h).
 
-## 6. Questions au propriétaire
-1. Le 8e worker (le planificateur) : d'accord pour un conteneur de plus, sur le modèle des 7 autres ?
-2. Seuils de retard : une valeur par défaut (2 fois le rythme) et un réglage par tâche, ou une valeur fixe ?
-3. La page « Tâches planifiées » : super administrateur seulement, ou aussi visible (en lecture) par l'administrateur d'un site pour ses
-   tâches à lui (aucune aujourd'hui) ?
-4. Le nettoyage Docker : rythme quotidien des images (24 h) et hebdomadaire du cache de construction, comme le cron d'origine ?
-5. `support.retention --apply` : à quelle date le premier passage réel, une fois le rapport de simulation lu ?
-6. La sauvegarde (hors dépôt) : la ranger dans `ops/` (sans secret) pour qu'elle soit versionnée, ou la laisser hors dépôt et seulement
-   surveillée ?
+## 6. Réponses du propriétaire (20/11/2026, sur les recommandations du chef)
+
+1. Le 8e conteneur du planificateur : **oui**.
+2. Le retard : **2 fois le rythme** par défaut, avec un **réglage par tâche**.
+3. La page « Tâches planifiées » : **super administrateur seulement**.
+4. Le nettoyage Docker : images de plus de **7 jours**, étiquette **« keep »** avant un changement d'image, cache de construction **chaque
+   semaine jusqu'à 5 Go**.
+5. `support.retention` : en **simulation** avec un rapport ; `--apply` seulement **après l'avis de l'avocat** sur la durée de 3 ans ;
+   aucune date pour l'instant.
+6. `backup.sh` : **rangé dans `ops/`**, sans aucun secret (les accès restent dans l'environnement du serveur).
+
+## 7. Place dans la file
+
+TACHES-0 part dans un train à part (`composer.lock`). Proposé au chef : CMD-WEB-1 → TACHES-0 → TACHES-1 → CMD-WEB → RENVOI-EA →
+STRIPE-WEB → TACHES-2 à TACHES-6.
