@@ -261,7 +261,7 @@ class AboDeliveryService
             $this->proofs->remove($before['proof_path']);
         }
         $this->event($subscription, $decision === BenefitOccurrence::RESOLUTION_KEPT ? 'contest_kept' : 'contest_returned', (int) $before['benefit_id'], $note, $by, $occurrenceId);
-        $this->journal($subscription, 'contestation_' . $decision, ['occurrenceId' => $occurrenceId]);
+        $this->journal($subscription, 'contest_' . $decision, ['occurrenceId' => $occurrenceId]);
 
         return $this->view($occurrenceId, true, $locale);
     }
