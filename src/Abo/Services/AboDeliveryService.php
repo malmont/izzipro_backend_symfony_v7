@@ -172,7 +172,9 @@ class AboDeliveryService
                 . AboStaffService::EFFECTIVE . " = ? AND o.status IN ('scheduled', 'done', 'missed') ORDER BY o.id LIMIT " . self::SESSION_MAX, [$slotId, $onlyStaff]);
         $onSlot = array_map(fn (array $r) => (int) $r['subscription_id'], $rows);
         if (($stranger = array_diff($absent, $onSlot)) !== []) {
-            throw new AboException(422, 'ABSENT_NOT_ON_SLOT', sprintf('Abonnement(s) %s : pas inscrit(s) à cette séance.', implode(', ', $stranger)), 'absentSubscriptionIds');
+            // relecture neuve d'ABO-3b : à l'intervenant, jamais un numéro d'abonnement
+            throw new AboException(422, 'ABSENT_NOT_ON_SLOT', $onlyStaff !== null ? 'Un absent désigné n\'est plus sur cette séance : relisez votre journée.'
+                : sprintf('Abonnement(s) %s : pas inscrit(s) à cette séance.', implode(', ', $stranger)), $onlyStaff !== null ? 'absentOccurrenceIds' : 'absentSubscriptionIds');
         }
         $out = ['slotId' => $slotId, 'done' => 0, 'missed' => 0, 'unchanged' => 0, 'failed' => []];
         $em = $this->emProvider->getEntityManager();

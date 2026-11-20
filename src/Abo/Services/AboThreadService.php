@@ -173,8 +173,8 @@ class AboThreadService
     {
         $limit = self::utc(($now ?? new \DateTimeImmutable())->modify('-' . self::KEEP_MONTHS . ' months'));
 
-        // relecture neuve : toute fin d'abonnement (résilié, jamais payé), datée par la résiliation ou, à défaut, par la dernière modification
-        return (int) $this->conn()->executeStatement("DELETE FROM subscription_message m USING subscription s WHERE s.id = m.subscription_id AND s.status IN ('canceled', 'incomplete_expired')
+        // relecture neuve : un abonnement résilié, ou jamais payé (`incomplete`), daté par la résiliation ou, à défaut, par la dernière modification
+        return (int) $this->conn()->executeStatement("DELETE FROM subscription_message m USING subscription s WHERE s.id = m.subscription_id AND s.status IN ('canceled', 'incomplete')
             AND COALESCE(s.canceled_at, s.updated_at) < ?", [$limit]);
     }
 

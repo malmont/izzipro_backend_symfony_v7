@@ -42,9 +42,9 @@ final class NotificationCatalog
     public const ENTITLEMENT_URGENT = 'entitlement_urgent';
     public const POS_HEALTH_ALERT = 'pos_health_alert';
     public const WEEKLY_DIGEST = 'weekly_digest';
-    /** Le courriel qui réunit les courriels de suivi retenus d'un sujet ; son sujet est celui des courriels qu'il porte */
     /** Lot ABO-3b : un abonné a écrit dans le fil de son abonnement (à l'adresse du site) */
     public const SUBSCRIPTION_MESSAGE = 'subscription_message';
+    /** Le courriel qui réunit les courriels de suivi retenus d'un sujet ; son sujet est celui des courriels qu'il porte */
     public const FOLLOWUP_SUMMARY = 'followup_summary';
 
     /** @var array<string, array{0: string, 1: ?string}> type de courriel → [famille, sujet] */

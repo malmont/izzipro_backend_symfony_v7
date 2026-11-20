@@ -125,11 +125,21 @@ class AboStaffService
      */
     public function revoke(int $userId): array
     {
-        $user = $this->emProvider->getEntityManager()->find(User::class, $userId);
+        $em = $this->emProvider->getEntityManager();
+        $user = $em->find(User::class, $userId);
         if (!$user instanceof User || !in_array(self::ROLE, $user->getRoles(), true)) {
             throw new AboException(404, 'STAFF_NOT_FOUND', 'Intervenant introuvable.');
         }
-        $this->roles->set($user, self::ROLE, false, ['abonnements']);
+        // le compte verrouillé le temps du retrait (une affectation simultanée relit le rôle sous ce verrou)
+        $em->getConnection()->beginTransaction();
+        try {
+            $em->getConnection()->fetchOne('SELECT id FROM "user" WHERE id = ? FOR UPDATE', [$userId]);
+            $this->roles->set($user, self::ROLE, false, ['abonnements']);
+            $em->getConnection()->commit();
+        } catch (\Throwable $e) {
+            $em->getConnection()->rollBack();
+            throw $e;
+        }
         $user->setResetToken(null)->setResetTokenExpiresAt(null);
         $this->emProvider->getEntityManager()->flush();
         $conn = $this->conn();
@@ -137,8 +147,16 @@ class AboStaffService
         $now = self::utc(new \DateTimeImmutable());
         $unassigned = (int) $conn->executeStatement("UPDATE benefit_occurrence SET staff_user_id = NULL WHERE staff_user_id = ? AND status IN ('available', 'scheduled')", [$userId]);
         $unassigned += (int) $conn->executeStatement('UPDATE benefit_slot SET staff_user_id = NULL WHERE staff_user_id = ? AND starts_at > ?', [$userId, $now]);
-        $unassigned += (int) $conn->executeStatement('UPDATE benefit_slot_rule SET staff_user_id = NULL WHERE staff_user_id = ?', [$userId]);
-        $unassigned += (int) $conn->executeStatement('UPDATE benefit SET default_staff_user_id = NULL WHERE default_staff_user_id = ?', [$userId]);
+        // les règles et les prestations par l'ORM : leurs lectures en cache (prestations sous l'étiquette des référentiels) sont vidées
+        foreach ($em->getRepository(\App\Abo\Entity\BenefitSlotRule::class)->findBy(['staffUserId' => $userId]) as $rule) {
+            $rule->setStaffUserId(null);
+            ++$unassigned;
+        }
+        foreach ($em->getRepository(\App\Abo\Entity\Benefit::class)->findBy(['defaultStaffUserId' => $userId]) as $benefit) {
+            $benefit->setDefaultStaffUserId(null);
+            ++$unassigned;
+        }
+        $em->flush();
 
         return ['userId' => $userId, 'unassigned' => $unassigned];
     }
@@ -163,6 +181,10 @@ class AboStaffService
             }
             if (!in_array($status, [BenefitOccurrence::STATUS_AVAILABLE, BenefitOccurrence::STATUS_SCHEDULED], true)) {
                 throw new AboException(409, 'OCCURRENCE_NOT_ASSIGNABLE', 'Seule une date à planifier ou planifiée reçoit un intervenant.');
+            }
+            // relecture neuve : le rôle relu sous verrou de la ligne du compte (un retrait simultané ne laisse pas une date à un compte sans rôle)
+            if ($staff !== null && !in_array(self::ROLE, json_decode((string) $conn->fetchOne('SELECT roles FROM "user" WHERE id = ? FOR SHARE', [$staff]), true) ?: [], true)) {
+                throw new AboException(422, 'STAFF_INVALID', 'Intervenant : un compte qui porte le rôle d\'intervenant.', 'staffUserId');
             }
             $conn->executeStatement('UPDATE benefit_occurrence SET staff_user_id = ? WHERE id = ?', [$staff, $occurrenceId]);
         }));
