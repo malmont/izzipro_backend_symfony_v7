@@ -881,3 +881,11 @@ Fiches correspondantes côté frontend (dépôt `Izzipro_next`) :
 | Mémoires Vivantes | `src/components/MemoiresVivantes/README.md` |
 | Boussole ESG | `src/components/BoussoleESG/README.md` |
 | Boutique | `src/components/Boutique/README.md` |
+
+**Webhook Stripe (lot WEBHOOK-SIG, 20/11/2026, faille corrigée)** : `POST /api/stripe/webhook` (et `/stripe/webhook`) refuse, HORS
+environnement des essais, tout événement sans signature vérifiée (400 `SIGNATURE_REQUIRED`, ou `SIGNATURE_INVALID`), avant tout traitement
+et sur tous les chemins ; secrets `STRIPE_WEBHOOK_SECRET` (plateforme) et `STRIPE_CONNECT_WEBHOOK_SECRET` (Connect) essayés l'un après
+l'autre. Chaque refus est journalisé (type, adresse, heure) et compté dans les incidents de la plateforme au plus une fois par minute
+(`stripe_webhook.unsigned`, `stripe_webhook.invalid_signature`). Un livre de Mémoires Vivantes n'est marqué payé que si la session, RELUE
+chez Stripe (`BookCheckoutSessionReader`, compte et clé de sa création), est payée et rattachée à ce livre ; passage à « payé » atomique
+(une seule facture) ; Stripe injoignable = 503 (Stripe réessaie). Essai `tests/Functional/Security/StripeWebhookSignatureTest.php`.

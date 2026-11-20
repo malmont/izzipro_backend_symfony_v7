@@ -183,3 +183,21 @@ erreur : ne pas revenir en arrière tant qu'elle n'a pas réussi partout. La mig
 Chaque bascule laisse un dossier `var/swap_stage<n>` (environ 60 Mo). `ops/bascule/bascule.sh menage` les liste ;
 `menage --oui` supprime tout sauf les trois derniers et ceux vers lesquels le cache en ligne a encore un lien. Le dernier est le retour
 arrière de la mise en ligne en cours : on ne le supprime jamais à la main.
+
+## 8. Rotation de la clé des jetons (JWT-ROTATION, contrat validé le 20/11/2026, REPORTÉE)
+
+Décision du propriétaire : reportée au passage de la production sur Kubernetes (dépôt privé, serveur actuel de développement). Ce jour-là :
+- les nouvelles clés et une NOUVELLE phrase de passe vont dans les Secrets de Kubernetes, jamais dans git ;
+- `jwt/private.pem` et `jwt/public.pem` (suivis par git depuis b6faf9f8) sortent du suivi (`git rm --cached`, `/jwt/` dans `.gitignore`) ;
+  une bascule vers un commit qui retire un fichier suivi l'EFFACE de l'arbre en ligne : sauvegarde de `jwt/` par l'outil juste avant, et
+  exception étroite et écrite dans la garde des montages (retrait de ces deux fichiers seulement, permis si le cache construit ne les lit
+  plus) ;
+- ordre sans coupure : la nouvelle paire est préparée à part (`jwt/v2/`, non suivi), les chemins lexik changent dans la configuration
+  (échange atomique du cache), le retour arrière remet l'ancien cache qui lit les anciens fichiers ; le retrait du suivi vient dans un
+  second train, après le délai de retour ;
+- la phrase de passe est dans l'environnement du conteneur (`env_file`, lu à sa CRÉATION) : modifier `.env` n'a aucun effet sans recréer
+  les conteneurs ;
+- conséquences : tous les jetons d'accès deviennent invalides ; les jetons de rafraîchissement (en base) en redonnent un. Vérifié dans le
+  code des applications le 20/11/2026 : la caisse et MAUI rafraîchissent puis rejouent une fois, sans boucle ; le web à vérifier ce jour-là ;
+- contrôles : connexion, rafraîchissement, lecture authentifiée, ancien jeton refusé en 401, les workers, `git ls-files jwt/` vide ;
+- l'ancienne image Docker (qui contient `.env` et la clé) est supprimée après le délai de retour, sur approbation du propriétaire.
