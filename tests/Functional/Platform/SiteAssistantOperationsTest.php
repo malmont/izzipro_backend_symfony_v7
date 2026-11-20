@@ -152,7 +152,7 @@ class SiteAssistantOperationsTest extends WebTestCase
         $this->assertSame(['site', 'help', []], [$body['access'], $body['tier'], $body['actions']]);
         // lot IA-A : les lectures d'un module éteint sur le site de test (codes-barres, pertes ; lot ABO-0 : abonnements, module Boutique) ne sont pas données ; lot IA-G : ni celles du groupe (pas de directeur)
         $this->assertSame(array_values(array_diff(\App\Services\SiteAssistantService\SiteAssistantTools::HELP_TOOLS, ['get_missing_barcodes', 'get_loss_health', 'get_loss_finding',
-            'get_subscription_plans', 'get_benefits', 'get_plan_subscribers', 'get_subscription', 'get_expiring_rights', ...\App\Services\SiteAssistantService\SiteAssistantTools::GROUP_READS])), array_column(FakeLandingAiClient::$requests[0]['tools'], 'name'));
+            'get_subscription_plans', 'get_benefits', 'get_plan_subscribers', 'get_subscription', 'get_expiring_rights', 'get_transfers_to_send', ...\App\Services\SiteAssistantService\SiteAssistantTools::GROUP_READS])), array_column(FakeLandingAiClient::$requests[0]['tools'], 'name'));
         $this->assertStringContainsString('Aide IA', FakeLandingAiClient::$requests[0]['system']);
         $results = FakeLandingAiClient::$requests[1]['messages'][2]['content'];
         $this->assertStringContainsString('IA complète', json_decode($results[0]['content'], true)['error']);

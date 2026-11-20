@@ -90,6 +90,9 @@ class EntryModeGuardSubscriber implements EventSubscriberInterface
         // lot ABO-CONF : créer, configurer, archiver ou supprimer une formule (son prix) et ses prestations : geste d'argent, fermé au directeur ;
         // l'aperçu, qui n'écrit rien, reste ouvert
         ['#^/api/site/abonnements/(formules(/(?!apercu$)[^/]+.*)?|prestations(/.*)?)$#', ['POST', 'PUT', 'PATCH', 'DELETE'], 'payment'],
+        // lot FIS-1 (décision du chef, 19/11/2026) : les prêts sont en LECTURE SEULE pour le directeur (créer, modifier, supprimer un prêt
+        // sont des écritures des comptes de la boutique) ; l'aperçu, qui n'écrit rien, reste ouvert
+        ['#^/api/gestion/prets(/(?!apercu$)[^/]+.*)?$#', ['POST', 'PUT', 'PATCH', 'DELETE'], 'payment'],
         ['#^/api/site/features/.+/(request|trial|enable|disable)(/|$)#', [], 'modules'],
         ['#^/api/site/features/?$#', ['PUT', 'PATCH', 'POST'], 'modules'],
         // les mêmes gestes de module dans EasyAdmin (« Mon site »)
@@ -119,7 +122,7 @@ class EntryModeGuardSubscriber implements EventSubscriberInterface
         ['#^/admin/orders/[^/]+/etiquette(/|$)#', [], 'payment'],
         // les droits : demander l'assistance d'une agence, le groupe lui-même, la vérification des taxes, l'adhésion et l'activation des applications
         ['#^/(api/site|admin)/assistance(/|$)#', ['POST', 'PUT', 'PATCH', 'DELETE'], 'rights'],
-        ['#^/api/(group|site/group-invitations|site/group-same-company|site/taxes)(/|$)#', ['POST', 'PUT', 'PATCH', 'DELETE'], 'rights'], // lot G-1d : jamais confirmé par le directeur entré
+        ['#^/api/(group|site/group-invitations|site/group-same-company|site/group-transfers|site/taxes)(/|$)#', ['POST', 'PUT', 'PATCH', 'DELETE'], 'rights'], // lot G-1d : jamais confirmé par le directeur entré ; lot G-5 : jamais envoyé par lui
         // lot G-4 : les outils du groupe (copie du catalogue…) ne se lancent que du siège, jamais par le directeur entré dans une boutique
         ['#^/api/gestion/groupe(/|$)#', [], 'rights'],
         ['#^/admin/taxes/verifier(/|$)#', ['POST'], 'rights'],

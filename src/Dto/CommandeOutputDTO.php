@@ -21,6 +21,8 @@ class CommandeOutputDTO
     public ?array $document; // justificatif lu par IA { id, type, invoiceNumber, invoiceDate } | null (lot L1, 10/11/2026)
     public string $receptionStatus; // none | partial | complete (lot R1)
     public ?int $tripId; // voyage d'achat rattaché (lot B1a, 11/11/2026)
+    /** Lot G-5 : la commande d'arrivée d'un transfert entre boutiques ; les écrans cachent « Modifier » et « Supprimer » (elle se reçoit seulement) */
+    public bool $groupTransfer;
 
     public function __construct(Commande $commande, string $host, string $currency = \App\Services\BoutiqueSettingsService\TenantCurrencyProvider::DEFAULT)
     {
@@ -35,6 +37,7 @@ class CommandeOutputDTO
         $this->document = $commande->getDocument()?->invoiceSummary();
         $this->receptionStatus = $commande->receptionStatus();
         $this->tripId = $commande->getTripId();
+        $this->groupTransfer = $commande->isGroupTransfer();
         $photoCommande = $commande->getCommandepictures();
         $this->photo = $photoCommande ? $host . '/assets/images/' . $photoCommande->getImageUrl() : null;
 

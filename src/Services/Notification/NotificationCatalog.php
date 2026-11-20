@@ -73,6 +73,7 @@ final class NotificationCatalog
         'loss_box_code' => [self::INDISPENSABLE, null], // lot L6-c : le code de l'étiquette d'un boîtier vendu, envoyé une fois, jamais gardé
         'assistance_request' => [self::INDISPENSABLE, null], // lot AG-ASSIST : l'agence apprend qu'un commerçant demande son aide ; jamais retenu // lot AG-2 : l'administrateur désigné d'un site créé par une agence choisit son mot de passe
         'group_invitation' => [self::INDISPENSABLE, null], // lot G-1a : un groupe invite la boutique, qui doit consentir ; jamais retenu
+        'group_transfer' => [self::INDISPENSABLE, null], // lot G-5 : un transfert à envoyer, en route, ou en échec d'envoi ; jamais retenu
         'group_same_company' => [self::INDISPENSABLE, null], // lot G-1d : le lien « même entreprise » demandé, confirmé, refusé ou retiré (consentement) ; jamais retenu
         'customer_import_invitation' => [self::INDISPENSABLE, null], // lot IMP-2 : un seul courriel par client repris d'une ancienne boutique, décidé par le commerçant, jamais relancé
         'chapter_invitation' => [self::INDISPENSABLE, null], // garde son propre lien de désabonnement
@@ -126,6 +127,7 @@ final class NotificationCatalog
         'src/LossPrevention/Services/LossBoxCodeMailer.php' => ['loss_box_code'],
         'src/Services/Group/GroupInvitationMailer.php' => ['group_invitation'],
         'src/Services/Group/GroupCompanyMailer.php' => ['group_same_company'],
+        'src/Services/Group/Transfer/GroupTransferMailer.php' => ['group_transfer'],
         'src/Services/Group/Copy/GroupCopyNotifier.php' => ['group_catalog_copied'],
         'src/Services/OrderService/OrderMailerService.php' => ['order_confirmation', self::ORDER_TO_SHIP, 'order_notice'],
         'src/Services/OrderService/OrderShipmentService.php' => ['order_shipped'],

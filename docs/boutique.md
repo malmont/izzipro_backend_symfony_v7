@@ -1053,7 +1053,8 @@ Les prestations à quantité deviennent des **droits** que l'abonné consomme ; 
   (sans report). Une prestation qui porte des droits ne se supprime pas (409 `BENEFIT_IN_USE`) : elle se désactive.
 - **Suivi** (`GET /api/site/abonnements/{id}`, gestion web et MAUI) : `balance[]` par prestation `{ benefitId, name, kind, available,
   used, carried, unlimited, nextExpiry }`, `todo[]` (droits qui expirent sous 7 jours), `history[]` (50 derniers événements, `by` et
-  `note` pour l'équipe), `pauses`.
+  `note` pour l'équipe ; une ligne `used` porte aussi `occurrenceId` et `undoUntil`, pour « Annuler l'utilisation » après un
+  rechargement, `null` pour une ligne écrite avant l'ajout du 19/11/2026 : migration `Version20270201700000`), `pauses`.
 - **Gestes** (`ROLE_ADMIN`, module Boutique, sous le verrou de l'abonnement ; la fiche est relue une fois le verrou pris, et chaque contrôle
   refait : deux gestes simultanés ne prolongent ni ne comptent jamais deux fois ; un abonnement tenu trop longtemps par un autre traitement
   rend 409 `SUBSCRIPTION_BUSY`, à refaire) :

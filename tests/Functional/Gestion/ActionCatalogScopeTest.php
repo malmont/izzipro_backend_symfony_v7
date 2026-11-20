@@ -2,6 +2,7 @@
 
 namespace App\Tests\Functional\Gestion;
 
+use App\Gestion\Loan\GestionLoanService;
 use App\Gestion\Services\Conversation\Action\ActionCatalog;
 use App\Gestion\Services\GestionBudgetService;
 use App\Gestion\Services\GestionCashService;
@@ -50,6 +51,8 @@ class ActionCatalogScopeTest extends KernelTestCase
         'product.cost.set' => [GestionProductCostService::class], // le coût d'achat seul, jamais le prix de vente
         'period.close' => [CloseCollectionUseCase::class],
         'price.set' => [GestionPriceService::class], // le prix de vente, par le service des prix du lot P4 (aperçu, lot, annulation) : lot IA-ACT-5
+        'loan.create' => [GestionLoanService::class], // un prêt de la gestion, par le service de l'écran des prêts : lot FIS-1 (contrat validé par le chef, 19/11/2026)
+        'loan.prepayment' => [GestionLoanService::class],
     ];
 
     /** Ce qu'une action peut utiliser sans écrire de donnée d'un autre module : lectures de la gestion, textes, devise, requête, journal */

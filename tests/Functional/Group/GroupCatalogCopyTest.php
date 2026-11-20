@@ -333,7 +333,7 @@ class GroupCatalogCopyTest extends WebTestCase
             $pdo->exec('UPDATE entreprise SET is_multi_shop_active = FALSE');
         }
         $this->master->exec("DELETE FROM site_entries WHERE mode = 'group'");
-        foreach (['shop_group_item_links', 'shop_group_copies', 'shop_group_events', 'shop_group_invitations', 'shop_group_company_requests', 'shop_group_sites', 'shop_groups'] as $table) {
+        foreach (['shop_group_item_links', 'shop_group_copies', 'shop_group_events', 'shop_group_invitations', 'shop_group_company_requests', 'shop_group_transfer_events', 'shop_group_transfer_lines', 'shop_group_transfers', 'shop_group_sites', 'shop_groups'] as $table) {
             $this->master->exec("DELETE FROM $table");
         }
         foreach ([[MV_TEST_TENANT_DB, MV_TEST_TENANT_CODE], [MV_TEST_TENANT2_DB, MV_TEST_TENANT2_CODE]] as [$db, $code]) {

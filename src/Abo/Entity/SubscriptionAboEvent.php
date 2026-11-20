@@ -43,6 +43,13 @@ class SubscriptionAboEvent
     #[ORM\Column(type: Types::DATETIME_IMMUTABLE)]
     private \DateTimeImmutable $at;
 
+    /** Le droit utilisé, pour une ligne « used » (ajout du 19/11/2026) : « Annuler l'utilisation » après un rechargement */
+    #[ORM\Column(name: 'occurrence_id', nullable: true)]
+    private ?int $occurrenceId = null;
+
+    public function getOccurrenceId(): ?int { return $this->occurrenceId; }
+    public function setOccurrenceId(?int $occurrenceId): static { $this->occurrenceId = $occurrenceId; return $this; }
+
     public function __construct(Subscription $subscription, string $type, ?int $benefitId = null, int $quantity = 0, ?string $note = null, ?string $by = null)
     {
         $this->subscription = $subscription;

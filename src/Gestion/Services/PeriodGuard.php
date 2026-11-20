@@ -42,6 +42,10 @@ class PeriodGuard
         if ($commande->getIsClosed()) {
             throw new GestionConflictException('COMMANDE_CLOSED', 'La commande est figée.');
         }
+        // lot G-5 : la commande d'un transfert se reçoit seulement ; la changer ferait apparaître ou disparaître de la marchandise
+        if ($commande->isGroupTransfer()) {
+            throw new GestionConflictException('TRANSFER_ORDER_LOCKED', 'Commande d\'un transfert entre boutiques : elle se reçoit, elle ne se modifie pas. Le directeur du groupe peut annuler le transfert.');
+        }
         if ($commande->getDate() !== null) {
             $this->assertDateWritable($commande->getDate());
         }

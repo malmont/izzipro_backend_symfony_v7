@@ -23,7 +23,9 @@ class GestionStatisticsSections
     public const STOCK = 'stock';
     public const SHIPPING = 'shipping';
     public const TAXES = 'taxes';
-    public const AVAILABLE = [self::PAYMENTS, self::EXPENSES, self::STOCK, self::SHIPPING, self::TAXES];
+    /** Lot FIS-1 : charges financières des prêts sur la plage (intérêts, assurance, frais, au prorata), à côté du résultat */
+    public const CHARGES = 'charges';
+    public const AVAILABLE = [self::PAYMENTS, self::EXPENSES, self::STOCK, self::SHIPPING, self::TAXES, self::CHARGES];
 
     /** `payment_method.id` => code stable rendu aux applications ; un moyen ajouté plus tard sort en `method_<id>` avec son nom */
     private const METHODS = [1 => 'card', 2 => 'cash', 3 => 'paypal'];
@@ -43,6 +45,7 @@ class GestionStatisticsSections
         private readonly ?GestionFixedCostService $fixedCosts = null,
         private readonly ?GestionStockSnapshotService $stock = null,
         private readonly ?HomeTilesService $tiles = null,
+        private readonly ?\App\Gestion\Loan\GestionLoanService $loans = null, // lot FIS-1
     ) {
     }
 
@@ -85,10 +88,24 @@ class GestionStatisticsSections
                 self::STOCK => $this->stockSection($ctx),
                 self::SHIPPING => $this->shipping($ctx),
                 self::TAXES => $this->taxes($ctx),
+                self::CHARGES => $this->charges($ctx),
             };
         }
 
         return $out;
+    }
+
+    // ------------------------------------------------------------------ charges (lot FIS-1)
+
+    /**
+     * Charges financières des prêts sur la plage, la plage précédente et l'an dernier : intérêts, assurance et frais au prorata. Le capital
+     * remboursé n'est jamais une charge : il est donné à part (`capitalRepaid`), pour la trésorerie.
+     */
+    private function charges(array $ctx): array
+    {
+        [$cur, $prev, $ly] = [$ctx['cur'], $ctx['prev'], $ctx['ly']];
+        $of = fn (array $r) => $this->loans?->chargesBetween($r[0], $r[1]) ?? ['interest' => 0, 'insurance' => 0, 'fees' => 0, 'total' => 0, 'loans' => 0];
+        return ['financial' => $of($cur), 'previous' => $prev === null ? null : $of($prev), 'lastYear' => $of($ly), 'capitalRepaid' => $this->loans?->capitalRepaidBetween($cur[0], $cur[1]) ?? 0];
     }
 
     // ------------------------------------------------------------------ paiements

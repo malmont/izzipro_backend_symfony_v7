@@ -37,6 +37,7 @@ class ConfirmSiteAssistantActionUseCase
         private readonly ?\App\Services\Group\Copy\GroupCatalogCopyService $groupCopies = null,
         private readonly ?\Psr\Log\LoggerInterface $logger = null,
         private readonly ?\App\Services\Group\GroupCompanyService $groupCompany = null, // lot G-1d
+        private readonly ?\App\Services\Group\Transfer\GroupTransferService $groupTransfers = null, // lot G-5
     ) {
     }
 
@@ -210,11 +211,16 @@ class ConfirmSiteAssistantActionUseCase
                 case 'propose_group_invitation':
                 case 'propose_group_copy':
                 case 'propose_group_same_company':
+                case 'propose_group_transfer':
                     // relu à la confirmation : toujours le directeur, sur le site du siège, avec son compte (jamais une entrée)
                     if ($actor === null || ($this->entry?->active() ?? false) || $this->groupDirector?->group() === null || $this->groupService === null || $this->groupCopies === null) {
                         throw new \InvalidArgumentException('Action réservée au directeur du groupe, sur le site du siège.');
                     }
                     try {
+                        if ($tool === 'propose_group_transfer') {
+                            // lot G-5 : la DEMANDE du directeur (mêmes règles que la route) ; la boutique source envoie elle-même
+                            return ($this->groupTransfers ?? throw new \OutOfBoundsException('Outil indisponible'))->request($actor, ['source' => $input['source'] ?? null, 'target' => $input['target'] ?? null, 'lines' => $input['lines'] ?? null]);
+                        }
                         if ($tool === 'propose_group_same_company') {
                             // lot G-1d : la DEMANDE du directeur ; la boutique confirme elle-même
                             return ($this->groupCompany ?? throw new \OutOfBoundsException('Outil indisponible'))->request($tenant, (string) ($input['site'] ?? ''), $actor, 'fr');

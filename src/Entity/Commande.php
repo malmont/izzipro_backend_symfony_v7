@@ -188,6 +188,18 @@ class Commande
     }
 
     /** @return Collection<int, CommandeLine> */
+    /** Lot G-5 : la commande d'arrivée d'un transfert entre boutiques d'un groupe (une ligne `transfer`) : elle se reçoit, elle ne se modifie pas */
+    public function isGroupTransfer(): bool
+    {
+        foreach ($this->lines as $line) {
+            if ($line->getSource() === CommandeLine::SOURCE_TRANSFER) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     public function getLines(): Collection
     {
         return $this->lines;

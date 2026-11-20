@@ -1,0 +1,11 @@
+# Transferts entre boutiques d'un groupe (lot G-5, 19/11/2026) : reprise des envois restés bloqués en « envoi en cours » plus de 5 minutes
+# (panne entre la sortie de la source et la commande de la destination). Termine l'envoi d'après les marques, sans jamais doubler une sortie.
+# Installation : sudo cp ops/systemd/group-transfers-resume.{service,timer} /etc/systemd/system/ && sudo systemctl daemon-reload && sudo systemctl enable --now group-transfers-resume.timer
+[Unit]
+Description=Arkanoa : reprise des transferts entre boutiques bloqués
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/docker exec -w /var/www symfony_app_v2 php bin/console app:group:transfers:resume --no-interaction

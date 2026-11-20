@@ -71,6 +71,8 @@ class SiteAssistantService
         private readonly ?\App\Services\Group\AllShops\GroupDirector $groupDirector = null,
         private readonly ?\App\Services\Group\AllShops\GroupViews $groupViews = null,
         private readonly ?\App\Services\Group\GroupService $groupService = null,
+        private readonly ?\App\Services\Group\Transfer\GroupTransferService $groupTransfers = null, // lot G-5
+        private readonly ?\App\Services\TenantConnectionProvider $tenantConnection = null, // lot G-5 : le site courant (outil des transferts à envoyer)
     ) {
     }
 
@@ -228,6 +230,17 @@ class SiteAssistantService
         }
         if (in_array($name, SiteAssistantTools::ORDER_TOOLS, true) || in_array($name, ['get_orders_todo', 'get_order'], true)) {
             return $this->runOrderTool($name, $input, $tenantCode);
+        }
+        if ($name === 'get_transfers_to_send' && !$this->available($name)) {
+            return [['error' => 'outil indisponible : ce site n\'appartient à aucun groupe de boutiques'], null, null];
+        }
+        if ($name === 'get_transfers_to_send') {
+            // lot G-5 : ce que la boutique doit envoyer ; quantités et articles, sans coût ; l'envoi reste le geste de l'administrateur
+            $rows = $this->groupTransfers?->toSend($tenantCode) ?? [];
+
+            return [['transfers' => array_map(static fn (array $t): array => ['id' => $t['id'], 'target' => $t['target'], 'state' => $t['state'], 'requestedAt' => $t['requestedAt'],
+                'lines' => array_map(static fn (array $l): array => ['variantId' => $l['sourceVariantId'], 'quantity' => $l['quantity']], $t['lines'] ?? [])], $rows),
+                'note' => 'L\'envoi est confirmé par l\'administrateur de la boutique, dans l\'écran des transferts : jamais par l\'assistant.'], null, null];
         }
         if (array_key_exists($name, SiteAssistantTools::MODULE_OF) || in_array($name, ['get_storefront_checklist', 'get_modules', ...SiteAssistantTools::IAA_ACTIONS, ...SiteAssistantTools::GROUP_READS], true)) {
             // lot IA-A : un outil dont le module n'est pas actif est refusé, même si le modèle l'invente (il ne lui a pas été donné)
@@ -595,7 +608,9 @@ TXT;
             case 'get_group':
                 return [$this->groupService->mine($tenantCode) + ['refusedToAssistant' => ['quitter ou dissoudre le groupe', 'entrer dans une boutique', 'créer une boutique',
                     // lot G-1d : un consentement se donne et se retire par une personne
-                    'confirmer le lien « même entreprise » à la place de la boutique', 'retirer le lien « même entreprise »']], null, $linkTo('groupe')];
+                    'confirmer le lien « même entreprise » à la place de la boutique', 'retirer le lien « même entreprise »',
+                    // lot G-5 : la marchandise qui part ou qui arrive, geste d'une personne dans la boutique
+                    'envoyer un transfert', 'recevoir un transfert']], null, $linkTo('groupe')];
             case 'get_group_view':
                 $view = (string) ($input['view'] ?? '');
                 $from = is_string($input['from'] ?? null) ? $input['from'] : null;
@@ -629,6 +644,28 @@ TXT;
                 $action = $this->remember($tenantCode, 'propose_group_invitation', ['site' => $site], sprintf('Inviter la boutique « %s » à rejoindre le groupe « %s » (elle accepte ou refuse elle-même)', $site, (string) $group['name']));
 
                 return [$proposed($action), $action, $linkTo('groupe')];
+            case 'get_group_transfers':
+                // lot G-5 : les transferts du groupe, état relu (une réception complète passe à « reçu »)
+                return [['transfers' => $this->groupTransfers?->listForGroup($group) ?? []], null, $linkTo('groupe')];
+            case 'propose_group_transfer':
+                // lot G-5 : la DEMANDE seulement ; la boutique source envoie elle-même, la destination reçoit par sa réception habituelle
+                $source = is_string($input['source'] ?? null) ? $input['source'] : '';
+                $target = is_string($input['target'] ?? null) ? $input['target'] : '';
+                $lines = [];
+                foreach (is_array($input['lines'] ?? null) ? $input['lines'] : [] as $l) {
+                    $l = (array) $l;
+                    if (is_int($l['variantId'] ?? null) && is_int($l['quantity'] ?? null) && $l['variantId'] > 0 && $l['quantity'] > 0) {
+                        $lines[] = ['variantId' => $l['variantId'], 'quantity' => $l['quantity']];
+                    }
+                }
+                if (!$known($source) || !$known($target) || $source === $target || $lines === [] || count($lines) > \App\Services\Group\Transfer\GroupTransferService::MAX_LINES) {
+                    return [['error' => 'source et target : deux boutiques différentes du groupe ; lines : 1 à 200 lignes {variantId, quantity}', 'shops' => array_keys($shops)], null, null];
+                }
+                $action = $this->remember($tenantCode, 'propose_group_transfer', ['source' => $source, 'target' => $target, 'lines' => $lines],
+                    sprintf('Demander un transfert de %d ligne(s), %d article(s) au total, de « %s » [%s] vers « %s » [%s] (la boutique source l\'envoie elle-même)', count($lines), array_sum(array_column($lines, 'quantity')),
+                        mb_substr((string) $shops[$source], 0, 60), $source, mb_substr((string) $shops[$target], 0, 60), $target));
+
+                return [$proposed($action, ['note' => 'Proposé au directeur ; à la confirmation, la demande part : rien ne sort du stock avant l\'envoi par la boutique source.']), $action, $linkTo('groupe')];
             case 'propose_group_same_company':
                 // lot G-1d : la DEMANDE seulement ; la boutique confirme elle-même (aucun outil, la route refuse toute entrée)
                 $site = is_string($input['site'] ?? null) ? trim($input['site']) : '';
@@ -736,6 +773,12 @@ TXT;
     /** Lot IA-A : l'outil est-il donné sur ce site ? Un outil sans module requis : toujours ; sinon l'un des modules doit être actif */
     private function available(string $tool): bool
     {
+        // lot G-5 : les transferts à envoyer, pour une boutique MEMBRE d'un groupe seulement (aucun outil inutile ailleurs)
+        if ($tool === 'get_transfers_to_send') {
+            $code = (string) ($this->tenantConnection?->getTenantCode() ?? '');
+
+            return $code !== '' && $this->groupTransfers !== null && ($this->groupService?->mine($code)['group'] ?? null) !== null;
+        }
         // lot IA-G : les outils du groupe ne sont donnés qu'au DIRECTEUR (relu à chaque fois : rôle, siège, module, jamais en entrée)
         if (in_array($tool, [...SiteAssistantTools::GROUP_READS, ...SiteAssistantTools::GROUP_ACTIONS], true)) {
             return $this->groupDirector?->group() !== null && $this->groupViews !== null && $this->groupService !== null;
@@ -905,6 +948,8 @@ TXT;
             case 'propose_group_invitation':
             case 'propose_group_copy':
             case 'propose_group_same_company':
+            case 'get_group_transfers':
+            case 'propose_group_transfer':
                 return $this->runGroupTool($name, $input, $tenantCode, $linkTo, $proposed);
         }
 

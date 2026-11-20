@@ -30,8 +30,8 @@ final class SiteAssistantTools
      * dits : quitter ou dissoudre le groupe (geste destructif qui coupe les entrées du directeur), entrer dans une boutique (geste de
      * sécurité : jeton, session), créer une boutique (aucune route de création au groupe à ce jour).
      */
-    public const GROUP_READS = ['get_group', 'get_group_view'];
-    public const GROUP_ACTIONS = ['propose_group_invitation', 'propose_group_copy', 'propose_group_same_company']; // lot G-1d : la demande du lien
+    public const GROUP_READS = ['get_group', 'get_group_view', 'get_group_transfers']; // lot G-5 : les transferts du groupe
+    public const GROUP_ACTIONS = ['propose_group_invitation', 'propose_group_copy', 'propose_group_same_company', 'propose_group_transfer']; // lot G-1d : la demande du lien ; lot G-5 : la demande de transfert
     /** Vues de « Toutes les boutiques » données au modèle (`get_group_view`) */
     public const GROUP_VIEWS = ['statistics', 'day', 'losses', 'to_receive', 'cash_balances', 'cash_movements', 'year', 'result'];
 
@@ -66,13 +66,15 @@ final class SiteAssistantTools
         // lot ABO-0 : lectures des abonnements
         'get_subscription_plans', 'get_benefits', 'get_plan_subscribers', 'get_subscription', 'get_expiring_rights',
         // lot IA-G : lectures du groupe (directeur seulement)
-        'get_group', 'get_group_view'];
+        'get_group', 'get_group_view', 'get_group_transfers',
+        // lot G-5 : les transferts que la boutique doit ENVOYER (son administrateur ; vide hors d'un groupe)
+        'get_transfers_to_send'];
     /** Lot IA-A : propositions des fonctions ajoutées, appliquées après confirmation (ConfirmSiteAssistantActionUseCase) et tracées « par l'assistant » */
     public const IAA_ACTIONS = ['add_default_variant', 'start_loss_exercise', 'start_loss_count', 'toggle_module', 'start_module_trial', 'generate_missing_barcodes', 'request_agency_assistance',
         'propose_benefit', 'propose_plan', 'set_plan_benefits', // lot ABO-0
         'propose_plan_update', // lot ABO-CONF
         'propose_use', 'propose_gift', 'propose_pause', 'propose_resume', 'propose_cancel_subscription', // lot ABO-1
-        'propose_group_invitation', 'propose_group_copy', 'propose_group_same_company']; // lot IA-G, G-1d
+        'propose_group_invitation', 'propose_group_copy', 'propose_group_same_company', 'propose_group_transfer']; // lot IA-G, G-1d, G-5
 
     /** Champs de la fiche Entreprise que l'assistant peut proposer de remplir (cheminement complet, 07/11/2026) ; les textes légaux peuvent être rédigés par l'IA */
     public const ENTREPRISE_FIELDS = ['name', 'email', 'tel', 'website', 'LegalNotice', 'conditionOfUse', 'privacyPolicy', 'apropos', 'metaTitle', 'metaDescription', 'seoKeywords', 'tvaIntracommunautaire', 'gstNumber', 'qstNumber', 'siret'];
@@ -130,6 +132,10 @@ final class SiteAssistantTools
                 'input_schema' => ['type' => 'object', 'properties' => ['view' => ['type' => 'string', 'enum' => self::GROUP_VIEWS], 'range' => ['type' => 'string', 'enum' => ['today', '7d', 'month', 'year']],
                     'from' => ['type' => 'string', 'description' => 'AAAA-MM-JJ'], 'to' => ['type' => 'string', 'description' => 'AAAA-MM-JJ'], 'source' => ['type' => 'string', 'enum' => ['all', 'ecommerce', 'pos', 'mobile_app']]], 'required' => ['view']]],
             ['name' => 'propose_group_invitation', 'description' => 'Propose d\'inviter une boutique existante (son code de site) à rejoindre le groupe. Elle accepte ou refuse elle-même. L\'administrateur confirme.', 'input_schema' => ['type' => 'object', 'properties' => ['site' => ['type' => 'string']], 'required' => ['site']]],
+            ['name' => 'get_group_transfers', 'description' => 'Les transferts de stock entre boutiques du groupe (directeur) : boutiques, état (demandé, envoyé, reçu, annulé, en échec d\'envoi), lignes et quantités.', 'input_schema' => ['type' => 'object', 'properties' => new \stdClass()]],
+            ['name' => 'get_transfers_to_send', 'description' => 'Les transferts de stock que CETTE boutique doit envoyer (demandés par le directeur de son groupe) : destination, lignes, quantités. L\'envoi est un geste de l\'administrateur, jamais de l\'assistant.', 'input_schema' => ['type' => 'object', 'properties' => new \stdClass()]],
+            ['name' => 'propose_group_transfer', 'description' => 'Propose de DEMANDER un transfert de stock d\'une boutique du groupe (source) vers une autre (target), lignes {variantId de la source, quantity}. Seules les boutiques de la même entreprise que le siège ; les articles doivent avoir été copiés. La boutique source ENVOIE elle-même ; l\'assistant n\'envoie ni ne reçoit jamais. L\'administrateur du siège confirme la demande.',
+                'input_schema' => ['type' => 'object', 'properties' => ['source' => ['type' => 'string'], 'target' => ['type' => 'string'], 'lines' => ['type' => 'array', 'items' => ['type' => 'object', 'properties' => ['variantId' => ['type' => 'integer'], 'quantity' => ['type' => 'integer']], 'required' => ['variantId', 'quantity']]]], 'required' => ['source', 'target', 'lines']]],
             ['name' => 'propose_group_same_company', 'description' => 'Propose de DEMANDER le lien « même entreprise » pour une boutique ASSOCIÉE du groupe (son code) : il permet le transfert de stock et la copie du coût d\'achat. Seul l\'administrateur de cette boutique le confirme ensuite, dans son écran ; l\'assistant ne confirme jamais à sa place. L\'administrateur du siège confirme la demande.', 'input_schema' => ['type' => 'object', 'properties' => ['site' => ['type' => 'string']], 'required' => ['site']]],
             ['name' => 'propose_group_copy', 'description' => 'Propose de copier des articles du catalogue d\'une boutique du groupe (source, le siège par défaut) vers une autre (target) : articles masqués par défaut, stock jamais copié, coût d\'achat copié seulement depuis le siège sauf withCost. L\'administrateur confirme ; la boutique cible est prévenue.',
                 'input_schema' => ['type' => 'object', 'properties' => ['source' => ['type' => 'string'], 'target' => ['type' => 'string'], 'articles' => ['type' => 'array', 'items' => ['type' => 'integer']],

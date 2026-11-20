@@ -13,16 +13,18 @@ class ActionCatalog
     public const KEYS = ['expense.create', 'supplier.create', 'shipping.create', 'budget.put', 'cash.balance.create', 'cash.movement.create', 'trip.create', // lot IA-ACT-2
         'fiscal_year.set', 'periods.calendar.set', 'product.cost.set', // lot IA-ACT-3
         'period.close', // lot IA-ACT-4
-        'price.set']; // lot IA-ACT-5
+        'price.set', // lot IA-ACT-5
+        'loan.create', 'loan.prepayment']; // lot FIS-1
 
     /** @var array<string, GestionAction> */
     private array $actions = [];
 
     public function __construct(ExpenseCreateAction $expense, SupplierCreateAction $supplier, ShippingCreateAction $shipping, BudgetPutAction $budget,
         CashBalanceCreateAction $cashBalance, CashMovementCreateAction $cashMovement, TripCreateAction $trip,
-        FiscalYearSetAction $fiscalYear, PeriodsCalendarSetAction $periodsCalendar, ProductCostSetAction $productCost, PeriodCloseAction $periodClose, PriceSetAction $priceSet)
+        FiscalYearSetAction $fiscalYear, PeriodsCalendarSetAction $periodsCalendar, ProductCostSetAction $productCost, PeriodCloseAction $periodClose, PriceSetAction $priceSet,
+        LoanCreateAction $loanCreate, LoanPrepaymentAction $loanPrepayment)
     {
-        foreach ([$expense, $supplier, $shipping, $budget, $cashBalance, $cashMovement, $trip, $fiscalYear, $periodsCalendar, $productCost, $periodClose, $priceSet] as $action) {
+        foreach ([$expense, $supplier, $shipping, $budget, $cashBalance, $cashMovement, $trip, $fiscalYear, $periodsCalendar, $productCost, $periodClose, $priceSet, $loanCreate, $loanPrepayment] as $action) {
             $this->actions[$action::key()] = $action;
         }
     }

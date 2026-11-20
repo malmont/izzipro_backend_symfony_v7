@@ -103,6 +103,7 @@ final class ScreenRegistry
         'tresorerie' => self::G, 'frais-fixes' => self::G, 'notes-de-frais' => self::G, 'periodes' => self::G, 'periode' => self::G, 'periode.budget' => self::G,
         'periode.simulation' => self::G, 'preparation' => self::G, 'statistiques' => self::G, 'statistiques.annee' => self::G, 'rapports' => self::G, 'reglages' => self::G,
         'reprise' => self::G, 'lexique' => self::G, 'notifications' => self::G, 'exercice' => self::G, 'annee' => self::G, 'stock.low' => self::G,
+        'prets' => self::G, // lot FIS-1 : les prêts de la gestion
         // anciens codes de la gestion, gardés : les applications en place les envoient encore
         'accueil' => self::G, 'journee' => self::G, 'periode.resultat' => self::G, 'periode.preparation' => self::G, 'commande' => self::G, 'article' => self::G,
         'stock' => self::G, 'tresorerie.rapprochements' => self::G, 'documents' => self::G, 'simulateur' => self::G, 'console' => self::G,
@@ -240,6 +241,7 @@ final class ScreenRegistry
         ['#^/api/gestion/locations(/|$)#', 'locations'],
         ['#^/api/gestion/notifications(/|$)#', 'notifications'],
         ['#^/api/gestion/preparation(/|$)#', 'preparation'],
+        ['#^/api/gestion/prets(/|$)#', 'prets'],
         ['#^/api/gestion/prix(/|$)#', 'prix'],
         ['#^/api/gestion/promotions(/|$)#', 'promotions'],
         ['#^/api/gestion/rapports(/|$)#', 'rapports'],
@@ -299,7 +301,7 @@ final class ScreenRegistry
         ['#^/api/site/assistant(/|$)#', 'site.assistant'],
         ['#^/api/site/essai(/|$)#', 'site.essai'],
         ['#^/api/site/taxes(/|$)#', 'site.taxes'],
-        ['#^/api/(group|site/group-invitations|site/group-same-company)(/|$)#', 'groupe'], // lot G-1d : le lien « même entreprise »
+        ['#^/api/(group|site/group-invitations|site/group-same-company|site/group-transfers)(/|$)#', 'groupe'], // lot G-1d : le lien « même entreprise » ; lot G-5 : les transferts à envoyer
         ['#^/api/site/domain(/|$)#', 'site.domaine'],
         ['#^/api/site/features(/|$)#', 'site.modules'],
         ['#^/api/site/help(/|$)#', 'site.aide'],

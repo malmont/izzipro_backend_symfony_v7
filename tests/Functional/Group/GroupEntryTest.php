@@ -83,9 +83,16 @@ class GroupEntryTest extends WebTestCase
             ['PUT', '/api/site/domain', 'security'],
             // décisions du chef : IA fermée (unités de la boutique), import des clients finaux fermé
             ['POST', '/api/gestion/console/messages', 'ai'], ['POST', '/api/gestion/conversations/1/messages', 'ai'], ['POST', '/api/products/ai/sheet', 'ai'],
-            ['POST', '/api/site/imports', 'customers'], ['POST', '/api/site/imports/1/invitations', 'customers']] as [$method, $path, $reason]) {
+            ['POST', '/api/site/imports', 'customers'], ['POST', '/api/site/imports/1/invitations', 'customers'],
+            // décision du chef (FIS-1, 19/11/2026) : les prêts en LECTURE SEULE (écritures des comptes de la boutique)
+            ['POST', '/api/gestion/prets', 'payment'], ['PATCH', '/api/gestion/prets/1', 'payment'], ['DELETE', '/api/gestion/prets/1', 'payment'],
+            ['POST', '/api/gestion/prets/1/remboursements', 'refund']] as [$method, $path, $reason]) {
             $this->assertSame([403, $reason], $this->reason($method, $path, $token), "$method $path");
         }
+        // ... et par le fil de la gestion : un prêt ne s'y ouvre pas (le chemin de confirmation ne dit pas l'action : le fil refuse lui-même)
+        $this->assertSame([403, 'MODE_FORBIDDEN'], $this->reason('POST', '/api/gestion/conversations', $token, ['action' => 'loan.create', 'params' => []], 'code'));
+        $this->assertSame([403, 'MODE_FORBIDDEN'], $this->reason('POST', '/api/gestion/conversations', $token, ['action' => 'loan.prepayment', 'params' => []], 'code'));
+        $this->assertNotSame(403, $this->request('POST', '/api/gestion/prets/apercu', $token, MV_TEST_TENANT2_HOST, [])->getStatusCode(), 'l\'aperçu, qui n\'écrit rien, reste ouvert');
         // formes déformées d'une route d'argent : jamais servies (refus de la garde ou route introuvable)
         foreach (['/api/order/cancel/5%20', '/api/order/cancel/+5', '/api/order/cancel/5.', '//api/order/cancel/5', '/api/order/cancel//5', '/api/order/cancel/5%2F', '/api/order//cancel/5'] as $odd) {
             $this->assertContains($this->request('POST', $odd, $token, MV_TEST_TENANT2_HOST, [])->getStatusCode(), [403, 404, 405], $odd);
@@ -381,7 +388,7 @@ class GroupEntryTest extends WebTestCase
     private function clean(): void
     {
         $this->master->exec("DELETE FROM site_entries WHERE mode = 'group'");
-        foreach (['shop_group_item_links', 'shop_group_copies', 'shop_group_events', 'shop_group_invitations', 'shop_group_company_requests', 'shop_group_sites', 'shop_groups'] as $table) {
+        foreach (['shop_group_item_links', 'shop_group_copies', 'shop_group_events', 'shop_group_invitations', 'shop_group_company_requests', 'shop_group_transfer_events', 'shop_group_transfer_lines', 'shop_group_transfers', 'shop_group_sites', 'shop_groups'] as $table) {
             $this->master->exec("DELETE FROM $table");
         }
         foreach ([[MV_TEST_TENANT_DB, MV_TEST_TENANT_CODE], [MV_TEST_TENANT2_DB, MV_TEST_TENANT2_CODE]] as [$db, $code]) {

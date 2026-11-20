@@ -729,6 +729,165 @@ relu à chaque appel et à la confirmation). Code : `SiteAssistantTools::GROUP_R
   essai d'injection (`GroupAssistantToolsTest` : un nom de boutique qui porte une consigne reste une donnée de l'aperçu, rien n'est écrit
   avant la confirmation).
 
+## 17. Lot G-5 : transfert léger entre boutiques du groupe (19/11/2026, contrat validé par le chef, 3 conditions) — SCHÉMA AVANT LE CODE
+
+Le directeur DEMANDE au siège un transfert de marchandise d'une boutique source vers une boutique destination du groupe ; l'administrateur
+de la SOURCE l'ENVOIE depuis son site ; la DESTINATION le reçoit par la réception habituelle des commandes fournisseurs (R1). Le stock
+ne se copie jamais : il SORT chez la source et ENTRE chez la destination. Code prévu : `src/Services/Group/Transfer/`.
+
+### 17.1 Qui peut transférer avec qui (condition 1 du chef)
+
+Un transfert entre deux entreprises distinctes est une VENTE (facture, taxes) et révèle le coût de l'une à l'autre. Permis seulement :
+- entre le siège et une boutique d'origine `created` (créée par le groupe), dans les deux sens ;
+- entre deux boutiques d'origine `created`.
+Décision du propriétaire (lot G-1d, § 17 bis) : une boutique associée AVEC le lien « même entreprise » confirmé compte comme une boutique
+`created` (`GroupCompanyService::same`, relu à chaque geste). Toute boutique d'origine `associated` SANS ce lien, en source ou en
+destination : 422 `TRANSFER_ASSOCIATED_SHOP`, « Cette
+boutique est une entreprise associée : un transfert avec elle serait une vente entre deux entreprises (facture, taxes). Ce cas n'est pas
+encore permis. » La vente entre boutiques associées est une question pour le propriétaire et l'avocat, notée pour plus tard. L'origine est
+RELUE à chaque geste (demande, envoi, annulation) : une boutique devenue `associated` entre-temps bloque l'envoi.
+
+### 17.2 Deux bases, aucune transaction commune (condition 2)
+
+Trois bases sont touchées : la base maître (l'état), la base de la source (sortie de stock), la base de la destination (commande
+fournisseur). Aucune transaction ne les couvre ensemble. L'état fait foi, et chaque geste est rejouable sans doublon.
+
+**Machine d'états** (`shop_group_transfers.state`, base maître) :
+
+```
+requested ──send──▶ sending ──(source OK, destination OK)──▶ sent ──(toutes les lignes reçues, relu)──▶ received
+    │                  │
+    │                  └──(destination en échec)──▶ compensation chez la source ──▶ send_failed
+    │                                                                                  │
+    └──cancel──▶ cancelled ◀──cancel (inverse chez la source + commande annulée)── sent ┘ (send_failed : cancel = simple fermeture)
+```
+
+- `requested` → `sending` : passage CONDITIONNEL (`UPDATE … SET state = 'sending', sending_since = now(), attempt = attempt + 1
+  WHERE id = ? AND state = 'requested'`). Une seule requête gagne : le double clic sur « envoyer » reçoit 409 `TRANSFER_ALREADY_SENDING`
+  (ou l'état actuel s'il est déjà `sent`).
+- `sending` → `sent` : quand les deux écritures sont faites (source puis destination), passage conditionnel `WHERE state = 'sending'`.
+- `sending` → `send_failed` : la destination a échoué ; la sortie de la source est défaite par un mouvement inverse ; un incident de la
+  plateforme est ouvert (`recordPlatformIssue`, sans nom ni coût). `send_failed` se renvoie (retour à `sending` par le même passage
+  conditionnel) ou se ferme (`cancelled`).
+- `sent` → `received` : jamais écrit par R1 (aucun crochet dans la réception) ; relu à la lecture : toutes les lignes de la commande de
+  destination sont reçues. Une lecture qui le constate le fige (passage conditionnel).
+- `cancelled` : depuis `requested` ou `send_failed` (simple fermeture) ; depuis `sent` sans aucune réception (inverse chez la source,
+  commande de destination annulée : la commande fournisseur n'a pas d'état « annulée » aujourd'hui, elle est fermée et ses lignes
+  remises à zéro, marque `order` gardée ; détail tranché au code) ; après une réception partielle : 409 `TRANSFER_PARTLY_RECEIVED`. Pendant `sending` : 409
+  `TRANSFER_SENDING` (on attend la fin ou la reprise).
+
+**Ordre d'écriture de l'envoi** :
+1. base maître : `requested` → `sending` (conditionnel) ;
+2. base SOURCE, UNE transaction : verrou des variantes (17.3), contrôle du stock, un mouvement « Transfert » sortant par ligne, marques
+   d'idempotence (17.4), coût unitaire figé sur la ligne du transfert (base maître, écrit après le COMMIT de la source) ;
+3. base DESTINATION, UNE transaction : fournisseur « Boutique <nom> » trouvé ou créé, commande fournisseur et ses lignes, marque
+   d'idempotence de la commande ;
+4. base maître : `sending` → `sent`, numéro de la commande de destination ; avis aux administrateurs de la destination.
+
+**Si la destination échoue** (étape 3) : mouvement inverse chez la source (une transaction, marques `back`), état `send_failed`, incident
+de la plateforme ; la réponse est 503 `TRANSFER_SEND_FAILED` (texte neutre). Si la source échoue (étape 2, stock court compris) :
+transaction annulée, rien n'est écrit chez la source, l'état revient à `requested` (conditionnel) ; 409 `TRANSFER_STOCK_SHORT` avec le
+détail par ligne.
+
+**Idempotence** : une clé par transfert ET par ligne. Chaque geste vérifie sa marque avant d'écrire, dans la même transaction que
+l'écriture ; la contrainte unique de la marque garantit qu'un rejeu concurrent échoue au lieu de doubler. Rejouer l'étape 2 après un
+COMMIT déjà fait ne sort rien de plus ; rejouer l'étape 3 retrouve la commande déjà créée.
+
+**Reprise** : un passage `app:group:transfers:resume` (minuteur toutes les 10 minutes, à installer par le propriétaire) reprend tout
+transfert en `sending` depuis plus de 5 minutes : il relit les marques de la source et de la destination et termine l'envoi (étapes
+manquantes) ; si la destination échoue encore, compensation et `send_failed` comme ci-dessus. Il ne crée jamais de seconde sortie : il
+s'appuie sur les marques. Chaque reprise est journalisée (`shop_group_transfer_events`).
+
+### 17.3 Verrou de stock chez la source (condition 3)
+
+À l'étape 2, les variantes de la source sont verrouillées (`SELECT … FROM product_variant WHERE id IN (…) ORDER BY id FOR UPDATE`, ordre
+fixe pour éviter les interblocages ; l'ordre de la réception R1 et de la vente : ligne, puis variante, est respecté). Le stock est relu
+SOUS le verrou ; il doit couvrir chaque ligne, sinon toute la transaction est annulée. Tout autre geste de stock (vente, réception,
+import, comptage) prend le même verrou de variante : il attend la fin de l'envoi et voit le stock déjà diminué. La source ne passe donc
+jamais en négatif à cause d'un transfert. `lock_timeout` de 5 secondes : au-delà, 409 `TRANSFER_STOCK_BUSY`, état revenu à `requested`.
+
+### 17.4 Tables
+
+Base maître :
+- `shop_group_transfers` : id, group_id, source_site, target_site, state, attempt, sending_since, target_commande_id, currency,
+  requested_by / sent_by / cancelled_by (comptes tracés comme G-1), dates de chaque passage ;
+- `shop_group_transfer_lines` : id, transfer_id, line_no, source_variant_id, target_variant_id (de `shop_group_item_links`, G-4),
+  quantity, unit_cost_cents (figé à l'envoi), currency ; UNIQUE (transfer_id, line_no) ;
+- `shop_group_transfer_events` : journal (demandé, envoi tenté, envoyé, échec, compensé, reprise, annulé, reçu), sans nom ni coût.
+
+Bases des sites (script gardé `scripts/migrate_all_v2_group_transfers.sh`, 10 bases et le modèle, plus la migration Doctrine) :
+- une ligne de donnée : le type de mouvement « Transfert » ;
+- `group_transfer_marks` : transfer_uid (identifiant global du transfert), kind (`out` sortie, `back` retour, `order` commande de
+  destination), line_no (0 pour `order`), ref_id (mouvement ou commande), created_at ; UNIQUE (transfer_uid, kind, line_no).
+
+### 17.5 Routes et refus (contrat, inchangé hors conditions)
+
+- au siège, directeur : `POST /api/gestion/groupe/transferts` { source, target, lines: [{ variantId, quantity }] } → 201 `requested` ;
+  `GET` liste et fiche ; `POST /{id}/cancel` ;
+- à la source, administrateur : `GET /api/site/group-transfers` (à envoyer) ; `POST /api/site/group-transfers/{id}/send`.
+- Refus : 422 `TRANSFER_ASSOCIATED_SHOP`, `TRANSFER_ITEM_NOT_IN_TARGET` (liste ; « copiez d'abord l'article »), `VALIDATION_FAILED`
+  (quantité entière > 0, 200 lignes au plus) ; 409 `TRANSFER_STOCK_SHORT`, `TRANSFER_STOCK_BUSY`, `TRANSFER_CURRENCY_DIFFERS`,
+  `TRANSFER_ALREADY_SENDING`, `TRANSFER_SENDING`, `TRANSFER_PARTLY_RECEIVED` ; 503 `TRANSFER_SEND_FAILED` ; 403 hors directeur, et
+  directeur entré dans une boutique (garde du mode groupe).
+- Coût à l'envoi : coût moyen des lignes d'achat de la source à la date, sinon prix d'achat ; il n'est lu que pour les lignes du transfert
+  et n'est montré qu'à la destination (sa commande) et au directeur.
+- Avis : à la demande, administrateurs de la source ; à l'envoi, ceux de la destination ; à l'échec d'envoi, le directeur (indispensables).
+
+### 17.6 Outils de l'IA
+
+Lecture `get_group_transfers` (directeur : transferts et état ; administrateur de la source : à envoyer) ; action `propose_group_transfer`
+(directeur, proposée puis confirmée, mêmes règles que la route). REFUSÉS à l'IA, et dits : l'ENVOI et la RÉCEPTION (gestes physiques d'une
+personne dans la boutique). Noms d'articles et de boutiques : des données (essai d'injection).
+
+### 17.7 Essais exigés
+
+Demande, envoi, réception, annulation avant et après l'envoi ; stock court, article non copié, devises différentes, boutique associée
+(source et destination) ; non-directeur et directeur entré ; PANNE ENTRE LES DEUX ÉCRITURES (destination simulée en échec : inverse chez
+la source, `send_failed`, incident ; puis renvoi réussi sans doublon) ; REJEU (étape 2 rejouée après COMMIT : aucune seconde sortie ;
+reprise d'un `sending` bloqué) ; DOUBLE CLIC sur « envoyer » (une seule sortie) ; vente concurrente pendant l'envoi (jamais de négatif).
+Lot à risque : relecture neuve en deux passes et mutations.
+### 17.7 bis Ce que les relectures ont changé au schéma (19/11/2026)
+
+- **Verrou consultatif du transfert** (base maître, `pg_try_advisory_lock(75050, id)`, session de la connexion maître) : pris par l'envoi,
+  la reprise et l'annulation ; un envoi vivant le tient tout du long, la reprise le laisse, l'annulation répond 409 `TRANSFER_SENDING`.
+  Il est revérifié avant la compensation et avant `sent` (connexion recréée = verrou perdu : l'envoi s'arrête, 503 `TRANSFER_SEND_PENDING`,
+  la reprise finit). Jamais de pooler en mode transaction devant la base maître.
+- **Marques de sortie et de retour PAR TENTATIVE** (`uid#attempt`) ; la commande de destination a UNE marque par transfert. Un renvoi
+  rend d'abord ce qu'une tentative précédente n'aurait pas rendu.
+- **Avant toute compensation**, la marque `order` de la destination est relue : une commande écrite (validée côté base, erreur côté PHP)
+  vaut envoi fait. Une relecture IMPOSSIBLE ne compense rien (503 `TRANSFER_SEND_PENDING`, état `sending`, reprise).
+- **Annulation** : `requested` → simple fermeture ; `send_failed`, `sent`, ou `sending` bloqué (verrou libre) → la commande de destination
+  éventuelle est annulée (lignes verrouillées ; refusée si une réception a commencé, ou si la commande a disparu ou changé : 409
+  `TRANSFER_ORDER_CHANGED`), puis le stock de TOUTES les tentatives revient chez la source. Les deux sites sont relus même sortis du groupe.
+- **La commande d'un transfert ne se modifie pas** (`Commande::isGroupTransfer`, `PeriodGuard::assertCommandeWritable`,
+  `CommandeLineService`, EasyAdmin) : 409 `TRANSFER_ORDER_LOCKED` ; elle se reçoit seulement.
+- **Reprise** : les envois bloqués par ancienneté ; un transfert en erreur passe derrière les autres ; seuls les succès sont comptés.
+
+### 17.8 Ce qui est codé (19/11/2026)
+
+Code : `src/Services/Group/Transfer/` (`GroupTransferService`, `GroupTransferRepository` pour la base maître, `GroupTransferSiteWriter` pour
+les écritures d'UN site et ses marques, `GroupTransferMailer`, `GroupTransferLinkGuard`), `GestionGroupTransferController`
+(`/api/gestion/groupe/transferts`), `SiteGroupTransferController` (`/api/site/group-transfers`), commande `app:group:transfers:resume`
+(minuteur `ops/systemd/group-transfers-resume.{service,timer}`, toutes les 10 minutes, installé par le propriétaire).
+
+- **Base maître** : `ops/sql/group_transfers_master.sql` (script hors dépôt `scripts/migrate_master_v2_group_transfers.sh`).
+  **Sites** : migration `Version20270202000000` (type « Transfert », `group_transfer_marks`), script `scripts/migrate_all_v2_group_transfers.sh`.
+- **Réponse** d'un transfert : `{ id, source, target, state, currency, requestedAt, sentAt, receivedAt, cancelledAt, partlyReceived,
+  targetOrderId, lines: [{ line, sourceVariantId, targetVariantId, quantity, unitCostCents }] }` (les lignes dans la fiche et la réponse
+  d'un geste, pas dans la liste du directeur).
+- **Refus** (en plus de 17.5) : 403 `GROUP_TRANSFER_FORBIDDEN` (pas le directeur, ou entré), `GROUP_FORBIDDEN` (route de la source : pas un
+  administrateur DU site), 404 `TRANSFER_NOT_FOUND` (inconnu, d'un autre groupe, ou la boutique n'est pas la source), `GROUP_SHOP_UNKNOWN` ;
+  409 `TRANSFER_ALREADY_SENT`, `TRANSFER_CANCELLED`, `TRANSFER_RECEIVED`, `TRANSFER_NOT_AVAILABLE` (migration absente sur le site).
+- **Réception** : jamais écrite par R1 ; lue par la fiche et la liste du directeur (commande toute reçue → `received`).
+- **Annulation après l'envoi** : la commande de destination est fermée, ses lignes remises à zéro, son nom préfixé « [annulé] » ; puis le
+  stock revient chez la source (marques `back`).
+- **Lien « même entreprise » retiré** (G-1d) : `GroupTransferLinkGuard` annule les transferts seulement demandés avec cette boutique.
+- **Outils de l'IA** : `get_group_transfers` (directeur), `get_transfers_to_send` (administrateur d'une boutique : quantités, sans coût),
+  `propose_group_transfer` (directeur, confirmé par lui, `GroupTransferService::request`). Refusés et dits (`refusedToAssistant`) :
+  envoyer, recevoir.
+
+Essai : `tests/Functional/Group/GroupTransferTest.php`.
+
 ## 17 bis. Lot G-1d : le lien « même entreprise » d'une boutique associée (19/11/2026, contrat validé par le chef, décision du propriétaire)
 
 Un transfert ou une copie du coût entre deux ENTREPRISES distinctes serait une vente (facture, taxes) et révélerait le coût de l'une à

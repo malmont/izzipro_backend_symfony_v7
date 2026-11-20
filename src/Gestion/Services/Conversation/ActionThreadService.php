@@ -29,7 +29,22 @@ class ActionThreadService
         private readonly ActionCatalog $catalog,
         private readonly LandingAiQuotaService $quota,
         private readonly TranslatorInterface $translator,
+        private readonly ?\Symfony\Bundle\SecurityBundle\Security $security = null,
     ) {
+    }
+
+    /**
+     * Actions du fil fermées au directeur d'un groupe entré dans une boutique (lot G-1 : aucun geste d'argent) : un prêt et son remboursement
+     * anticipé sont des écritures des comptes de la boutique (décision du chef, 19/11/2026). Les routes des prêts lui sont fermées de même.
+     */
+    public const GROUP_CLOSED_ACTIONS = ['loan.create', 'loan.prepayment'];
+
+    /** @throws GestionConflictException 403 MODE_FORBIDDEN */
+    private function groupGuard(string $key): void
+    {
+        if (in_array($key, self::GROUP_CLOSED_ACTIONS, true) && $this->security?->getUser() instanceof \App\Security\Entry\GroupOperator) {
+            throw new GestionConflictException('MODE_FORBIDDEN', 'Cette action n\'est pas ouverte au directeur d\'un groupe dans une boutique.', 403, ['reason' => 'payment']);
+        }
     }
 
     /**
@@ -46,6 +61,7 @@ class ActionThreadService
         if ($params !== null && !is_array($params)) {
             throw new GestionValidationException(['params' => 'MUST_BE_OBJECT'], 'params : objet { paramètre: valeur } attendu');
         }
+        $this->groupGuard($key);
         $action = $this->catalog->get($key);
         $answers = [];
         $fields = [];
@@ -228,6 +244,7 @@ class ActionThreadService
      */
     public function confirm(GestionConversation $conversation, mixed $previewHash, ?string $user): array
     {
+        $this->groupGuard((string) $conversation->getKind());
         $action = $this->workable($conversation);
         if (!is_string($previewHash) || $previewHash === '') {
             throw new GestionValidationException(['previewHash' => 'REQUIRED']);
@@ -259,6 +276,7 @@ class ActionThreadService
      */
     public function undo(GestionConversation $conversation, ?string $user): array
     {
+        $this->groupGuard((string) $conversation->getKind());
         $confirmed = $this->confirmation($conversation);
         if ($confirmed === null) {
             throw $this->last($conversation, 'undone') !== null

@@ -96,7 +96,10 @@ Test : `tests/Functional/Gestion/CashApiTest.php`.
 - Sans solde : 200, `balance`, `projection` et `projectionWithSales` à `null`, `status: "no_balance"`.
 - `byCategory` : totaux des mouvements prévus et des dépenses saisies sur les jours de la projection (après le jour du solde).
 - `caveats` : `STALE_BALANCE` (solde de plus de 7 jours), `RECORDED_EXPENSES_INCLUDED` (toujours), `TAXES_INCLUDED` (toujours : les
-  encaissements comprennent les taxes, à prévoir en mouvement `tax`), `NO_SALES_HISTORY` (aucune commande sur les 30 jours).
+  encaissements comprennent les taxes, à prévoir en mouvement `tax`), `NO_SALES_HISTORY` (aucune commande sur les 30 jours),
+  `LOAN_MAY_OVERLAP_MOVEMENTS` (un mouvement prévu `loan` saisi à la main existe à côté d'un prêt : rien n'est supprimé).
+- Prêts (lot FIS-1, `docs/prets-gestion.md`) : déblocage, échéances entières, frais et remboursements anticipés des prêts dans la devise
+  du site entrent dans la projection, `cashUntil` et l'attendu du rapprochement ; `byCategory.loan` les compte.
 
 ## 5. Vignettes et notification
 
