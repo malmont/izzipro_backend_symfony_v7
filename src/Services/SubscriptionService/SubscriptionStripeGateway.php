@@ -13,20 +13,20 @@ use App\Services\TenantEntityManagerProvider;
 use Stripe\StripeClient;
 use Stripe\Subscription as StripeSubscription;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
-use Symfony\Contracts\Cache\CacheInterface;
-use Symfony\Contracts\Cache\ItemInterface;
 
 /**
  * Stripe Billing sur le compte connecté du site (StripeConfig actif ; sinon le compte de la plateforme). Les
- * identifiants Stripe créés (client, produit, prix, taux de taxe) sont gardés en base ou en cache pour ne pas être
- * recréés. Toute erreur de l'API remonte en SubscriptionException 502.
+ * identifiants Stripe créés (client, produit, prix, taux de taxe) sont gardés en base pour ne pas être recréés : client et
+ * prix de la formule sur leur fiche, taux de taxe et prix de livraison dans `stripe_object_ref` de la base maître (lot
+ * CACHE-ETAT, StripeObjectRefStore : clé de tous les paramètres, mode, verrou, référence périmée recréée). Toute erreur de
+ * l'API remonte en SubscriptionException 502.
  */
 final class SubscriptionStripeGateway implements SubscriptionStripeGatewayInterface
 {
     public function __construct(
         private readonly TenantEntityManagerProvider $emProvider,
         private readonly TenantConnectionProvider $tenantProvider,
-        private readonly CacheInterface $cache,
+        private readonly StripeObjectRefStore $refs, // lot CACHE-ETAT : plus de cache pour les identifiants Stripe
         private readonly StripeConnectSetupService $setup,
         #[Autowire('%env(default::STRIPE_SECRET_KEY)%')]
         private readonly ?string $stripeSecretKey,
@@ -80,37 +80,57 @@ final class SubscriptionStripeGateway implements SubscriptionStripeGatewayInterf
     {
         $ids = [];
         foreach ($taxes as $tax) {
-            $percentage = round((float) $tax['rate'] * 100, 4);
-            $key = 'stripe_tax_rate_' . hash('sha256', ($this->account() ?? 'platform') . '|' . $tax['label'] . '|' . $percentage);
-            $ids[] = $this->cache->get($key, function (ItemInterface $item) use ($tax, $percentage) {
-                $item->expiresAfter(86400 * 30);
-
-                return $this->call(fn (StripeClient $c, array $o) => $c->taxRates->create([
-                    'display_name' => (string) $tax['label'], 'percentage' => $percentage, 'inclusive' => false,
-                    'country' => 'CA', 'description' => 'Taxe du site (table)',
-                ], $o))->id;
-            });
+            $params = self::taxRateParams($tax);
+            $ref = StripeObjectRefStore::refKey($params);
+            $ids[] = $this->refs->ensure($this->account() ?? 'platform', $this->mode(), 'tax_rate', $ref,
+                fn (string $id): bool => (bool) $this->retrieveAlive(fn (StripeClient $c, array $o) => $c->taxRates->retrieve($id, [], $o)),
+                fn (int $generation): string => $this->call(fn (StripeClient $c, array $o) => $c->taxRates->create($params, $o + ['idempotency_key' => StripeObjectRefStore::idempotencyKey($generation, 'tax', $ref)]))->id);
         }
 
         return $ids;
     }
 
+    /**
+     * Paramètres de création d'un taux de taxe : TOUS entrent dans la clé de l'objet (lot CACHE-ETAT).
+     *
+     * @param array{label: string, rate: float|int|string} $tax
+     */
+    public static function taxRateParams(array $tax): array
+    {
+        return [
+            'display_name' => (string) $tax['label'], 'percentage' => round((float) $tax['rate'] * 100, 4), 'inclusive' => false,
+            'country' => 'CA', 'description' => 'Taxe du site (table)',
+        ];
+    }
+
     public function ensureShippingPrice(Carrier $carrier, int $amount, string $currency, string $interval, int $intervalCount): string
     {
-        $key = 'stripe_shipping_price_' . hash('sha256', implode('|', [$this->account() ?? 'platform', $carrier->getId(), $amount, strtolower($currency), $interval, $intervalCount]));
+        [$productParams, $priceParams] = self::shippingParams((int) $carrier->getId(), (string) $carrier->getName(), (string) $this->tenantProvider->getTenantCode(), $amount, $currency, $interval, $intervalCount);
+        $ref = StripeObjectRefStore::refKey(['product' => $productParams, 'price' => $priceParams]);
 
-        return $this->cache->get($key, function (ItemInterface $item) use ($carrier, $amount, $currency, $interval, $intervalCount) {
-            $item->expiresAfter(86400 * 30);
-            $product = $this->call(fn (StripeClient $c, array $o) => $c->products->create([
-                'name' => sprintf('Livraison — %s', $carrier->getName()), 'tax_code' => 'txcd_92010001', // code fiscal « livraison » de Stripe Tax
-                'metadata' => ['tenant_code' => (string) $this->tenantProvider->getTenantCode(), 'carrier_id' => (string) $carrier->getId()],
-            ], $o));
+        return $this->refs->ensure($this->account() ?? 'platform', $this->mode(), 'shipping_price', $ref,
+            fn (string $id): bool => (bool) $this->retrieveAlive(fn (StripeClient $c, array $o) => $c->prices->retrieve($id, [], $o)),
+            function (int $generation) use ($productParams, $priceParams, $ref): string {
+                $product = $this->call(fn (StripeClient $c, array $o) => $c->products->create($productParams, $o + ['idempotency_key' => StripeObjectRefStore::idempotencyKey($generation, 'prod', $ref)]));
 
-            return $this->call(fn (StripeClient $c, array $o) => $c->prices->create([
-                'product' => $product->id, 'unit_amount' => $amount, 'currency' => strtolower($currency),
-                'recurring' => ['interval' => $interval, 'interval_count' => $intervalCount],
-            ], $o))->id;
-        });
+                return $this->call(fn (StripeClient $c, array $o) => $c->prices->create(['product' => $product->id] + $priceParams, $o + ['idempotency_key' => StripeObjectRefStore::idempotencyKey($generation, 'price', $ref)]))->id;
+            });
+    }
+
+    /**
+     * Paramètres de création du produit et du prix de livraison : TOUS entrent dans la clé de l'objet (lot CACHE-ETAT).
+     *
+     * @return array{0: array<string, mixed>, 1: array<string, mixed>}
+     */
+    public static function shippingParams(int $carrierId, string $carrierName, string $tenantCode, int $amount, string $currency, string $interval, int $intervalCount): array
+    {
+        return [
+            [
+                'name' => sprintf('Livraison — %s', $carrierName), 'tax_code' => 'txcd_92010001', // code fiscal « livraison » de Stripe Tax
+                'metadata' => ['tenant_code' => $tenantCode, 'carrier_id' => (string) $carrierId],
+            ],
+            ['unit_amount' => $amount, 'currency' => strtolower($currency), 'recurring' => ['interval' => $interval, 'interval_count' => $intervalCount]],
+        ];
     }
 
     public function create(string $customerId, string $priceId, int $quantity, int $trialDays, array $metadata, array $taxRateIds, bool $automaticTax, ?string $shippingPriceId = null, bool $cancelAtPeriodEnd = false, ?float $applicationFeePercent = null): array
@@ -295,6 +315,29 @@ final class SubscriptionStripeGateway implements SubscriptionStripeGatewayInterf
     private function account(): ?string
     {
         return $this->emProvider->getEntityManager()->getRepository(StripeConfig::class)->findOneBy(['isActive' => true])?->getAccountId();
+    }
+
+    /** Mode de la clé du serveur (test / live) : il entre dans la clé des objets gardés (lot CACHE-ETAT) */
+    private function mode(): string
+    {
+        return StripeObjectRefStore::modeOf($this->stripeSecretKey);
+    }
+
+    /**
+     * L'objet gardé existe-t-il encore, actif, chez Stripe ? Disparu (resource_missing) = non ; toute autre erreur remonte (502).
+     */
+    private function retrieveAlive(callable $retrieve): bool
+    {
+        return (bool) $this->call(function (StripeClient $c, array $o) use ($retrieve): bool {
+            try {
+                return (bool) ($retrieve($c, $o)->active ?? false);
+            } catch (\Stripe\Exception\InvalidRequestException $e) {
+                if ($e->getStripeCode() === 'resource_missing') {
+                    return false;
+                }
+                throw $e;
+            }
+        });
     }
 
     /** @throws SubscriptionException 502 */

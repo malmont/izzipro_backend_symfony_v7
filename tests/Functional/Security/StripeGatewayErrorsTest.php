@@ -20,7 +20,6 @@ use Psr\Log\AbstractLogger;
 use Stripe\Exception\AuthenticationException;
 use Stripe\Exception\CardException;
 use Stripe\Exception\InvalidRequestException;
-use Symfony\Contracts\Cache\CacheInterface;
 
 /**
  * Lot ERREURS-1 (12/11/2026) : les passerelles Stripe ne renvoient plus le message brut d'une erreur de l'API. Une carte refusée garde
@@ -77,7 +76,7 @@ class StripeGatewayErrorsTest extends TestCase
         $em->method('getRepository')->willReturn($repository);
         $provider = $this->createMock(TenantEntityManagerProvider::class);
         $provider->method('getEntityManager')->willReturn($em);
-        $gateway = new SubscriptionStripeGateway($provider, $this->createMock(TenantConnectionProvider::class), $this->createMock(CacheInterface::class), (new \ReflectionClass(StripeConnectSetupService::class))->newInstanceWithoutConstructor(), 'sk_test_fictif', $this->safe); // classe finale : instance vide, non utilisée ici
+        $gateway = new SubscriptionStripeGateway($provider, $this->createMock(TenantConnectionProvider::class), $this->createMock(\App\Services\SubscriptionService\StripeObjectRefStore::class), (new \ReflectionClass(StripeConnectSetupService::class))->newInstanceWithoutConstructor(), 'sk_test_fictif', $this->safe); // classe finale : instance vide, non utilisée ici
         $call = fn (\Throwable $failure) => $this->thrownBy(fn () => $this->invoke($gateway, 'call', [fn () => throw $failure]));
 
         $e = $call($this->authentication());

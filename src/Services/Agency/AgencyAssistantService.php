@@ -46,7 +46,7 @@ class AgencyAssistantService
         private readonly LandingAiQuotaService $quota,
         private readonly AgencyClientsService $clients,
         private readonly AgencySiteRequestService $requests,
-        #[Autowire(service: 'cache.app')] private readonly CacheInterface $cache,
+        #[Autowire(service: 'cache.state')] private readonly CacheInterface $cache, // lot CACHE-ETAT : actions en attente de confirmation
         private readonly LoggerInterface $logger,
         private readonly ?HelpCatalogService $help = null,
         private readonly ?\App\Services\ContentAuditService\ContentAuditRecorder $audit = null,

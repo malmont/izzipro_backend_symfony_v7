@@ -161,7 +161,7 @@ class PlatformIncidentTest extends WebTestCase
             $this->api('GET', '/api/site/storefront', null, null, '10.98.0.2', ['HTTP_X_TEST_RAISE' => 'error']);
         }
         $this->assertSame([1, 1], [(int) $this->row((int) $row['id'])['count'], $this->events((int) $row['id'])], 'une seule écriture pendant la minute');
-        $cache = static::getContainer()->get('cache.app');
+        $cache = static::getContainer()->get('cache.state');
         $item = $cache->getItem('platform_incident_w_' . $row['fingerprint']);
         $this->assertSame(9, $item->get()['pending']);
         $item->set(['at' => time() - PlatformIncidentService::WRITE_EVERY_SECONDS - 1, 'pending' => 9]); // la minute est passée

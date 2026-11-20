@@ -19,7 +19,7 @@ final class AppJoinTokens
     public const TTL_SECONDS = 600;
 
     public function __construct(
-        #[Autowire(service: 'cache.rate_limiter')] private readonly CacheItemPoolInterface $cache,
+        #[Autowire(service: 'cache.state')] private readonly CacheItemPoolInterface $cache, // lot CACHE-ETAT : un état, préfixe fixe
         private readonly TenantConnectionProvider $tenant,
     ) {
     }

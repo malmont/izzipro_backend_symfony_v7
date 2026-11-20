@@ -9,7 +9,7 @@
 #   ops/bascule/bascule.sh switch <commit> <n>      avance du code et échange du cache, contrôles d'après
 #   ops/bascule/bascule.sh retour <commit d'avant> <n>   retour arrière : code et cache d'avant
 #   ops/bascule/bascule.sh logs <depuis, ISO UTC>   erreurs du journal et codes du serveur web depuis cet instant
-#   ops/bascule/bascule.sh workers                  le worker des courriels bat-il ?
+#   ops/bascule/bascule.sh workers                  le worker des courriels bat-il ? et le contrôle g des 7 workers (lecture seule)
 #   ops/bascule/bascule.sh essai-echange            essai à blanc des échanges du vendor et de public/bundles (dossiers d'essai)
 #   ops/bascule/bascule.sh menage [--oui]           anciens caches de bascule : liste, puis suppression avec --oui (garde les 3 derniers)
 #   ops/bascule/bascule.sh fin                      supprime le jeton de contrôle
@@ -54,9 +54,14 @@ clean_tree() {
 
 # Worker des courriels vivant ? Conteneur démarré et dernier battement de moins de 30 s. Le battement est une clé de 24 h réécrite
 # toutes les 5 s : son âge = 86400 - ttl. Lecture seule.
+# Lot CACHE-ETAT : la clé la PLUS JEUNE (après une montée de version, l'ancien préfixe laisse une vieille clé jusqu'à 24 h) ; $1 = transport
 beat_age() {
-  local k; k=$(docker exec "$REDIS" redis-cli -n 0 --scan --pattern '*worker_heartbeat.email' | head -1)
-  echo $((86400 - $(docker exec "$REDIS" redis-cli -n 0 ttl "$k" 2>/dev/null || echo -86400)))
+  local k best=999999 a
+  for k in $(docker exec "$REDIS" redis-cli -n 0 --scan --pattern "*worker_heartbeat.${1:-email}"); do
+    a=$((86400 - $(docker exec "$REDIS" redis-cli -n 0 ttl "$k" 2>/dev/null || echo -86400)))
+    [ "$a" -lt "$best" ] && best=$a
+  done
+  echo "$best"
 }
 worker_email() {
   local age st; age=$(beat_age); st=$(docker ps --filter "name=$WORKER" --format '{{.Status}}')
@@ -73,9 +78,53 @@ restart_workers() {
   local w0; w0=$(started)
   docker exec -w /var/www "$APP" php bin/console messenger:stop-workers >/dev/null 2>&1
   for _ in $(seq 1 30); do pause 2; [ "$(started)" != "$w0" ] && beat_after_restart && break; done
-  [ "$(started)" != "$w0" ] || echo "ATTENTION : le conteneur du worker des courriels n'a pas redémarré"
+  # Lot CACHE-ETAT (contrôle g) : CHAQUE conteneur de worker doit avoir démarré APRÈS l'heure de bascule. Sinon (signal non reçu : ancien
+  # préfixe du cache après une montée de version d'avant ce lot), docker restart des retardataires, puis nouvelle vérification.
+  late=$(late_workers)
+  if [ -n "$late" ]; then
+    echo "workers démarrés AVANT la bascule : $late : docker restart"
+    # shellcheck disable=SC2086
+    docker restart $late >/dev/null
+    for _ in $(seq 1 30); do pause 2; [ -z "$(late_workers)" ] && break; done
+  fi
+  # les workers reconstruisent leur cache avant de battre (10 à 30 s) : on attend 60 s au plus que tout soit vert, puis on dit l'état
+  for _ in $(seq 1 30); do workers_g >/dev/null 2>&1 && break; pause 2; done
+  workers_g
   worker_email "après" || echo "ATTENTION : le worker des courriels ne bat pas 60 s après : le relancer (docker restart $WORKER) et prévenir"
 }
+
+# Conteneurs de workers (hors planificateur, noté à part) démarrés avant l'heure de bascule (var/bascule.heure)
+late_workers() {
+  local c t0 out=""; t0=$(date -d "$(cat "$L/var/bascule.heure")" +%s)
+  for c in $(docker ps -a --format '{{.Names}}' | grep -E '^symfony_messenger_worker.*_v2$' | grep -v scheduler | sort); do
+    [ "$(date -d "$(docker inspect -f '{{.State.StartedAt}}' "$c")" +%s)" -ge "$t0" ] || out="$out $c"
+  done
+  echo "${out# }"
+}
+
+# Contrôle g : workers démarrés après la bascule, en marche, battement de moins de 60 s (clé la plus jeune) ; le planificateur à part
+workers_g() {
+  local n=0 bad=0 c t a
+  for c in $(docker ps -a --format '{{.Names}}' | grep -E '^symfony_messenger_worker.*_v2$' | grep -v scheduler | sort); do
+    n=$((n + 1)); [ "$(docker inspect -f '{{.State.Status}}' "$c")" = running ] || bad=$((bad + 1))
+  done
+  [ -z "$(late_workers)" ] || bad=$((bad + 1))
+  for t in async esg landing_ai media email pdf gestion_ai; do a=$(beat_age "$t"); [ "$a" -lt 60 ] || { bad=$((bad + 1)); echo "ATTENTION battement $t : $a s"; }; done
+  echo "workers (contrôle g) : $n conteneur(s), $bad anomalie(s)$([ "$bad" = 0 ] && echo ' : OK' || echo ' : RETOUR ARRIÈRE IMMÉDIAT') ; planificateur : $(docker ps --format '{{.Names}}' | grep -q scheduler && echo "battement il y a $(beat_age scheduler_default) s" || echo 'arrêté (conteneur absent)')"
+  [ "$bad" = 0 ]
+}
+
+# Rechargement de PHP-FPM (signal USR2 au maître, PID 1, par le shell : l'image n'a pas d'exécutable kill) et preuves : (a) aucun processus
+# de pool repris d'avant, (b) version du Kernel sur disque
+reload_fpm() {
+  local before after kept
+  before=$(fpm_pools); docker exec "$APP" sh -c 'kill -USR2 1' || { echo "RECHARGEMENT FPM IMPOSSIBLE : RETOUR ARRIÈRE"; return 1; }
+  pause 3; after=$(fpm_pools)
+  kept=$(comm -12 <(echo "$before" | tr ' ' '\n' | sort) <(echo "$after" | tr ' ' '\n' | sort) | grep -c .)
+  echo "FPM rechargé : $(echo "$after" | wc -w) processus de pool, $kept repris d'avant$([ "$kept" = 0 ] && echo ' : OK' || echo ' : RETOUR ARRIÈRE IMMÉDIAT') ; $(docker exec "$APP" grep -m1 'const VERSION ' /var/www/vendor/symfony/http-kernel/Kernel.php | tr -s ' ' | sed 's/^ //')"
+  [ "$kept" = 0 ]
+}
+fpm_pools() { docker exec "$APP" sh -c 'for p in /proc/[0-9]*; do c=$(tr "\0" " " < $p/cmdline 2>/dev/null); case "$c" in "php-fpm: pool"*) echo "${p#/proc/}";; esac; done' | tr '\n' ' '; }
 
 # Échange atomique de deux dossiers (renameat2, RENAME_EXCHANGE) : aucun instant sans cache
 exchange() { docker exec -u www-data "$APP" perl -e 'my $r = syscall(316, -100, $ARGV[0], -100, $ARGV[1], 2); print "échange : rc=$r $!\n"; exit($r == 0 ? 0 : 1)' "/var/www/var/swap_stage$1/dev" /var/www/var/cache/dev; }
@@ -172,7 +221,7 @@ PHP
 fin)
   docker exec -u www-data "$APP" rm -f /var/www/var/swap_token.txt && echo "jeton de contrôle supprimé"
   ;;
-workers) worker_email maintenant ;;
+workers) worker_email maintenant; workers_g ;;
 essai-echange)
   # Essai à blanc des échanges du vendor et de public/bundles, dans le conteneur en ligne, en root, sur des dossiers d'essai placés comme
   # les vrais (var/ ↔ racine, var/ ↔ public/ : même montage) : bascule, retour, puis second échange en échec (le vendor doit revenir).
@@ -305,6 +354,7 @@ switch)
   fi
   git merge -q --ff-only "$2" && exchange "$3" || { echo "ÉCHEC DE LA BASCULE : vérifier l'état (git log -1, var/cache/dev) avant toute autre commande"; exit 1; }
   echo "bascule en $(awk -v a="$T0" -v b="$(date +%s.%N)" 'BEGIN{printf "%.2f", b-a}') s à $(cat "$L/var/bascule.heure") UTC ; retour arrière : « retour $(git rev-parse --short "HEAD@{1}") $3 »"
+  reload_fpm
   restart_workers
   after_checks
   ;;
@@ -327,6 +377,7 @@ retour)
   fi
   git reset -q --hard "$2" && exchange "$3" || { echo "ÉCHEC DU RETOUR ARRIÈRE : vérifier l'état (git log -1, var/cache/dev)"; exit 1; }
   echo "retour arrière en $(awk -v a="$T0" -v b="$(date +%s.%N)" 'BEGIN{printf "%.2f", b-a}') s à $(cat "$L/var/bascule.heure") UTC : $(git log -1 --format=%h) ; le cache remis en avant reste dans var/swap_stage$3 (pour revenir : « switch <commit> $3 »)"
+  reload_fpm
   restart_workers
   after_checks
   echo "si l'authentification reste en échec : regarder les montages du conteneur, puis docker restart $APP (docs/architecture.md, « Points de montage »)"

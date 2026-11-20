@@ -697,9 +697,8 @@ class DashboardController extends AbstractDashboardController
         }
         
         yield MenuItem::section('Maintenance');
-        // Cache Redis partagé par tous les sites : propriétaire de la plateforme seulement (03/11/2026)
-        yield MenuItem::linkToRoute('Vider cache Redis', 'fas fa-trash-alt', 'admin_redis_flush')
-            ->setPermission('ROLE_SUPER_ADMIN');
+        // « Vider cache Redis » : plus d'entrée de menu (un lien est un GET, et la route n'accepte plus que POST depuis le lot CACHE-ETAT) ;
+        // le bouton reste sur le tableau de bord (POST + confirmation + jeton CSRF), super administrateur seulement
         // Workers communs à tous les sites : propriétaire de la plateforme seulement
         yield MenuItem::linkToRoute('Workers (tâches de fond)', 'fas fa-heartbeat', 'admin_workers')
             ->setPermission('ROLE_SUPER_ADMIN');

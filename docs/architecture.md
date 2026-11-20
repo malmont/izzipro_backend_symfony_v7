@@ -564,6 +564,18 @@ des files. Refus définitif du serveur (5xx) : pas de relance, file
   - **Limiteur de débit** : pool `cache.rate_limiter` propre (`config/packages/cache.yaml`, `REDIS_LIMITER_URL`, repli
     `REDIS_URL`), hors du cache à étiquettes ; en production avec une instance de cache à éviction, le pointer vers une
     instance sans éviction (comme les sessions et les files).
+  - **État dans Redis, préfixe fixe (lot CACHE-ETAT, 20/11/2026)** : Symfony calcule le préfixe d'un pool à partir du projet, du
+    conteneur et, depuis la 7.x, de la classe de l'adaptateur ; à la montée 6.4 → 7.4 il a changé et tout ce qui était un ÉTAT a été
+    perdu (limiteurs, jetons, actions en attente, signal d'arrêt des workers, que messenger:stop-workers n'a plus envoyé aux anciens
+    workers). `App\DependencyInjection\FixedCacheNamespacePass` fixe le préfixe de `cache.rate_limiter` (`iz_rl`), du pool d'état
+    `cache.state` (`iz_state` : jetons « Rejoindre » d'APPS-MEMBRES, actions des assistants du site et de l'agence en attente de
+    confirmation, vérifications de l'alerte en caisse des pertes, fenêtre « une fois par minute » des incidents 5xx, compteur des
+    courriels d'essai d'alerte, battement des workers) et du signal d'arrêt des workers (`iz_workers`). Règle : un état de courte durée
+    (1 h au plus) va dans `cache.state`, jamais dans `cache.app` ; ce qui doit durer ou ne jamais se perdre va en base
+    (`stripe_object_ref` et `essai_job` de la base maître, SQL `ops/sql/cache_state_master.sql`). « Vider Redis » d'EasyAdmin
+    (POST seul, jeton CSRF) épargne ces préfixes et les laissez-passer `admin_pass_used:*` (`RedisAdminController::PROTECTED_PREFIXES`),
+    et vide la base de l'adresse Redis (avant : toujours la base 0). Redis en ligne : `noeviction`, sans `maxmemory`, AOF et RDB.
+    Test `tests/Functional/Cache/CacheStateTest.php`.
   Tests de fraîcheur, un par route en cache : `tests/Functional/Cache/` (`LandingCacheInvalidationTest`,
   `BoutiqueCacheInvalidationTest`, `OrdersAchatsCacheInvalidationTest`, `CacheInvalidationAfterCommitTest`,
   `CacheInvalidationTest` ; fabrique d'entités `CacheTestEntityFactory`).

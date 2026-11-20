@@ -17,17 +17,19 @@ class RedisAdminController extends AbstractController
     /** Sessions utilisateurs (RedisSessionHandler) : les supprimer déconnecterait tous les admins */
     private const SESSION_PREFIX = 'sf_s';
 
-    #[Route('/admin/redis/flush', name: 'admin_redis_flush', methods: ['GET', 'POST'])]
+    /**
+     * Lot CACHE-ETAT (20/11/2026) : ce qui est un ÉTAT et non un cache n'est jamais vidé ici. Préfixes fixes des pools d'état
+     * (FixedCacheNamespacePass : compteurs des limiteurs, état de courte durée, signal d'arrêt des workers) et laissez-passer d'EasyAdmin à
+     * usage unique (AdminPassService : les effacer rouvrirait leur rejeu).
+     */
+    public const PROTECTED_PREFIXES = ['iz_rl:', 'iz_state:', 'iz_workers:', 'admin_pass_used:'];
+
+    // Lot CACHE-ETAT : POST seul (un GET répond 405) ; le bouton du tableau de bord envoie POST + confirmation + jeton CSRF
+    #[Route('/admin/redis/flush', name: 'admin_redis_flush', methods: ['POST'])]
     public function flushRedis(Request $request, LoggerInterface $logger, ?CacheInterface $cache = null): Response
     {
         // Le cache est partagé par tous les sites : propriétaire de la plateforme seulement (03/11/2026)
         $this->denyAccessUnlessGranted('ROLE_SUPER_ADMIN');
-
-        // Un simple lien (GET, ex. le menu) ne vide plus Redis : uniquement le bouton du tableau de bord (POST + confirmation + CSRF)
-        if (!$request->isMethod('POST')) {
-            $this->addFlash('info', 'Pour vider le cache Redis, utilisez le bouton « Flush Redis » du tableau de bord (une confirmation vous sera demandée).');
-            return $this->redirectToRoute('admin');
-        }
 
         $submittedToken = $request->request->get('_token');
         if (!$this->isCsrfTokenValid('admin_redis_flush', $submittedToken)) {
@@ -51,6 +53,12 @@ class RedisAdminController extends AbstractController
                     if (!empty($parsed['pass'])) {
                         $redis->auth($parsed['pass']);
                     }
+                    // Lot CACHE-ETAT : la base de l'adresse (/2 pour les essais) ; avant, toujours la base 0, celle de la production,
+                    // même depuis l'environnement des essais
+                    $database = (int) ltrim((string) ($parsed['path'] ?? ''), '/');
+                    if ($database > 0) {
+                        $redis->select($database);
+                    }
 
                     // Récupérer toutes les clés et filtrer pour préserver les statistiques de trafic
                     $allKeys = $redis->keys('*') ?: [];
@@ -63,6 +71,8 @@ class RedisAdminController extends AbstractController
                             $protectedTrafficKeysCount++;
                         } elseif (str_starts_with($key, self::SESSION_PREFIX)) {
                             continue;
+                        } elseif (self::isProtected($key)) {
+                            continue; // lot CACHE-ETAT : un état, pas un cache
                         } elseif (in_array($key, self::MESSENGER_KEYS, true)) {
                             // File de messages (générations en attente) : ne jamais la supprimer
                             continue;
@@ -138,5 +148,17 @@ class RedisAdminController extends AbstractController
         }
 
         return $this->redirectToRoute('admin');
+    }
+
+    /** Clé d'un état protégé (lot CACHE-ETAT) ? */
+    public static function isProtected(string $key): bool
+    {
+        foreach (self::PROTECTED_PREFIXES as $prefix) {
+            if (str_starts_with($key, $prefix)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

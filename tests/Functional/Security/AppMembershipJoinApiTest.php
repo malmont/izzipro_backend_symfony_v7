@@ -258,7 +258,7 @@ class AppMembershipJoinApiTest extends WebTestCase
 
         // Un jeton d'un autre site, un jeton expiré, le jeton d'un compte effacé depuis : refusés
         $tokensService = static::getContainer()->get(AppJoinTokens::class);
-        $pool = static::getContainer()->get('cache.rate_limiter');
+        $pool = static::getContainer()->get('cache.state'); // lot CACHE-ETAT
         $forge = function (array $data) use ($pool): string {
             $forged = bin2hex(random_bytes(32));
             $pool->save($pool->getItem('app_join.' . hash('sha256', $forged))->set($data)->expiresAfter(600));

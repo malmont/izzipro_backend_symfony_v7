@@ -10,4 +10,12 @@ framework:
             cache.rate_limiter:
                 adapter: cache.adapter.redis
                 provider: '%env(default:env_redis_url:REDIS_LIMITER_URL)%'
+            # Lot CACHE-ETAT (20/11/2026) : ÉTAT de courte durée (1 h au plus) qui n'est pas un vrai cache : jetons « Rejoindre », actions
+            # des assistants en attente de confirmation, vérifications de l'alerte en caisse, fenêtre des incidents 5xx, compteur des
+            # courriels d'essai d'alerte, battement des workers. Sans étiquettes, jamais vidé par une invalidation de site ni par
+            # « Vider Redis » ; même instance que le limiteur (sans éviction). Préfixe FIXE (iz_state) : FixedCacheNamespacePass.
+            # Ce qui doit durer plus longtemps ou ne jamais se perdre va en base (stripe_object_ref, essai_job : base maître).
+            cache.state:
+                adapter: cache.adapter.redis
+                provider: '%env(default:env_redis_url:REDIS_LIMITER_URL)%'
        

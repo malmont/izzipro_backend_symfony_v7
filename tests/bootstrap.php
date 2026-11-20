@@ -110,6 +110,8 @@ $master->exec(file_get_contents(__DIR__ . '/../ops/sql/tech_metrics_master.sql')
 $master->exec(file_get_contents(__DIR__ . '/../ops/sql/platform_master.sql'));
 // Lot ABO-CONF C (19/11/2026) : journal de la commission des abonnements (ops/sql/subscription_fee_master.sql, même SQL que la base maître réelle)
 $master->exec(file_get_contents(__DIR__ . '/../ops/sql/subscription_fee_master.sql'));
+// Lot CACHE-ETAT (20/11/2026) : identifiants Stripe et état des remplissages d'essai en base (ops/sql/cache_state_master.sql, même SQL que la base maître réelle)
+$master->exec(file_get_contents(__DIR__ . '/../ops/sql/cache_state_master.sql'));
 // Agences (lot AG-1, 15/11/2026) : agences, sites gérés, forfaits, journal (ops/sql/agency_master.sql, même SQL que la base maître réelle)
 $master->exec(file_get_contents(__DIR__ . '/../ops/sql/agency_master.sql'));
 // Création d'un site avec son type par la plateforme (lot TYPE-1, 16/11/2026) : demandes à étapes (ops/sql/platform_sites_master.sql, même SQL que la base maître réelle)

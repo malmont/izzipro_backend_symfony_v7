@@ -58,7 +58,7 @@ class LossCounterService
         private readonly Security $security,
         private readonly LossBoxLimits $limits,
         private readonly TenantConnectionProvider $tenant,
-        #[Autowire(service: 'cache.rate_limiter')] private readonly CacheItemPoolInterface $checks,
+        #[Autowire(service: 'cache.state')] private readonly CacheItemPoolInterface $checks, // lot CACHE-ETAT : un état, préfixe fixe
         private readonly LossSite $site,
         private readonly LossTexts $texts,
         private readonly ?LossSaleLinkService $sales = null,

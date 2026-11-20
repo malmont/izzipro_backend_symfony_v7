@@ -1125,7 +1125,10 @@ ajustent et répondent, mais ne créent rien. Les formules de la plateforme et d
     livre ou si des droits la citent) ; désactiver une prestation dont des droits sont encore à utiliser : 409 BENEFIT_IN_USE avec
     `pendingRights` (la retirer de la formule à la place) ; la même règle dans EasyAdmin.
 - **Prix et Stripe** : produit et prix Stripe naissent à la première souscription, sur le compte connecté du site (sinon celui de la
-  plateforme), un produit par formule. Prix, devise ou rythme modifiés : la ligne en cours de l'historique `subscription_plan_price`
+  plateforme), un produit par formule. Taux de taxe et prix de livraison des abonnements (lot CACHE-ETAT, 20/11/2026) : gardés dans
+  `stripe_object_ref` de la base maître (compte + mode test/live + genre + clé de TOUS les paramètres de création), créés sous verrou
+  avec une clé d'idempotence fixe, vérifiés chez Stripe avant usage et recréés (génération suivante) s'ils y ont disparu ou sont archivés
+  (`StripeObjectRefStore`) ; avant, dans le cache : un cache vidé recréait chaque objet chez Stripe. Prix, devise ou rythme modifiés : la ligne en cours de l'historique `subscription_plan_price`
   (migration `Version20270201800000`, script `scripts/migrate_all_v2_abo_catalog.sh`) se clôt avec le prix Stripe de son époque, une autre
   s'ouvre, et le prix Stripe de la formule repart à zéro : les NOUVEAUX abonnés paient le nouveau prix (sur le même produit Stripe), les
   abonnés en cours gardent le leur. Défaut corrigé : avant, un prix modifié dans EasyAdmin gardait l'ancien prix Stripe, même pour les
