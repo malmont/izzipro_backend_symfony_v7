@@ -10,8 +10,9 @@ use Doctrine\ORM\Mapping as ORM;
 /**
  * Un droit à profiter d'une prestation (lot ABO-1, 19/11/2026, `docs/plan-abo-universel.md`) : né d'une facture payée (`origin` period,
  * une fois par facture : unicité abonnement, ligne de formule, facture, rang) ou offert par l'équipe (`gift`). `available` jusqu'à
- * `valid_until`, puis reporté une fois (`carried`) ou perdu (`expired`) ; `done` quand il est utilisé. ABO-2 et ABO-3 ajouteront
- * `scheduled`, `late_cancelled`, `missed`.
+ * `valid_until`, puis reporté une fois (`carried`) ou perdu (`expired`) ; `done` quand il est utilisé. Lot ABO-2 : `scheduled` (une date
+ * planifiée : créneau ou date libre, jamais perdue par le passage) et `late_cancelled` (annulé après le délai : compte comme utilisé) ; ABO-3
+ * ajoutera `missed`.
  */
 #[ORM\Entity(repositoryClass: BenefitOccurrenceRepository::class)]
 #[ORM\Table(name: 'benefit_occurrence')]
@@ -20,6 +21,12 @@ class BenefitOccurrence
     public const STATUS_AVAILABLE = 'available';
     public const STATUS_DONE = 'done';
     public const STATUS_EXPIRED = 'expired';
+    public const STATUS_SCHEDULED = 'scheduled';
+    public const STATUS_LATE_CANCELLED = 'late_cancelled';
+    /** Ce qui compte dans « utilisé » */
+    public const USED = [self::STATUS_DONE, self::STATUS_LATE_CANCELLED];
+    public const SOURCE_CLIENT = 'client';
+    public const SOURCE_TEAM = 'team';
     public const ORIGIN_PERIOD = 'period';
     public const ORIGIN_GIFT = 'gift';
 
@@ -82,6 +89,22 @@ class BenefitOccurrence
     #[ORM\Column(name: 'created_at', type: Types::DATETIME_IMMUTABLE)]
     private \DateTimeImmutable $createdAt;
 
+    #[ORM\ManyToOne(targetEntity: BenefitSlot::class)]
+    #[ORM\JoinColumn(name: 'slot_id', nullable: true, onDelete: 'SET NULL')]
+    private ?BenefitSlot $slot = null;
+
+    #[ORM\Column(name: 'scheduled_at', type: Types::DATETIME_IMMUTABLE, nullable: true)]
+    private ?\DateTimeImmutable $scheduledAt = null;
+
+    #[ORM\Column(name: 'scheduled_end', type: Types::DATETIME_IMMUTABLE, nullable: true)]
+    private ?\DateTimeImmutable $scheduledEnd = null;
+
+    #[ORM\Column(name: 'scheduled_by', length: 180, nullable: true)]
+    private ?string $scheduledBy = null;
+
+    #[ORM\Column(name: 'scheduled_source', length: 10, nullable: true)]
+    private ?string $scheduledSource = null;
+
     public function __construct()
     {
         $this->createdAt = new \DateTimeImmutable();
@@ -122,4 +145,9 @@ class BenefitOccurrence
     public function getReason(): ?string { return $this->reason; }
     public function setReason(?string $reason): static { $r = trim(strip_tags((string) $reason)); $this->reason = $r !== '' ? mb_substr($r, 0, 300) : null; return $this; }
     public function getCreatedAt(): \DateTimeImmutable { return $this->createdAt; }
+    public function getSlot(): ?BenefitSlot { return $this->slot; }
+    public function getScheduledAt(): ?\DateTimeImmutable { return $this->scheduledAt; }
+    public function getScheduledEnd(): ?\DateTimeImmutable { return $this->scheduledEnd; }
+    public function getScheduledBy(): ?string { return $this->scheduledBy; }
+    public function getScheduledSource(): ?string { return $this->scheduledSource; }
 }

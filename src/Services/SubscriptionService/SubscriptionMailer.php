@@ -7,7 +7,7 @@ use App\Services\EmailConfigurationService\EmailSenderService;
 use App\Services\MediaUrlResolver;
 use Psr\Log\LoggerInterface;
 
-/** Courriels des abonnements (échec de paiement, résiliation faute de paiement, pause, résiliation) : configuration d'envoi du site, jamais bloquants */
+/** Courriels des abonnements (échec de paiement, résiliation faute de paiement, pause, résiliation ; lot ABO-2 : séance annulée par la boutique) : configuration d'envoi du site, jamais bloquants */
 final class SubscriptionMailer
 {
     private const TEXTS = [
@@ -18,6 +18,8 @@ final class SubscriptionMailer
         'cancel_scheduled' => ['Votre abonnement prendra fin', 'Votre abonnement « %s » prendra fin à la fin de la période en cours. Vous pouvez le reprendre avant cette date depuis votre compte.'],
         // lot ABO-1 : résiliation programmée à la fin d'un engagement minimal (la date est dans le récapitulatif)
         'cancel_at_term_end' => ['Votre résiliation est enregistrée', 'Votre demande de résiliation de l\'abonnement « %s » est enregistrée. Il prendra fin à la fin de votre engagement, à la date ci-dessous ; aucune échéance ne sera prélevée après. Vous pouvez annuler cette résiliation avant cette date depuis votre compte.'],
+        // lot ABO-2 (Q2) : un créneau annulé par la boutique ; le droit redevient à planifier, rien n'est perdu
+        'session_cancelled' => ['Votre séance est annulée', 'La boutique a annulé une séance de votre abonnement « %s » (détails ci-dessous). Rien n\'est perdu : votre séance est de nouveau à planifier depuis votre compte.'],
     ];
 
     public function __construct(
@@ -28,7 +30,7 @@ final class SubscriptionMailer
     }
 
     /**
-     * @param 'payment_failed'|'canceled_unpaid'|'paused'|'canceled'|'cancel_scheduled'|'cancel_at_term_end' $kind
+     * @param 'payment_failed'|'canceled_unpaid'|'paused'|'canceled'|'cancel_scheduled'|'cancel_at_term_end'|'session_cancelled' $kind
      * @param array{rows?: array<string, string>, payUrl?: ?string} $details lignes ajoutées au récapitulatif, lien de paiement
      */
     public function notify(Subscription $subscription, string $kind, string $locale, string $host, array $details = []): void

@@ -470,6 +470,9 @@ final class CacheTags
         Subscription::class,
         // lot ABO-1 : droits et historique des abonnements, lus frais (solde, gestes du quotidien)
         \App\Abo\Entity\BenefitOccurrence::class,
+        // lot ABO-2 : l'agenda (places restantes, réservations) se lit toujours en direct
+        \App\Abo\Entity\BenefitSlotRule::class,
+        \App\Abo\Entity\BenefitSlot::class,
         \App\Abo\Entity\SubscriptionAboEvent::class,
         StripeConfig::class,
         SquareConfig::class,

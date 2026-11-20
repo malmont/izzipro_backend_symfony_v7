@@ -211,7 +211,7 @@ class AboRightsTest extends WebTestCase
         $this->assertSame('Séance annulée par nous', $fiche['history'][0]['note']);
         $this->assertArrayHasKey('by', $fiche['history'][0]);
         $mine = $this->json('GET', '/api/subscriptions/' . $s->getId(), null, 200, 'owner');
-        $this->assertSame(['benefitId', 'name', 'kind', 'available', 'used', 'carried', 'unlimited', 'nextExpiry'], array_keys($mine['balance'][0]));
+        $this->assertSame(['benefitId', 'name', 'kind', 'available', 'scheduled', 'used', 'carried', 'unlimited', 'nextExpiry'] /* lot ABO-2 : scheduled */, array_keys($mine['balance'][0]));
         $this->assertStringNotContainsString('Séance annulée', (string) json_encode($mine, JSON_UNESCAPED_UNICODE), 'aucun motif ni aucune note de l\'équipe chez le client');
         $this->assertStringNotContainsString('séance du mardi', (string) json_encode($mine, JSON_UNESCAPED_UNICODE));
 

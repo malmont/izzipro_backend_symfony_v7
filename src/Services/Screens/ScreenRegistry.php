@@ -134,6 +134,8 @@ final class ScreenRegistry
         'admin.paiement' => ['family' => self::VENTE, 'module' => null, 'surface' => 'easyadmin'],
         'admin.expeditions' => ['family' => self::VENTE, 'module' => 'module.boutique', 'surface' => 'easyadmin'],
         'admin.abonnements' => ['family' => self::VENTE, 'module' => 'module.boutique', 'surface' => 'easyadmin'],
+        // lot ABO-2 : l'agenda des prestations (règles de créneaux, créneaux) : pas de paiement ni d'identité d'abonné, ouvert au directeur
+        'admin.agenda' => ['family' => self::VENTE, 'module' => 'module.boutique', 'surface' => 'easyadmin'],
         'admin.stock' => ['family' => self::VENTE, 'module' => 'module.boutique', 'surface' => 'easyadmin'],
         'admin.caisse' => ['family' => self::VENTE, 'module' => 'module.pos', 'surface' => 'easyadmin'],
         'admin.controles' => ['family' => self::VENTE, 'module' => null, 'surface' => 'easyadmin'],
@@ -408,6 +410,8 @@ final class ScreenRegistry
         'StripeConfigCrudController' => 'admin.paiement', 'SquareConfigCrudController' => 'admin.paiement',
         'ShippingOrderCrudController' => 'admin.expeditions', 'ParcelCrudController' => 'admin.expeditions', 'ShippingLabelCrudController' => 'admin.expeditions',
         'SubscriptionCrudController' => 'admin.abonnements',
+        // lot ABO-2 : l'agenda des prestations (règles de créneaux, créneaux et leurs réservations)
+        'BenefitSlotRuleCrudController' => 'admin.agenda', 'BenefitSlotCrudController' => 'admin.agenda',
         // lot ABO-0 : ce que les formules livrent, réglé avec les formules
         'BenefitCrudController' => 'admin.boutique-pages', 'PlanBenefitCrudController' => 'admin.boutique-pages',
         'MovementTypeCrudController' => 'admin.stock', 'InventoryMovementsCrudController' => 'admin.stock',

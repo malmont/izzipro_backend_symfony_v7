@@ -21,7 +21,8 @@ class AboFollowUpService
 
     public function __construct(private readonly TenantEntityManagerProvider $emProvider, private readonly BenefitService $benefits, private readonly StoreClock $clock,
         private readonly ?AboRightsService $rights = null, // lot ABO-1 : solde, à faire, historique
-        private readonly ?AboCatalogService $catalog = null) // lot ABO-CONF : le prix que paie l'abonné (son époque), pas celui du jour
+        private readonly ?AboCatalogService $catalog = null, // lot ABO-CONF : le prix que paie l'abonné (son époque), pas celui du jour
+        private readonly ?AboAgendaService $agenda = null) // lot ABO-2 : les prochaines dates
     {
     }
 
@@ -103,6 +104,8 @@ class AboFollowUpService
             'canceledAt' => $this->at($s->getCanceledAt()), 'fulfillmentTarget' => $s->getFulfillmentTarget(), 'orders' => $orders,
             // lot ABO-1 : remplis ; « par qui » et les notes seulement pour l'équipe, jamais pour le modèle
             'todo' => $this->rights?->todo($s, $locale) ?? [], 'history' => $this->rights?->history($s, $withIdentity) ?? [], 'balance' => $this->rights?->balance($s, $locale) ?? [],
+            // lot ABO-2 : les 10 prochaines dates, avec leur numéro (déplacer, annuler) ; l'intervenant et la source pour l'équipe, jamais pour le modèle
+            'upcoming' => $this->agenda?->upcoming($s, $withIdentity, $locale) ?? [],
             'pauses' => $withIdentity ? $s->getPauses() : array_map(fn (array $p) => array_intersect_key($p, array_flip(['from', 'until', 'resumedAt'])), $s->getPauses()),
         ];
     }

@@ -151,7 +151,7 @@ class AboBenefitsTest extends WebTestCase
 
         $sheet = $this->json('GET', '/api/site/abonnements/' . $ids[Subscription::STATUS_ACTIVE][0], 'admin', 200);
         // lot ABO-1 : le solde a une ligne par prestation de la formule, à zéro tant qu'aucune période n'est payée
-        $this->assertSame([[], [], [['name' => 'Carte de séances', 'kind' => 'quota', 'available' => 0, 'used' => 0, 'carried' => 0, 'unlimited' => false, 'nextExpiry' => null]]],
+        $this->assertSame([[], [], [['name' => 'Carte de séances', 'kind' => 'quota', 'available' => 0, 'scheduled' => 0, 'used' => 0, 'carried' => 0, 'unlimited' => false, 'nextExpiry' => null]]],
             [$sheet['todo'], $sheet['history'], array_map(fn (array $b) => array_diff_key($b, ['benefitId' => 1]), $sheet['balance'])], 'forme stable, remplie à ABO-1');
         $this->assertSame($this->planId, $sheet['plan']['id']);
         $this->assertSame('SUBSCRIPTION_NOT_FOUND', $this->json('GET', '/api/site/abonnements/999999', 'admin', 404)['code']);

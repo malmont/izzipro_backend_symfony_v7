@@ -17,14 +17,16 @@ use App\Services\TenantEntityManagerProvider;
  */
 class AboAssistantTools
 {
-    public const READS = ['get_subscription_plans', 'get_benefits', 'get_plan_subscribers', 'get_subscription', 'get_expiring_rights'];
+    public const READS = ['get_subscription_plans', 'get_benefits', 'get_plan_subscribers', 'get_subscription', 'get_expiring_rights', 'get_slots', 'get_to_schedule'];
     /** Lot ABO-1 : gestes du quotidien (résiliation EN FIN DE PÉRIODE seulement ; jamais immédiate, ni remboursement, ni retrait de droits payés) */
-    public const ACTIONS = ['propose_benefit', 'propose_plan', 'propose_plan_update', 'set_plan_benefits', 'propose_use', 'propose_gift', 'propose_pause', 'propose_resume', 'propose_cancel_subscription'];
+    public const ACTIONS = ['propose_benefit', 'propose_plan', 'propose_plan_update', 'set_plan_benefits', 'propose_use', 'propose_gift', 'propose_pause', 'propose_resume', 'propose_cancel_subscription',
+        'propose_slot_rule', 'propose_assign_date', 'propose_move_occurrence']; // lot ABO-2 : agenda
     public const MAX_BENEFITS = 10;
 
     public function __construct(private readonly BenefitService $benefits, private readonly AboFollowUpService $followUp, private readonly TenantEntityManagerProvider $emProvider,
         private readonly ?AboRightsService $rights = null, // lot ABO-1
-        private readonly ?AboCatalogService $catalog = null) // lot ABO-CONF : le service commun des formules
+        private readonly ?AboCatalogService $catalog = null, // lot ABO-CONF : le service commun des formules
+        private readonly ?AboAgendaService $agenda = null) // lot ABO-2 : l'agenda des prestations
     {
     }
 
@@ -61,6 +63,17 @@ class AboAssistantTools
             ['name' => 'propose_pause', 'description' => 'Abonnements : propose de mettre un abonnement en pause jusqu\'à une date (AAAA-MM-JJ, heure du magasin), dans la limite de la formule ; les droits disponibles sont prolongés d\'autant. L\'administrateur confirme.', 'input_schema' => ['type' => 'object', 'properties' => ['subscriptionId' => ['type' => 'integer'], 'until' => ['type' => 'string']], 'required' => ['subscriptionId', 'until']]],
             ['name' => 'propose_resume', 'description' => 'Abonnements : propose de reprendre un abonnement en pause. L\'administrateur confirme.', 'input_schema' => ['type' => 'object', 'properties' => ['subscriptionId' => ['type' => 'integer']], 'required' => ['subscriptionId']]],
             ['name' => 'propose_cancel_subscription', 'description' => 'Abonnements : propose de résilier un abonnement EN FIN DE PÉRIODE (jamais tout de suite) ; pendant l\'engagement minimal, un motif est exigé. L\'administrateur confirme.', 'input_schema' => ['type' => 'object', 'properties' => ['subscriptionId' => ['type' => 'integer'], 'reason' => ['type' => 'string']], 'required' => ['subscriptionId']]],
+            // --- lot ABO-2 : agenda ; un abonné = son numéro, jamais son identité ni l'intervenant
+            ['name' => 'get_slots', 'description' => 'Abonnements : les créneaux datés des prestations entre deux dates (AAAA-MM-JJ, heure du magasin, 14 jours par défaut, 62 au plus), avec les places restantes. Filtre benefitId facultatif.', 'input_schema' => ['type' => 'object', 'properties' => [
+                'benefitId' => ['type' => 'integer'], 'from' => ['type' => 'string'], 'to' => ['type' => 'string']]]],
+            ['name' => 'get_to_schedule', 'description' => 'Abonnements : les droits à planifier (séances ou services sans date), par numéro d\'abonnement et prestation, avec le mode de dates et la prochaine échéance.', 'input_schema' => ['type' => 'object', 'properties' => new \stdClass()]],
+            ['name' => 'propose_slot_rule', 'description' => 'Abonnements : propose de créer des créneaux récurrents pour une séance ou un service (benefitId) : jours de la semaine (1 = lundi … 7 = dimanche), heure du magasin HH:MM, durée en minutes (sinon celle de la prestation), nombre de places, lieu, intervenant (numéro de compte, facultatif), dates de début et de fin facultatives. Les créneaux sont créés 8 semaines devant. L\'administrateur confirme.', 'input_schema' => ['type' => 'object', 'properties' => [
+                'benefitId' => ['type' => 'integer'], 'weekdays' => ['type' => 'array', 'items' => ['type' => 'integer']], 'time' => ['type' => 'string'], 'durationMinutes' => ['type' => 'integer'],
+                'capacity' => ['type' => 'integer'], 'location' => ['type' => 'string'], 'staffUserId' => ['type' => 'integer'], 'from' => ['type' => 'string'], 'until' => ['type' => 'string']], 'required' => ['benefitId', 'weekdays', 'time', 'capacity']]],
+            ['name' => 'propose_assign_date', 'description' => 'Abonnements : propose de donner une date à un droit à planifier d\'un abonnement (subscriptionId, benefitId) : un créneau (slotId, de get_slots) ou, pour une prestation à date libre, une date startsAt (AAAA-MM-JJTHH:MM, heure du magasin). La place est vérifiée à la confirmation. L\'administrateur confirme.', 'input_schema' => ['type' => 'object', 'properties' => [
+                'subscriptionId' => ['type' => 'integer'], 'benefitId' => ['type' => 'integer'], 'slotId' => ['type' => 'integer'], 'startsAt' => ['type' => 'string']], 'required' => ['subscriptionId', 'benefitId']]],
+            ['name' => 'propose_move_occurrence', 'description' => 'Abonnements : propose de déplacer une date planifiée d\'un abonnement (subscriptionId, occurrenceId lu dans get_subscription, champ upcoming ; une date choisie par l\'abonné : seulement avant le délai d\'annulation) vers un autre créneau (slotId) ou une autre date libre (startsAt). Sans perte pour l\'abonné. L\'administrateur confirme.', 'input_schema' => ['type' => 'object', 'properties' => [
+                'subscriptionId' => ['type' => 'integer'], 'occurrenceId' => ['type' => 'integer'], 'slotId' => ['type' => 'integer'], 'startsAt' => ['type' => 'string']], 'required' => ['subscriptionId', 'occurrenceId']]],
             ['name' => 'set_plan_benefits', 'description' => 'Abonnements : propose de régler les prestations d\'une formule existante (ajouter une prestation ou changer sa quantité, son mode de dates, ses règles). L\'administrateur confirme.', 'input_schema' => ['type' => 'object', 'properties' => ['planId' => ['type' => 'integer'], 'benefits' => ['type' => 'array', 'items' => $rules]], 'required' => ['planId', 'benefits']]],
         ];
     }
@@ -80,6 +93,10 @@ class AboAssistantTools
                 'get_plan_subscribers' => [$this->followUp->subscribers((int) ($input['planId'] ?? 0), isset($input['status']) ? (string) $input['status'] : null, (int) ($input['page'] ?? 1), 50, 'fr', false), 'subscriptions'],
                 'get_subscription' => [$this->followUp->subscription((int) ($input['subscriptionId'] ?? 0), 'fr', false), 'subscriptions'],
                 'get_expiring_rights' => [['rights' => $this->expiring(max(1, min(30, (int) ($input['days'] ?? 7))))], 'subscriptions'],
+                // lot ABO-2 : jamais l'intervenant ni l'identité d'un abonné
+                'get_slots' => [['slots' => $this->agendaOrFail()->slots(isset($input['benefitId']) ? (int) $input['benefitId'] : null, isset($input['from']) ? (string) $input['from'] : null,
+                    isset($input['to']) ? (string) $input['to'] : null, false)], 'abo_slots'],
+                'get_to_schedule' => [['subscriptions' => $this->agendaOrFail()->toSchedule(false, 100)], 'subscriptions'],
                 default => [['error' => 'outil inconnu'], null],
             };
         } catch (AboException $e) {
@@ -185,6 +202,43 @@ class AboAssistantTools
                     }
 
                     return [['subscriptionId' => (int) $sub->getId()], sprintf('Reprendre l\'abonnement n° %d', $sub->getId()), null, 'subscriptions'];
+                case 'propose_slot_rule':
+                    $agenda = $this->agendaOrFail();
+                    $data = array_intersect_key($input, array_flip(['benefitId', 'weekdays', 'time', 'durationMinutes', 'capacity', 'location', 'staffUserId', 'from', 'until']));
+                    $probe = new \App\Abo\Entity\BenefitSlotRule();
+                    $agenda->fillRule($probe, $data, true);
+                    $agenda->validateRule($probe);
+                    $dayNames = [1 => 'lundi', 2 => 'mardi', 3 => 'mercredi', 4 => 'jeudi', 5 => 'vendredi', 6 => 'samedi', 7 => 'dimanche'];
+
+                    return [$data, sprintf('Créer les créneaux « %s » le %s à %s (heure du magasin), %d min, %d place(s)%s, 8 semaines devant', $probe->getBenefit()?->getName('fr'),
+                        implode(', ', array_map(fn (int $d) => $dayNames[$d], $probe->getWeekdays())), $probe->getLocalTime(), $probe->getDurationMinutes(), $probe->getCapacity(),
+                        $probe->getLocation() !== null ? ', lieu : ' . mb_substr($probe->getLocation(), 0, 80) : ''), null, 'abo_slot_rules'];
+                case 'propose_assign_date':
+                case 'propose_move_occurrence':
+                    $agenda = $this->agendaOrFail();
+                    $sub = $this->subscriptionOrFail((int) ($input['subscriptionId'] ?? 0));
+                    $slotId = isset($input['slotId']) ? (int) $input['slotId'] : null;
+                    $startsAt = isset($input['startsAt']) ? trim((string) $input['startsAt']) : null;
+                    if (($slotId === null) === ($startsAt === null || $startsAt === '')) {
+                        throw new AboException(422, 'SLOT_REQUIRED', 'Un créneau (slotId) ou une date libre (startsAt), l\'un des deux.', 'slotId');
+                    }
+                    $when = $slotId !== null ? $this->slotLabel($slotId) : $startsAt;
+                    if ($name === 'propose_assign_date') {
+                        $benefitId = (int) ($input['benefitId'] ?? 0);
+                        $line = array_values(array_filter($this->rights?->balance($sub, 'fr') ?? [], fn (array $b) => $b['benefitId'] === $benefitId))[0]
+                            ?? throw new AboException(404, 'BENEFIT_NOT_IN_PLAN', 'Cette prestation n\'est pas dans la formule de l\'abonnement.', 'benefitId');
+                        if ((int) $line['available'] < 1) {
+                            throw new AboException(409, 'BALANCE_EMPTY', 'Plus aucun droit à planifier pour cette prestation.', 'benefitId');
+                        }
+
+                        return [['subscriptionId' => (int) $sub->getId(), 'benefitId' => $benefitId, 'slotId' => $slotId, 'startsAt' => $startsAt],
+                            sprintf('Donner une date à « %s » pour l\'abonnement n° %d : %s (place vérifiée à la confirmation)', $line['name'], $sub->getId(), $when), null, 'subscriptions'];
+                    }
+                    $occurrenceId = (int) ($input['occurrenceId'] ?? 0);
+                    $current = $this->movable($sub, $occurrenceId);
+
+                    return [['subscriptionId' => (int) $sub->getId(), 'occurrenceId' => $occurrenceId, 'slotId' => $slotId, 'startsAt' => $startsAt],
+                        sprintf('Déplacer « %s » de l\'abonnement n° %d du %s au %s (sans perte)', $current['name'], $sub->getId(), $current['startsAt'], $when), null, 'subscriptions'];
                 case 'propose_cancel_subscription':
                     $sub = $this->subscriptionOrFail((int) ($input['subscriptionId'] ?? 0));
                     $reason = trim(strip_tags((string) ($input['reason'] ?? '')));
@@ -279,6 +333,22 @@ class AboAssistantTools
                 $this->rightsOrFail()->resume($this->subscriptionOrFail((int) ($input['subscriptionId'] ?? 0)), 'assistant');
 
                 return ['written' => 1];
+            // lot ABO-2 : par le service de l'agenda, tout relu (place restante sous le verrou du créneau, droits à planifier) ; « par l'assistant »
+            case 'propose_slot_rule':
+                $rule = $this->agendaOrFail()->saveRule(null, array_intersect_key($input, array_flip(['benefitId', 'weekdays', 'time', 'durationMinutes', 'capacity', 'location', 'staffUserId', 'from', 'until'])));
+
+                return ['ruleId' => (int) $rule->getId(), 'written' => 1];
+            case 'propose_assign_date':
+                $r = $this->agendaOrFail()->book($this->subscriptionOrFail((int) ($input['subscriptionId'] ?? 0)), (int) ($input['benefitId'] ?? 0), null,
+                    isset($input['slotId']) ? (int) $input['slotId'] : null, isset($input['startsAt']) ? (string) $input['startsAt'] : null, \App\Abo\Entity\BenefitOccurrence::SOURCE_TEAM, 'assistant');
+
+                return ['written' => 1, 'occurrenceId' => $r['occurrenceId']];
+            case 'propose_move_occurrence':
+                $this->movable($this->subscriptionOrFail((int) ($input['subscriptionId'] ?? 0)), (int) ($input['occurrenceId'] ?? 0)); // relu à la confirmation
+                $r = $this->agendaOrFail()->move($this->subscriptionOrFail((int) ($input['subscriptionId'] ?? 0)), (int) ($input['occurrenceId'] ?? 0),
+                    isset($input['slotId']) ? (int) $input['slotId'] : null, isset($input['startsAt']) ? (string) $input['startsAt'] : null, \App\Abo\Entity\BenefitOccurrence::SOURCE_TEAM, 'assistant');
+
+                return ['written' => 1, 'occurrenceId' => $r['occurrenceId']];
             case 'propose_cancel_subscription':
                 $this->rightsOrFail()->cancelAtPeriodEnd($this->subscriptionOrFail((int) ($input['subscriptionId'] ?? 0)), true, $input['reason'] ?? null, 'assistant');
 
@@ -306,6 +376,37 @@ class AboAssistantTools
     private function subscriptionOrFail(int $id): \App\Entity\Subscription
     {
         return $this->emProvider->getEntityManager()->getRepository(\App\Entity\Subscription::class)->find($id) ?? throw new AboException(404, 'SUBSCRIPTION_NOT_FOUND', 'Abonnement introuvable.', 'subscriptionId');
+    }
+
+    /**
+     * Le rendez-vous que l'assistant peut déplacer (contrat § 7) : une date choisie par l'abonné, seulement avant le délai d'annulation.
+     *
+     * @return array<string, mixed>
+     * @throws AboException 404 OCCURRENCE_NOT_FOUND, 409 CANCEL_DEADLINE_PASSED
+     */
+    private function movable(\App\Entity\Subscription $sub, int $occurrenceId): array
+    {
+        $current = array_values(array_filter($this->agendaOrFail()->upcoming($sub, true), fn (array $u) => $u['occurrenceId'] === $occurrenceId))[0]
+            ?? throw new AboException(404, 'OCCURRENCE_NOT_FOUND', 'Rendez-vous introuvable.', 'occurrenceId');
+        if ($current['source'] === \App\Abo\Entity\BenefitOccurrence::SOURCE_CLIENT && new \DateTimeImmutable((string) $current['cancellableUntil']) <= new \DateTimeImmutable()) {
+            throw new AboException(409, 'CANCEL_DEADLINE_PASSED', 'Ce rendez-vous a été choisi par l\'abonné et le délai pour le déplacer est passé : seule l\'équipe le déplace, depuis la fiche.', 'occurrenceId');
+        }
+        unset($current['staffUserId'], $current['source']); // jamais au modèle
+
+        return $current;
+    }
+
+    private function agendaOrFail(): AboAgendaService
+    {
+        return $this->agenda ?? throw new AboException(422, 'TOOL_UNKNOWN', 'Outil indisponible.');
+    }
+
+    /** Un créneau en clair pour l'aperçu (prestation, date à l'heure du magasin) @throws AboException 404 SLOT_NOT_FOUND */
+    private function slotLabel(int $slotId): string
+    {
+        $slot = $this->emProvider->getEntityManager()->getRepository(\App\Abo\Entity\BenefitSlot::class)->find($slotId) ?? throw new AboException(404, 'SLOT_NOT_FOUND', 'Créneau introuvable.', 'slotId');
+
+        return sprintf('créneau n° %d du %s', $slotId, (string) $this->agendaOrFail()->at($slot->getStartsAt()));
     }
 
     private function rightsOrFail(): AboRightsService
