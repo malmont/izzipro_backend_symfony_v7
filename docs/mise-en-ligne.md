@@ -201,3 +201,38 @@ Décision du propriétaire : reportée au passage de la production sur Kubernete
   code des applications le 20/11/2026 : la caisse et MAUI rafraîchissent puis rejouent une fois, sans boucle ; le web à vérifier ce jour-là ;
 - contrôles : connexion, rafraîchissement, lecture authentifiée, ancien jeton refusé en 401, les workers, `git ls-files jwt/` vide ;
 - l'ancienne image Docker (qui contient `.env` et la clé) est supprimée après le délai de retour, sur approbation du propriétaire.
+
+## 9. Image de l'application (PHP, lot PHP84, 20/11/2026)
+
+L'image ne fournit que PHP, ses extensions et sa configuration (`docker/php/php.ini`, minimal : erreurs jamais affichées et
+journalisées, `expose_php` coupé, limites d'avant) : le code, le vendor, `.env` et `jwt/` sont montés. Elle ne doit JAMAIS
+contenir de secret : elle sera poussée dans un registre (cible Kubernetes). Toute construction passe par l'outil, jamais par
+`docker build .` dans l'arbre en ligne, et chaque image est contrôlée (`ops/image/verifier-image.sh` : familles de secrets
+partout sous `/var/www`, `/root`, `/home`, variables d'environnement de l'image, réglages PHP en CLI et en FPM, version).
+
+Changer d'image (commandes approuvées par le propriétaire, lancées par le chaperon) :
+1. Garder les images en service pour le retour : `docker tag app_v2-app:latest app_v2-app:retour-<date>` et
+   `docker tag app_v2-worker-media:latest app_v2-worker-media:retour-<date>`.
+2. Construire depuis le COMMIT, sous une étiquette neuve (jamais `latest` : l'outil la refuse) :
+   `ops/image/construire-image.sh app_v2-app:<version> <commit> <version PHP>`. L'image n'est gardée que si elle est conforme.
+3. `docker tag app_v2-app:<version> app_v2-app:latest`, puis reconstruire l'image du worker `media` (elle part de `latest`) et
+   la contrôler : `docker build -t app_v2-worker-media:<version> docker/worker-media && ops/image/verifier-image.sh
+   app_v2-worker-media:<version> <version PHP> && docker tag app_v2-worker-media:<version> app_v2-worker-media:latest`.
+4. Vérifier qu'aucune génération IA n'est en cours (statut de FPM, files Messenger), puis recréer le site et les 8 workers,
+   sans toucher à la base, à Redis ni à nginx : `docker compose -p app_v2 up -d --no-deps --no-build --force-recreate app
+   messenger_worker messenger_worker_esg messenger_worker_landing messenger_worker_media messenger_worker_pdf
+   messenger_worker_email messenger_worker_gestion messenger_worker_scheduler`. Recréer un conteneur relit `.env`.
+5. Recharger nginx (il résout `app` à son démarrage, et `app` recréé change d'adresse) :
+   `docker exec symfony_nginx_v2 nginx -t && docker exec symfony_nginx_v2 nginx -s reload`.
+6. Contrôles : landing pages publiques d'abord, `/api/health`, connexion, `/admin` ; `php -v` et `php -m` du conteneur ;
+   statut de FPM ; les 8 workers démarrés après l'heure de bascule, sans redémarrage en boucle ; `messenger:stats` ;
+   502 / 504 du journal de nginx sur 10 minutes.
+
+Essai à blanc du retour, avant : la même ligne `docker compose … up` avec `--dry-run` montre l'image prise par chaque conteneur.
+Retour : `docker tag app_v2-app:retour-<date> app_v2-app:latest`, idem pour `app_v2-worker-media`, puis les étapes 4 et 5.
+Tant que le retour est possible, le code doit rester compatible avec l'ancienne image (au lot PHP84 : `composer.json` passe à
+PHP 8.4 dans un SECOND train, sinon `vendor/composer/platform_check.php` refuserait l'ancien PHP).
+
+Après le délai de retour : supprimer les anciennes images (celles d'avant le 20/11/2026 contiennent `.env` et la clé JWT) et
+le cache de construction qui garde leurs couches (`docker builder prune`), sur approbation du propriétaire. Ne jamais pousser
+dans un registre une image qui n'a pas passé `verifier-image.sh`.

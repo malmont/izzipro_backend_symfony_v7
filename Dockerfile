@@ -1,5 +1,8 @@
-# 📦 Utilise PHP 8.3.36 avec FPM (correctif CVE-2026-109618, CVE-2026-109619)
-FROM php:8.3.36-fpm
+# 📦 PHP 8.4.28 avec FPM (19/11/2026 : dernière 8.4, avec les correctifs de sécurité de ce jour ; lot PHP84, brique 1 avant
+#    Symfony 8). Le code et le vendor sont montés par docker-compose.yml : l'image ne fournit que PHP, ses extensions et sa
+#    configuration. Construire par `ops/image/construire-image.sh <étiquette> <commit>` (contexte neuf, .dockerignore
+#    appliqué, image contrôlée par ops/image/verifier-image.sh), jamais par `docker build .` dans l'arbre en ligne.
+FROM php:8.4.28-fpm
 
 # 🔧 Installer les dépendances système nécessaires
 RUN apt-get update && apt-get install -y \
@@ -20,7 +23,7 @@ RUN apt-get update && apt-get install -y \
  && docker-php-ext-configure gd --with-freetype --with-jpeg \
  && docker-php-ext-install pdo pdo_pgsql zip intl opcache gd \
  && pecl update-channels \
- && pecl install redis-6.0.2 \
+ && pecl install redis-6.3.0 \
  && docker-php-ext-enable redis \
  && apt-get clean && rm -rf /var/lib/apt/lists/*
 
@@ -29,12 +32,15 @@ RUN echo "memory_limit=-1" > /usr/local/etc/php/conf.d/memory-limit.ini \
  && printf "opcache.enable=1\nopcache.memory_consumption=128\nopcache.interned_strings_buffer=8\nopcache.max_accelerated_files=10000\nopcache.validate_timestamps=0\n" > /usr/local/etc/php/conf.d/opcache-recommended.ini \
  && echo "variables_order=EGPCS" > /usr/local/etc/php/conf.d/zzz-env.ini
 
+# ✅ php.ini minimal : erreurs jamais affichées, journalisées ; expose_php coupé ; limites d'avant (lot PHP84)
+COPY docker/php/php.ini /usr/local/etc/php/php.ini
+
 # ✅ PHP-FPM: écoute local + garder les env
 RUN sed -i "s|listen = 127.0.0.1:9000|listen = 127.0.0.1:9000|g" /usr/local/etc/php-fpm.d/www.conf \
  && sed -i 's|^;*clear_env = .*|clear_env = no|' /usr/local/etc/php-fpm.d/www.conf
 
 # 📦 Installer Composer
-COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
+COPY --from=composer:2.10 /usr/bin/composer /usr/bin/composer
 
 # 📂 Définir le dossier de travail
 WORKDIR /var/www

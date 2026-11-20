@@ -27,7 +27,7 @@ class BookPdfController extends AbstractController
 
     #[Route('/{id}/pdf/preview-interior', name: 'api_memoires_book_preview_interior', methods: ['GET'])]
     #[Route('/{bookId}/pdf/preview-interior', methods: ['GET'])]
-    public function previewInterior(?string $id = null, ?string $bookId = null, Request $request = null): Response
+    public function previewInterior(?string $id = null, ?string $bookId = null, ?Request $request = null): Response
     {
         $targetId = $id ?: $bookId;
         $em = $this->emProvider->getEntityManager();
@@ -56,7 +56,7 @@ class BookPdfController extends AbstractController
 
     #[Route('/{id}/pdf/preview-cover', name: 'api_memoires_book_preview_cover', methods: ['GET'])]
     #[Route('/{bookId}/pdf/preview-cover', methods: ['GET'])]
-    public function previewCover(?string $id = null, ?string $bookId = null, Request $request = null): Response
+    public function previewCover(?string $id = null, ?string $bookId = null, ?Request $request = null): Response
     {
         $targetId = $id ?: $bookId;
         $em = $this->emProvider->getEntityManager();
@@ -91,7 +91,7 @@ class BookPdfController extends AbstractController
 
     #[Route('/{id}/pdf/generate', name: 'api_memoires_book_generate_pdfs', methods: ['POST'])]
     #[Route('/{bookId}/pdf/generate', methods: ['POST'])]
-    public function generatePdfs(?string $id = null, ?string $bookId = null, Request $request = null): JsonResponse
+    public function generatePdfs(?string $id = null, ?string $bookId = null, ?Request $request = null): JsonResponse
     {
         $targetId = $id ?: $bookId;
         $em = $this->emProvider->getEntityManager();
@@ -144,7 +144,7 @@ class BookPdfController extends AbstractController
     /** État de la mise en page PDF en tâche de fond (lot 3) : pending | generating | done | failed | idle ; URL des fichiers seulement quand ils sont prêts */
     #[Route('/{id}/pdf/status', name: 'api_memoires_book_pdf_status', methods: ['GET'])]
     #[Route('/{bookId}/pdf/status', methods: ['GET'])]
-    public function pdfStatus(?string $id = null, ?string $bookId = null, Request $request = null): JsonResponse
+    public function pdfStatus(?string $id = null, ?string $bookId = null, ?Request $request = null): JsonResponse
     {
         $targetId = $id ?: $bookId;
         $book = $this->emProvider->getEntityManager()->getRepository(Book::class)->find(Uuid::fromString($targetId));

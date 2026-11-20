@@ -11,6 +11,10 @@ use App\Services\LandingAiService\LandingAiQuotaService;
 use App\Services\TenantEntityManagerProvider;
 use Symfony\Component\Dotenv\Dotenv;
 
+// Sortie standard réservée au résultat lu par l'essai : les avis de PHP (sous 8.4, ceux du vendor à la compilation des
+// classes ; script lancé sans le runtime de Symfony, qui les coupe d'ordinaire) vont sur la sortie d'erreur
+ini_set('display_errors', 'stderr');
+
 require dirname(__DIR__, 3) . '/vendor/autoload.php';
 (new Dotenv())->bootEnv(dirname(__DIR__, 3) . '/.env');
 

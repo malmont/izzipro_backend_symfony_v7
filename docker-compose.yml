@@ -2,6 +2,8 @@ version: '3.8'
 
 services:
   app:
+    # Ne pas construire par `docker compose build` (contexte = arbre en ligne) : ops/image/construire-image.sh depuis le
+    # commit, contrôle de l'image compris (docs/mise-en-ligne.md § 9, lot PHP84)
     build:
       context: .
       dockerfile: Dockerfile

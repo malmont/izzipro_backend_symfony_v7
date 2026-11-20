@@ -27,11 +27,11 @@ class PaymentHandlerUseCase
     public function handlePayment(
         Order $order,
         float $amount,
-        int $paymentMethodId = null,
+        ?int $paymentMethodId,
         int $paymentTypeId,
         int $statusPaymentId,
-        \DateTime $paymentDate = null,
-        ICreateOrderDTO $orderDTO = null
+        ?\DateTime $paymentDate = null,
+        ?ICreateOrderDTO $orderDTO = null
     ): void {
         $em = $this->emProvider->getEntityManager();
 
