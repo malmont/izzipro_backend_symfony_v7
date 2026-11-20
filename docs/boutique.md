@@ -1257,7 +1257,8 @@ l'aperçu et à la confirmation) ; une date donnée par l'équipe, à tout momen
 ### « Fait » et suivi des droits (lot ABO-3a, 20/11/2026, `docs/plan-abo-universel.md` § 4, § 7 ; contrat validé par le chef)
 
 Code : `src/Abo/Services/AboDeliveryService.php`, photos `src/Abo/Services/AboProofStorage.php`, routes
-`src/Abo/Controller/AboDeliveryController.php`, essais `tests/Functional/Abo/AboDeliveryTest.php`. Colonnes de site (migration
+`src/Abo/Controller/AboDeliveryController.php`, essais `tests/Functional/Abo/AboDeliveryTest.php`, réponses complètes de chaque route
+(données fictives) : `docs/abo-3a-exemples-reponses.json`. Colonnes de site (migration
 `Version20270202100000`, script `scripts/migrate_all_v2_abo_fait.sh`) : sur `benefit_occurrence`, la preuve (`proof_path`, `proof_sha256`,
 `proof_mime`, `proof_at`), `done_notified_at`, l'avis de l'abonné (`customer_ack`, `customer_ack_comment`, `customer_ack_at`,
 `ack_ticket_ref`) et la décision (`ack_resolution`, `ack_resolved_at`, `ack_resolved_by`) ; `subscription.done_emails` (vrai par défaut).
