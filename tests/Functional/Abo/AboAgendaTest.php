@@ -229,6 +229,7 @@ class AboAgendaTest extends WebTestCase
         $this->assertArrayHasKey('staffUserId', $upcoming[0]);
         // l'abonnement d'un autre client : 404
         $this->assertSame(404, $this->api('POST', '/api/subscriptions/' . $s->getId() . '/rendez-vous', ['benefitId' => $yoga->getId(), 'slotId' => $d], 'other')->getStatusCode());
+        $this->assertSame(0, (int) $this->db->fetchOne("SELECT COUNT(*) FROM benefit_occurrence WHERE slot_id = ? AND status = 'scheduled'", [$d]), 'rien d\'écrit pour un autre client');
     }
 
     public function testPauseCancelledSlotFreeDateAndTheHourlyPassNeverLoseAScheduledRight(): void
@@ -245,7 +246,7 @@ class AboAgendaTest extends WebTestCase
 
         // une date de l'équipe au-delà de la validité, pendant la pause : rendue, elle reste due (relecture neuve)
         $third = $this->json('POST', $team, ['benefitId' => $yoga->getId(), 'slotId' => $this->slot($yoga, '+2 days', 4)], 201)['appointment']['occurrenceId'];
-        $this->db->executeStatement("UPDATE benefit_occurrence SET valid_until = NOW() - INTERVAL '1 day' WHERE id = ?", [$third]);
+        $this->db->executeStatement("UPDATE benefit_occurrence SET valid_until = NOW() - INTERVAL '10 days' WHERE id = ?", [$third]); // plus échue que la pause n'est longue
         // pause de 5 jours : la date pendant la pause redevient à planifier, sans perte ; celle d'après reste
         $this->json('POST', '/api/site/abonnements/' . $s->getId() . '/pause', ['until' => (new \DateTimeImmutable('+5 days', new \DateTimeZone(self::TZ)))->format('Y-m-d')], 200);
         $this->assertSame(['available', 'scheduled', 'available'], [$this->status($first), $this->status($second), $this->status($third)]);
