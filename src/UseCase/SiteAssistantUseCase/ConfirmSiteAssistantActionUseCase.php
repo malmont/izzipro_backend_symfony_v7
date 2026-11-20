@@ -262,6 +262,9 @@ class ConfirmSiteAssistantActionUseCase
                 case 'propose_pause':
                 case 'propose_resume':
                 case 'propose_cancel_subscription':
+                case 'propose_slot_rule': // lot ABO-2
+                case 'propose_assign_date':
+                case 'propose_move_occurrence':
                     // lot ABO-0 : par le service de l'écran, tout relu (formule, produit porteur, prestations actives) ; un refus garde son message
                     return ($this->abo ?? throw new \OutOfBoundsException('Outil indisponible'))->apply($tool, $input);
             }

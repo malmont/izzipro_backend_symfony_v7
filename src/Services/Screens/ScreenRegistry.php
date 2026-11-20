@@ -406,6 +406,8 @@ final class ScreenRegistry
         'StripeConfigCrudController' => 'admin.paiement', 'SquareConfigCrudController' => 'admin.paiement',
         'ShippingOrderCrudController' => 'admin.expeditions', 'ParcelCrudController' => 'admin.expeditions', 'ShippingLabelCrudController' => 'admin.expeditions',
         'SubscriptionCrudController' => 'admin.abonnements',
+        // lot ABO-2 : l'agenda des prestations (règles de créneaux, créneaux et leurs réservations)
+        'BenefitSlotRuleCrudController' => 'admin.abonnements', 'BenefitSlotCrudController' => 'admin.abonnements',
         // lot ABO-0 : ce que les formules livrent, réglé avec les formules
         'BenefitCrudController' => 'admin.boutique-pages', 'PlanBenefitCrudController' => 'admin.boutique-pages',
         'MovementTypeCrudController' => 'admin.stock', 'InventoryMovementsCrudController' => 'admin.stock',

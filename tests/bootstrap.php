@@ -200,6 +200,11 @@ foreach ([MV_TEST_TENANT_DB, MV_TEST_TENANT2_DB] as $db) {
     foreach (\DoctrineMigrations\Version20270201700000::STATEMENTS as $sql) {
         $tenantDb->exec($sql);
     }
+    // PROVISOIRE, lot ABO-2 (20/11/2026) : la migration Version20270201900000 (agenda des prestations), de la même façon (après ABO-1)
+    require_once dirname(__DIR__) . '/migrations/Version20270201900000.php';
+    foreach (\DoctrineMigrations\Version20270201900000::STATEMENTS as $sql) {
+        $tenantDb->exec($sql);
+    }
     $tenantDb = null;
 }
 

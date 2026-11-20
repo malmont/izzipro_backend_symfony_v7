@@ -37,6 +37,8 @@ final class SubscriptionOutputDto
         public readonly ?array $cancellation = null,
         /** @var array{price: int, currency: string, interval: string, intervalCount: int}|null lot ABO-CONF : le prix que paie l'abonné (son époque), `plan.price` étant celui du jour */
         public readonly ?array $billedPrice = null,
+        /** @var list<array<string, mixed>> lot ABO-2 : les 10 prochaines dates (prestation, début, fin, lieu, annulable jusqu'à), jamais l'intervenant */
+        public readonly array $upcoming = [],
     ) {
     }
 
@@ -62,7 +64,16 @@ final class SubscriptionOutputDto
     public function withBalance(array $balance): self
     {
         $args = get_object_vars($this);
-        $args['balance'] = array_map(fn (array $b) => array_intersect_key($b, array_flip(['benefitId', 'name', 'kind', 'available', 'used', 'carried', 'unlimited', 'nextExpiry'])), $balance);
+        $args['balance'] = array_map(fn (array $b) => array_intersect_key($b, array_flip(['benefitId', 'name', 'kind', 'available', 'scheduled', 'used', 'carried', 'unlimited', 'nextExpiry'])), $balance);
+
+        return new self(...$args);
+    }
+
+    /** @param list<array<string, mixed>> $upcoming lot ABO-2 : la vue du client (sans intervenant) */
+    public function withUpcoming(array $upcoming): self
+    {
+        $args = get_object_vars($this);
+        $args['upcoming'] = array_map(fn (array $u) => array_intersect_key($u, array_flip(['occurrenceId', 'benefitId', 'name', 'startsAt', 'endsAt', 'location', 'slotId', 'cancellableUntil'])), $upcoming);
 
         return new self(...$args);
     }

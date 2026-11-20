@@ -83,7 +83,7 @@ final class NotificationCatalog
         'order_confirmation' => [self::INDISPENSABLE, null],
         'order_shipped' => [self::INDISPENSABLE, null],
         'order_notice' => [self::INDISPENSABLE, null], // remboursement, annulation, retour, reçu
-        'subscription_notice' => [self::INDISPENSABLE, null], // les cinq avis d'abonnement d'un client d'une boutique
+        'subscription_notice' => [self::INDISPENSABLE, null], // les avis d'abonnement d'un client d'une boutique (lot ABO-2 : « séance annulée » par la boutique, Q2)
         'pos_receipt' => [self::INDISPENSABLE, null],
         'booking_customer' => [self::INDISPENSABLE, null], // accusé de réservation, réservation confirmée, annulée ou modifiée
         'customer_message' => [self::INDISPENSABLE, null], // message écrit par un client : contact, formulaire à étapes, financement (décision A du propriétaire)

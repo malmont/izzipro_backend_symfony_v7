@@ -1175,6 +1175,74 @@ ajustent et répondent, mais ne créent rien. Les formules de la plateforme et d
   script `scripts/migrate_master_v2_subscription_fee.sh`), lisible du seul super administrateur (console Plateforme).
 - Code : `App\Services\SubscriptionService\SubscriptionFeeService`.
 
+### Agenda des prestations (lot ABO-2, 20/11/2026, `docs/plan-abo-universel.md` § 3, § 7 ; Q1 à Q4 validées)
+
+Code : `src/Abo/Services/AboAgendaService.php`, routes `src/Abo/Controller/AboAgendaController.php`, essais `tests/Functional/Abo/AboAgendaTest.php`.
+Tables de site (migration `Version20270201900000`, script `scripts/migrate_all_v2_abo_agenda.sh`) : `benefit_slot_rule`, `benefit_slot`,
+`benefit_slot_hold` ; `benefit_occurrence` gagne `slot_id`, `scheduled_at`, `scheduled_end` (UTC), `scheduled_by`, `scheduled_source`
+(`client` ou `team`) et les états `scheduled` (planifié) et `late_cancelled` (annulé trop tard).
+
+- **Règles de créneaux** (EasyAdmin « Règles de créneaux », outil `propose_slot_rule`) : une séance ou un service, jours ISO (1 = lundi),
+  heure **locale** du magasin `HH:MM`, durée (celle de la prestation par défaut), places (1 à 500), lieu, intervenant (compte du site,
+  facultatif, jamais montré aux abonnés), du / au. Les créneaux datés naissent **8 semaines devant**, à l'enregistrement de la règle et à
+  chaque passage horaire `app:abo:periodes` ; l'heure locale est convertie en UTC **jour par jour** (18:00 reste 18:00 après le passage à
+  l'heure d'été) ; unicité règle + début : rejouer ne crée rien. Modifier une règle retire ses créneaux futurs **sans** réservation ni
+  place retenue et les refait ; ceux qui en ont restent tels quels (heure, places, lieu). Désactiver ou supprimer une règle ne garde que
+  ses créneaux réservés. Créneau ponctuel : EasyAdmin « Créneaux », « Créer ».
+- **Trois modes de dates** (`plan_benefit.scheduling`) : `admin_after` : l'équipe donne une date libre (`startsAt`), durée de la
+  prestation, **sans contrôle de capacité** (Q4 ; l'intervenant sans chevauchement viendra avec ABO-3) ; `fixed_slots` : un créneau,
+  réservé par l'abonné si `slot_choice` = `client`, sinon attribué par l'équipe ; `client_at_subscription` : l'abonné choisit à la
+  souscription (places retenues, ci-dessous), puis réserve comme un créneau à son choix. L'équipe peut toujours donner un créneau.
+- **Capacité** : sous le verrou de l'abonnement puis celui du créneau (`pg_advisory_xact_lock`, attente bornée à 3 s : au-delà 409
+  `SLOT_BUSY`, à refaire), compte des droits `scheduled` et des places retenues encore valables ; au-delà 409 `SLOT_FULL`. Un abonnement ne
+  prend jamais deux places du même créneau (409 `SLOT_ALREADY_BOOKED`). Créneau annulé 409 `SLOT_CANCELLED`, commencé 409 `SLOT_PAST`.
+- **Quel droit** : celui demandé (`occurrenceId`, équipe) ou le droit à planifier qui expire le premier. L'abonné ne réserve qu'un
+  créneau qui commence **avant la fin de validité** de son droit (409 `SLOT_AFTER_VALIDITY`) ; l'équipe n'a pas cette limite.
+- **Annuler, déplacer** (délai `cancel_deadline_hours` de la prestation dans la formule, 24 h par défaut) : l'abonné avant le délai : le
+  droit redevient à planifier ; après : `late_cancelled`, **compté comme utilisé** (décision 1) ; déplacer = annuler + réserver d'un seul
+  tenant (un refus garde l'ancienne date), refusé après le délai (409 `CANCEL_DEADLINE_PASSED`). L'équipe annule et déplace **à tout
+  moment, sans perte**, au journal du site (`appointment_set`, `appointment_moved`, `appointment_cancelled`, Q3).
+- **Un droit rendu reste dû** : s'il redevient à planifier après sa fin de validité (date de l'équipe au-delà, créneau annulé), il vaut
+  jusqu'à la fin de la période en cours (ou 30 jours).
+- **Pause** (décision 3) : les dates planifiées entre maintenant et la reprise redeviennent à planifier, sans perte, puis sont
+  prolongées comme les autres droits ; les dates d'après la reprise restent.
+- **Créneau annulé par la boutique** (`POST /api/site/abonnements/creneaux/{slotId}/annulation { reason }`, motif obligatoire, ou
+  EasyAdmin « Créneaux » : motif dans la fiche puis « Enregistrer ») : ses droits planifiés ou annulés trop tard redeviennent à planifier,
+  ses places retenues sont rendues, chaque abonné reçoit le courriel « Votre séance est annulée » (`SubscriptionMailer`, sujet
+  `subscription_notice`, **indispensable**, Q2), au journal. Un créneau ne se supprime pas.
+- **Passage horaire** : un droit `scheduled` n'est jamais reporté ni perdu, même échu ; `late_cancelled` et `done` comptent dans « utilisé ».
+- **Places retenues à la souscription** (Q1, décision 5) : `POST /api/subscriptions` accepte `slots: [{ benefitId, slotId }]` (prestations
+  `client_at_subscription` de la formule, autant de dates au plus que de séances d'une période) ; chaque place est retenue **30 minutes**
+  avant tout appel à Stripe (refus 409 `SLOT_FULL`, 422 `SLOTS_INVALID`, 403 `SCHEDULING_NOT_BY_CLIENT`), rendue aussitôt si la souscription
+  échoue, rattachée à l'abonnement créé ; à la naissance des droits (facture payée), elle devient le rendez-vous. Une place échue n'est
+  convertie que s'il reste de la place (sinon le droit reste à planifier, événement `hold_lost`). Les places échues depuis un jour sont
+  effacées par le passage. Créneaux à choisir avant d'être abonné : `GET /api/subscription-plans/{id}/creneaux?benefitId=`.
+- **Solde** : `balance[]` gagne `scheduled` ; `available` reste « à planifier ». La fiche (gestion et abonné) gagne `upcoming[]` : les 10
+  prochaines dates (prestation, début, fin, lieu, `cancellableUntil`) ; l'équipe y voit aussi l'intervenant et la source.
+
+Routes (dates ATOM à l'heure du magasin) :
+
+| Qui | Route | Rôle |
+|---|---|---|
+| équipe | `GET /api/site/abonnements/creneaux?benefitId=&from=&to=` | créneaux, places restantes (`remaining`, `booked`, `held`), 14 jours par défaut, 62 au plus |
+| équipe | `GET /api/site/abonnements/a-planifier` | droits à planifier par abonnement (prénom et nom de l'abonné, mode, prochaine échéance) |
+| équipe | `POST /api/site/abonnements/{id}/rendez-vous { benefitId, occurrenceId?, slotId \| startsAt }` | 201 `{ appointment, subscription }` |
+| équipe | `PATCH` / `DELETE /api/site/abonnements/{id}/rendez-vous/{occurrenceId}` | déplacer, annuler sans perte |
+| équipe | `POST /api/site/abonnements/creneaux/{slotId}/annulation { reason }` | 200 `{ slotId, released }` |
+| abonné | `GET /api/subscriptions/{id}/creneaux?benefitId=` | créneaux ouverts à son choix, 8 semaines, sans intervenant |
+| abonné | `POST /api/subscriptions/{id}/rendez-vous { benefitId, slotId }` | 201 `{ appointment, subscription }` |
+| abonné | `PATCH` / `DELETE /api/subscriptions/{id}/rendez-vous/{occurrenceId}` | déplacer avant le délai ; annuler (`cancellation.status` : `available` ou `late_cancelled`) |
+| futur abonné | `GET /api/subscription-plans/{id}/creneaux?benefitId=` | créneaux à choisir à la souscription |
+
+Réserver et déplacer (abonné) exigent le module Boutique (`ModuleAccessService::METHOD_ROUTES`) ; annuler reste servi. Pour le directeur
+d'un groupe entré dans une boutique, réserver, déplacer, régler les créneaux et annuler un créneau restent ouverts (ce n'est pas de
+l'argent) ; l'agence, elle, n'entre pas dans les abonnements (famille vente).
+
+Outils de l'assistant du site (module Boutique, aucune identité, jamais l'intervenant) : lectures `get_slots`, `get_to_schedule` ;
+propositions confirmées par l'administrateur, appliquées par le même service : `propose_slot_rule`, `propose_assign_date` (place vérifiée
+à la confirmation), `propose_move_occurrence`. Un lieu, un nom ou un motif lus sont des données : un lieu porteur d'une consigne n'entraîne
+rien (essai).
+
 ### Codes des refus des abonnements (04/11/2026, application e-commerce mobile)
 
 Même contrat que les codes du devis : chaque refus (`SubscriptionException`) porte un `code` de premier niveau et un `message`

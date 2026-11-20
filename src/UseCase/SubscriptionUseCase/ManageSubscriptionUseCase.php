@@ -16,7 +16,8 @@ class ManageSubscriptionUseCase
 {
     public function __construct(private readonly SubscriptionService $service, private readonly SubscriptionMailer $mailer,
         private readonly ?\App\Abo\Services\AboRightsService $rights = null,
-        private readonly ?\App\Abo\Services\AboCatalogService $catalog = null) // lot ABO-CONF : le prix que paie l'abonné // lot ABO-1 : solde, pause datée, engagement minimal
+        private readonly ?\App\Abo\Services\AboCatalogService $catalog = null, // lot ABO-CONF : le prix que paie l'abonné // lot ABO-1 : solde, pause datée, engagement minimal
+        private readonly ?\App\Abo\Services\AboAgendaService $agenda = null) // lot ABO-2 : prochaines dates, places retenues à la souscription
     {
     }
 
@@ -36,6 +37,10 @@ class ManageSubscriptionUseCase
             $dto = $dto->withBilledPrice($this->catalog->billedPrice($subscription)); // l'abonné en cours garde le prix de son époque
         }
 
+        if ($this->agenda !== null) {
+            $dto = $dto->withUpcoming($this->agenda->upcoming($subscription, false, $locale));
+        }
+
         return $dto->withBalance($this->rights->balance($subscription, $locale))->withCancellation([
             'allowed' => $subscription->getStatus() !== \App\Entity\Subscription::STATUS_CANCELED && $subscription->getStripeSubscriptionId() !== null,
             'cancellableFrom' => $engaged ? $this->rights->at($termEnd) : null,
@@ -50,7 +55,8 @@ class ManageSubscriptionUseCase
     }
 
     /**
-     * @param array<string, mixed> $body { planId, quantity?, addressId?, carrierId? }
+     * @param array<string, mixed> $body { planId, quantity?, addressId?, carrierId?, slots? } ; `slots` (lot ABO-2, Q1) : [{ benefitId, slotId }],
+     *        places retenues 30 minutes pendant le paiement, puis rendez-vous à la naissance des droits ; libérées si la souscription échoue
      * @return array{subscriptionId: int, clientSecret: ?string, intentType: ?string, status: string, reused: bool, subscription: SubscriptionOutputDto}
      * @throws SubscriptionException
      */
@@ -66,7 +72,25 @@ class ManageSubscriptionUseCase
         }
         $target = $body['fulfillmentTarget'] ?? null; // site cible d'une formule branchée sur une offre de la plateforme (lot 3 bis, 04/11/2026)
         $link = $body['fulfillmentLink'] ?? null; // lot PROVISION-1 : le lien signé de « Mettre à jour mon forfait »
-        $result = $this->service->subscribe($user, (int) $planId, (int) $quantity, self::id($body['addressId'] ?? null), self::id($body['carrierId'] ?? null), is_string($target) ? trim($target) : null, is_string($link) ? trim($link) : null);
+        $holds = [];
+        if ($this->agenda !== null && array_key_exists('slots', $body) && $body['slots'] !== null && $body['slots'] !== []) {
+            $plan = $this->service->plans()->find((int) $planId);
+            if ($plan === null || !$plan->isActive()) {
+                throw new SubscriptionException(404, 'Formule introuvable.', [], [], 'PLAN_NOT_FOUND');
+            }
+            try {
+                $holds = $this->agenda->hold($user, $plan, (int) $quantity, $body['slots']); // avant tout appel à Stripe : une place complète refuse tôt
+            } catch (\App\Abo\Services\AboException $e) {
+                throw $this->aboRefusal($e);
+            }
+        }
+        try {
+            $result = $this->service->subscribe($user, (int) $planId, (int) $quantity, self::id($body['addressId'] ?? null), self::id($body['carrierId'] ?? null), is_string($target) ? trim($target) : null, is_string($link) ? trim($link) : null);
+        } catch (\Throwable $e) {
+            $this->agenda?->releaseHolds($holds); // souscription refusée : les places sont rendues tout de suite
+            throw $e;
+        }
+        $this->agenda?->attachHolds($holds, $result['subscription']);
 
         return [
             'subscriptionId' => (int) $result['subscription']->getId(), 'clientSecret' => $result['clientSecret'],

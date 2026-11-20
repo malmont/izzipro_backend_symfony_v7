@@ -104,6 +104,8 @@ class ModuleAccessService
     public const METHOD_ROUTES = [
         '#^/api/subscriptions$#' => [self::BOUTIQUE, ['POST']],
         '#^/api/subscriptions/\d+/(change-plan|resume)$#' => [self::BOUTIQUE, ['POST']],
+        // lot ABO-2 : réserver ou déplacer une date exige le module ; annuler la sienne reste toujours servi
+        '#^/api/subscriptions/\d+/rendez-vous(/\d+)?$#' => [self::BOUTIQUE, ['POST', 'PATCH']],
     ];
 
     private const CACHE_KEY = 'module_flags';

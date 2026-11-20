@@ -730,6 +730,9 @@ class DashboardController extends AbstractDashboardController
         yield MenuItem::linkToCrud('Prestations', 'fas fa-concierge-bell', \App\Abo\Entity\Benefit::class);
         yield MenuItem::linkToCrud('Prestations des formules', 'fas fa-list-check', \App\Abo\Entity\PlanBenefit::class);
         yield MenuItem::linkToCrud('Abonnements', 'fas fa-id-card', Subscription::class);
+        // lot ABO-2 : l'agenda des prestations
+        yield MenuItem::linkToCrud('Règles de créneaux', 'fas fa-calendar-week', \App\Abo\Entity\BenefitSlotRule::class);
+        yield MenuItem::linkToCrud('Créneaux', 'fas fa-calendar-day', \App\Abo\Entity\BenefitSlot::class);
         yield MenuItem::linkToCrud('Atouts (icône + phrase)', 'fa fa-star', Feature::class);
         yield MenuItem::linkToCrud('Cartes « Explorer »', 'fa fa-th-large', ExploreCard::class);
 

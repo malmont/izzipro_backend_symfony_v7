@@ -42,6 +42,7 @@ class AboRightsService
         private readonly StoreClock $clock,
         private readonly LoggerInterface $logger,
         private readonly ?\App\Services\ContentAuditService\ContentAuditRecorder $audit = null,
+        private readonly ?AboAgendaService $agenda = null, // lot ABO-2 : places retenues converties à la naissance
     ) {
     }
 
@@ -95,6 +96,8 @@ class AboRightsService
             $em->persist(new SubscriptionAboEvent($subscription, 'born', null, $created));
             $em->flush();
         }
+        // lot ABO-2 (Q1) : les places retenues à la souscription deviennent des rendez-vous sur les droits nés
+        $this->agenda?->convertHolds($subscription);
 
         return $created;
     }
@@ -139,7 +142,7 @@ class AboRightsService
     /**
      * Le solde par prestation de la formule (côté client : seulement les nombres et les échéances).
      *
-     * @return list<array{benefitId: int, name: string, kind: string, available: ?int, used: int, carried: int, unlimited: bool, nextExpiry: ?string}>
+     * @return list<array{benefitId: int, name: string, kind: string, available: ?int, scheduled: int, used: int, carried: int, unlimited: bool, nextExpiry: ?string}>
      */
     public function balance(Subscription $subscription, string $locale): array
     {
@@ -157,12 +160,15 @@ class AboRightsService
             }
             $mine = array_filter($occ, fn (BenefitOccurrence $o) => $o->getBenefit()?->getId() === $b->getId());
             $avail = array_filter($mine, fn (BenefitOccurrence $o) => $o->getStatus() === BenefitOccurrence::STATUS_AVAILABLE && $o->getValidUntil() > $now);
+            // lot ABO-2 : `available` reste « à planifier » ; `scheduled` les dates planifiées (jamais perdues par le passage) ; « utilisé » compte
+            // aussi une annulation tardive (décision 1)
+            $scheduled = count(array_filter($mine, fn (BenefitOccurrence $o) => $o->getStatus() === BenefitOccurrence::STATUS_SCHEDULED));
             $next = null;
             foreach ($avail as $o) {
                 $next = $next === null || $o->getValidUntil() < $next ? $o->getValidUntil() : $next;
             }
             $out[] = ['benefitId' => (int) $b->getId(), 'name' => $b->getName($locale), 'kind' => $b->getKind(),
-                'available' => $pb->getQuantity() === null ? null : count($avail), 'used' => count(array_filter($mine, fn (BenefitOccurrence $o) => $o->getStatus() === BenefitOccurrence::STATUS_DONE)),
+                'available' => $pb->getQuantity() === null ? null : count($avail), 'scheduled' => $scheduled, 'used' => count(array_filter($mine, fn (BenefitOccurrence $o) => in_array($o->getStatus(), BenefitOccurrence::USED, true))),
                 'carried' => count(array_filter($avail, fn (BenefitOccurrence $o) => $o->isCarried())), 'unlimited' => $pb->getQuantity() === null, 'nextExpiry' => $this->at($next)];
         }
         // une prestation retirée de la formule : ses droits déjà payés restent au solde jusqu'à leur échéance
@@ -170,14 +176,15 @@ class AboRightsService
         $left = [];
         foreach ($occ as $o) {
             $b = $o->getBenefit();
-            if ($b !== null && !in_array((int) $b->getId(), $listed, true) && $o->getStatus() === BenefitOccurrence::STATUS_AVAILABLE && $o->getValidUntil() > $now) {
+            if ($b !== null && !in_array((int) $b->getId(), $listed, true) && (($o->getStatus() === BenefitOccurrence::STATUS_AVAILABLE && $o->getValidUntil() > $now) || $o->getStatus() === BenefitOccurrence::STATUS_SCHEDULED)) {
                 $left[(int) $b->getId()][] = $o;
             }
         }
-        foreach ($left as $benefitId => $avail) {
-            $b = $avail[0]->getBenefit();
-            $next = min(array_map(fn (BenefitOccurrence $o) => $o->getValidUntil(), $avail));
-            $out[] = ['benefitId' => $benefitId, 'name' => $b->getName($locale), 'kind' => $b->getKind(), 'available' => count($avail), 'used' => 0,
+        foreach ($left as $benefitId => $rows) {
+            $b = $rows[0]->getBenefit();
+            $avail = array_filter($rows, fn (BenefitOccurrence $o) => $o->getStatus() === BenefitOccurrence::STATUS_AVAILABLE);
+            $next = $avail !== [] ? min(array_map(fn (BenefitOccurrence $o) => $o->getValidUntil(), $avail)) : null;
+            $out[] = ['benefitId' => $benefitId, 'name' => $b->getName($locale), 'kind' => $b->getKind(), 'available' => count($avail), 'scheduled' => count($rows) - count($avail), 'used' => 0,
                 'carried' => count(array_filter($avail, fn (BenefitOccurrence $o) => $o->isCarried())), 'unlimited' => false, 'nextExpiry' => $this->at($next)];
         }
 
@@ -328,6 +335,13 @@ class AboRightsService
             $pauses = $subscription->getPauses();
             $pauses[] = ['from' => $now->format(\DATE_ATOM), 'until' => $until->format(\DATE_ATOM), 'by' => $by, 'extendedSeconds' => $seconds];
             $subscription->setPauses($pauses);
+            // lot ABO-2 (décision 3) : les dates planifiées PENDANT la pause sont annulées sans perte (elles redeviennent à planifier, puis sont
+            // prolongées comme les autres) ; celles d'après la reprise restent
+            $released = $em->getConnection()->executeStatement("UPDATE benefit_occurrence SET status = 'available', slot_id = NULL, scheduled_at = NULL, scheduled_end = NULL, scheduled_by = NULL, scheduled_source = NULL
+                WHERE subscription_id = ? AND status = 'scheduled' AND scheduled_at >= ? AND scheduled_at < ?", [$subscription->getId(), gmdate('Y-m-d H:i:s', $now->getTimestamp()), gmdate('Y-m-d H:i:s', $until->getTimestamp())]);
+            if ($released > 0) {
+                $em->persist(new SubscriptionAboEvent($subscription, 'unscheduled', null, $released, 'pause', $by));
+            }
             // TOUS les droits disponibles sont prolongés de la durée de la pause, y compris un droit échu que le passage n'a pas encore traité :
             // rien n'est perdu pendant qu'on ne paie pas
             $em->getConnection()->executeStatement("UPDATE benefit_occurrence SET valid_until = valid_until + (? || ' seconds')::interval WHERE subscription_id = ? AND status = 'available'",
