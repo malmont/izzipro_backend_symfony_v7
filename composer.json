@@ -119,7 +119,8 @@
         ]
     },
     "conflict": {
-        "symfony/symfony": "*"
+        "symfony/symfony": "*",
+        "google/protobuf": ">=5"
     },
     "extra": {
         "symfony": {
