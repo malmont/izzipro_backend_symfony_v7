@@ -60,6 +60,31 @@ class StoreClock
         return new \DateTimeZone($this->settings()['timezone']);
     }
 
+    /**
+     * Un instant rendu à l'heure du magasin, avec son décalage (ATOM : « 2026-12-20T13:31:45-05:00 ») ; accepte un instant ou un texte daté
+     * déjà rangé (ATOM en UTC, par exemple dans un champ JSON). Lot ABO-DATES (20/11/2026). Un texte illisible est rendu tel quel.
+     */
+    public static function atomIn(\DateTimeZone $timezone, \DateTimeInterface|string|null $at): ?string
+    {
+        if ($at === null || $at === '') {
+            return null;
+        }
+        if (is_string($at)) {
+            try {
+                $at = new \DateTimeImmutable($at);
+            } catch (\Exception) {
+                return $at;
+            }
+        }
+
+        return \DateTimeImmutable::createFromInterface($at)->setTimezone($timezone)->format(\DATE_ATOM);
+    }
+
+    public function atom(\DateTimeInterface|string|null $at): ?string
+    {
+        return self::atomIn($this->timezone(), $at);
+    }
+
     /** Journée (Y-m-d) d'un instant, dans le fuseau du magasin */
     public function day(\DateTimeInterface $at): string
     {

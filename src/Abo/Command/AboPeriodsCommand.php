@@ -22,7 +22,8 @@ final class AboPeriodsCommand extends Command
 {
     public function __construct(private readonly TenantConnectionManager $tenants, private readonly TenantEntityManagerProvider $emProvider, private readonly AboRightsService $rights,
         private readonly ?\App\Services\SubscriptionService\SubscriptionFeeService $fees = null, // lot ABO-CONF C : rattrapage de la commission
-        private readonly ?\App\Abo\Services\AboAgendaService $agenda = null) // lot ABO-2 : créneaux 8 semaines devant
+        private readonly ?\App\Abo\Services\AboAgendaService $agenda = null, // lot ABO-2 : créneaux 8 semaines devant
+        private readonly ?\App\Abo\Services\AboDeliveryService $delivery = null) // lot ABO-3a : photos de preuve de plus de 12 mois effacées
     {
         parent::__construct();
     }
@@ -46,6 +47,11 @@ final class AboPeriodsCommand extends Command
                 $slots = $this->agenda?->generateAll() ?? 0;
                 if ($slots > 0) {
                     $output->writeln(sprintf('%s : %d créneau(x) créé(s).', $tenant['code'], $slots));
+                }
+                // lot ABO-3a (décision 9) : les photos de preuve de plus de 12 mois (l'empreinte et la date restent)
+                $purged = $this->delivery?->purgeProofs() ?? 0;
+                if ($purged > 0) {
+                    $output->writeln(sprintf('%s : %d photo(s) de preuve de plus de 12 mois effacée(s).', $tenant['code'], $purged));
                 }
                 // lot ABO-CONF C : la commission voulue posée sur les abonnements en cours, 50 par site et par passage (repris au suivant)
                 $f = $this->fees?->catchUp() ?? ['updated' => 0, 'failed' => 0];

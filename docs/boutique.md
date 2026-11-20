@@ -1000,12 +1000,19 @@ Socle de l'abonnement universel : une formule livre des **prestations** ; aucun 
   BENEFIT_KIND_RESERVED, PLAN_BENEFIT_QUANTITY_INVALID, PLAN_BENEFIT_SCHEDULING_INVALID, PLAN_BENEFIT_RULES_INVALID,
   PLAN_BENEFIT_DUPLICATE ; 409 BENEFIT_IN_USE : une prestation livrée ne se supprime pas, elle se désactive) et phrase « ce que verra
   l'abonné » calculée par le serveur, en français et en anglais (« 8 séances Yoga par semaine ; vous choisissez vos créneaux ;
-  annulation sans frais jusqu'à 24 h avant ; jusqu'à 8 reportées à la période suivante. »).
+  annulation sans frais jusqu'à 24 h avant ; jusqu'à 8 reportées à la période suivante. »). Rythme accordé par une seule règle
+  (`App\Abo\Services\AboWording`, 20/11/2026) : « par semaine / mois / an » pour une période, « toutes les 2 semaines », « tous les
+  3 mois », « tous les 2 ans » pour plusieurs ; « per week », « every 2 weeks » ; une carte à une seule période : « valable 2 semaines ».
 - **EasyAdmin** (section « Boutique : accueil et pages ») : « Prestations », « Prestations des formules » (filtres formule et prestation,
   colonne « Ce que verra l'abonné »), et sur la fiche d'une formule, « Prestations livrées ».
 - **Grille publique** : `GET /api/subscription-plans` rend `benefits[]` pour chaque formule (`[]` sans prestation) : `{ id, benefitId,
   kind, name, description, durationMinutes, location, quantity, scheduling, slotChoice, cancelDeadlineHours, carryOverMax, proof,
   summary }`, dans la langue demandée ; jamais l'intervenant ni un coût. Cache : `Benefit` et `PlanBenefit` étiquetés avec les formules.
+- **Dates des fiches d'abonnement** (lot ABO-DATES, 20/11/2026) : toutes à l'heure du magasin, avec le décalage
+  (`2026-12-20T13:00:00-05:00`), dans la fiche de gestion (`/api/site/abonnements/...`) comme dans celle de l'abonné
+  (`/api/subscriptions`, `…/{id}`) : `currentPeriodEnd`, `createdAt`, `canceledAt`, `pausedAt`, `orders[].date`, le prochain essai de
+  paiement (`paymentIssue` / `latestInvoice.nextPaymentAttempt`), les pauses (`from`, `until`, `resumedAt`) ; une seule règle,
+  `StoreClock::atom()`. Avant ce lot, la fiche de l'abonné les rendait en UTC (`+00:00`).
 - **Suivi** pour la gestion web ET l'application de gestion mobile, mêmes routes (`ROLE_ADMIN`, module Boutique, lecture seule,
   `?locale=en` possible, dates ATOM à l'heure du magasin) ; écran du registre `abonnements` (famille vente) :
   - `GET /api/site/abonnements/formules` → `{ plans: [{ id, name, price, currency, interval, intervalCount, active, fulfillmentType,
@@ -1060,7 +1067,8 @@ Les prestations à quantité deviennent des **droits** que l'abonné consomme ; 
   rend 409 `SUBSCRIPTION_BUSY`, à refaire) :
   - `POST /api/site/abonnements/{id}/utilisations { benefitId, note? }` (201) : marque utilisé le droit qui expire le premier ; deux gestes
     simultanés ne prennent jamais le même droit. 409 `BALANCE_EMPTY`, 422 `BENEFIT_NOT_IN_PLAN`. Annulable 24 h :
-    `DELETE …/utilisations/{occurrenceId}` (404 `OCCURRENCE_NOT_FOUND`, 409 `USE_UNDO_EXPIRED`) ;
+    `DELETE …/utilisations/{occurrenceId}` (404 `OCCURRENCE_NOT_FOUND`, 409 `USE_UNDO_EXPIRED` ; 409 `OCCURRENCE_SCHEDULED` pour une date
+    marquée « fait » par ABO-3a, qui se corrige par `…/correction`) ;
   - `POST /api/site/abonnements/{id}/droits { benefitId, quantity (1 à 10), reason }` (201) : droits offerts jusqu'à la fin de la
     période en cours ; motif obligatoire (`GIFT_INVALID`, `REASON_REQUIRED`) ; écrit au journal du site ;
   - `POST /api/site/abonnements/{id}/pause { until }` (date du magasin) : 90 jours au plus et une pause par an glissant, réglables par
@@ -1290,6 +1298,123 @@ propositions confirmées par l'administrateur, appliquées par le même service 
 à la confirmation), `propose_move_occurrence`. Un lieu, un nom ou un motif lus sont des données : un lieu porteur d'une consigne n'entraîne
 rien (essai). L'assistant ne déplace une date choisie par l'abonné qu'avant le délai d'annulation (409 `CANCEL_DEADLINE_PASSED`, à
 l'aperçu et à la confirmation) ; une date donnée par l'équipe, à tout moment.
+
+### « Fait » et suivi des droits (lot ABO-3a, 20/11/2026, `docs/plan-abo-universel.md` § 4, § 7 ; contrat validé par le chef)
+
+Code : `src/Abo/Services/AboDeliveryService.php`, photos `src/Abo/Services/AboProofStorage.php`, routes
+`src/Abo/Controller/AboDeliveryController.php`, essais `tests/Functional/Abo/AboDeliveryTest.php`, réponses complètes de chaque route
+(données fictives) : `docs/abo-3a-exemples-reponses.json`. Colonnes de site (migration
+`Version20270202100000`, script `scripts/migrate_all_v2_abo_fait.sh`) : sur `benefit_occurrence`, la preuve (`proof_path`, `proof_sha256`,
+`proof_mime`, `proof_at`), `done_notified_at`, l'avis de l'abonné (`customer_ack`, `customer_ack_comment`, `customer_ack_at`,
+`ack_ticket_ref`) et la décision (`ack_resolution`, `ack_resolved_at`, `ack_resolved_by`) ; `subscription.done_emails` (vrai par défaut).
+Nouvel état `missed` (absent).
+
+- **Fait / absent** (équipe) : une date **planifiée**, le jour même (heure du magasin) ou après (sinon 409 `NOT_YET_DUE`). « Fait » : note
+  facultative (300 caractères), photo facultative ; « absent » : compté comme **utilisé** (décision 1, défaut accepté), sans courriel. Un
+  droit déjà marqué de l'autre façon : 409 `OCCURRENCE_ALREADY_MARKED` (le corriger d'abord) ; un droit sans date : 409
+  `OCCURRENCE_NOT_SCHEDULED` (une utilisation sans date passe par « Utiliser » d'ABO-1). **Deux fois le même geste : 200, `changed: false`**,
+  rien d'écrit, aucun second courriel. Un nouveau constat repart d'un avis vierge. Un « fait » ou un « absent » **garde sa place** dans
+  le créneau (les places comptent les dates planifiées, faites et absentes : aucune surréservation si le constat est corrigé).
+- **Photo de preuve** : multipart, champ `photo`, JPEG, PNG ou WebP (un HEIC d'iPhone se convertit en JPEG avant l'envoi), 10 Mo au plus
+  (422 `PROOF_TOO_LARGE`, `PROOF_FORMAT` ; 12 000 pixels au plus de côté et 50 millions de pixels en tout, contrôlés avant le décodage). Relue puis **réencodée** en JPEG par GD : aucune métadonnée gardée (position GPS, appareil,
+  date) ; l'orientation de l'appareil est appliquée aux pixels ; 2000 pixels au plus de côté ; empreinte SHA-256 gardée. Stockage privé
+  `var/storage/private_media/abo-proofs/<site>/`, jamais d'adresse publique, servie par les deux routes `…/preuve` seulement
+  (`Cache-Control: private, no-store`). Visible de l'abonné (décision 9). **Effacée après 12 mois** au passage `app:abo:periodes`
+  (l'empreinte et la date restent ; durée à faire relire par l'avocat, liste « avant le réel »). Jamais envoyée à l'IA.
+- **Courriel « Votre prestation est faite »** (`SubscriptionMailer`, type `subscription_done`, indispensable comme tout courriel à un
+  client) : **un seul par droit**, réservé par la base (`done_notified_at`), même après une correction puis un nouveau « fait » ; une
+  séance entière envoie **un courriel par abonné**, à lui seul (jamais groupé). L'abonné le **coupe** depuis son compte
+  (`PATCH /api/subscriptions/{id}/courriels { doneEmails: false }`) : les niveaux de courriels (NOTIF) ne règlent pas les courriels aux
+  clients, ce choix par abonnement en tient lieu.
+- **Séance entière** : chaque inscrit planifié est marqué fait, sauf les absents désignés par leur numéro d'abonnement (422
+  `ABSENT_NOT_ON_SLOT` pour un abonnement qui n'y est pas) ; un droit déjà marqué reste tel quel (`unchanged`) ; un abonnement tenu un
+  instant par un autre traitement est rendu dans `failed` sans arrêter les autres.
+- **Corriger un constat** (« fait » ou « absent » posé par erreur ; administrateur, **motif obligatoire**, au journal `occurrence_undo` et à
+  l'historique `done_undone` / `missed_undone`) : la date redevient planifiée, le droit revient au solde, la photo est effacée. Permis tant
+  que la période du droit court, et toujours dans les **7 jours** qui suivent le constat (sinon 409 `UNDO_PERIOD_CLOSED`) ; **refusé
+  pendant une contestation** (409 `CONTESTATION_PENDING`). Le créneau annulé entre-temps : le droit redevient à planifier, sans perte.
+  « Annuler l'utilisation » d'ABO-1 ne touche jamais une date marquée (409 `OCCURRENCE_SCHEDULED`).
+- **Avis de l'abonné** : `confirmed` ou `contested` (commentaire de 10 à 1000 caractères), dans les **30 jours** du constat (409
+  `ACK_TOO_LATE`) ; le même avis une seconde fois : 200 sans rien changer ; un autre avis : 409 `ACK_ALREADY_GIVEN`. Une contestation
+  ouvre une **demande d'Assistance** quand le module est ouvert (sujet « Contestation : <prestation> du <date> », catégorie `other` ; son
+  numéro est rendu dans `ticket`) ; si le plafond de demandes est atteint, la contestation est gardée quand même. **Jamais de
+  remboursement automatique** (décision 6).
+- **Trancher une contestation** (administrateur) : `kept` (constat maintenu) ou `returned` (le droit redevient **à planifier**, valable au
+  moins jusqu'à la fin de la période en cours ; photo et note effacées ; replanifié puis refait, c'est une nouvelle prestation : nouveau
+  courriel, nouvel avis). Au journal et à l'historique (`contest_kept`, `contest_returned`).
+- **Fiches** : gestion `GET /api/site/abonnements/{id}` et abonné `GET /api/subscriptions/{id}` gagnent `delivered[]` (90 jours, 20 au plus,
+  les plus récentes d'abord) et `doneEmails`. Abonné : `occurrenceId`, `benefitId`, `name`, `status` (`done` | `missed`), `startsAt`,
+  `doneAt`, `note`, `hasProof`, `customerAck`, `ackUntil` (null une fois l'avis donné) ; l'équipe voit en plus `doneBy`, `ackComment`,
+  `ackAt`, `ticket`, `resolution`. Le modèle (assistant) ne voit dans la fiche ni « par qui », ni la note, ni le commentaire ; seul `get_contestations` lui donne le
+  commentaire, courriels et téléphones masqués, pour qu'il résume la contestation (l'administrateur tranche).
+- **Entrées** : le directeur d'un groupe entré lit « À faire aujourd'hui », les contestations et les photos ; il ne marque, ne corrige ni ne
+  tranche rien (`EntryModeGuardSubscriber`, famille « droits »). L'agence n'entre pas dans les abonnements (famille vente), comme pour l'agenda.
+
+Routes (dates ATOM à l'heure du magasin) :
+
+| Qui | Route | Rôle |
+|---|---|---|
+| équipe | `GET /api/site/abonnements/aujourdhui?date=AAAA-MM-JJ` | séances du jour (même sans inscrit) et leurs inscrits, dates libres, compteurs ; 422 `DATE_INVALID` |
+| équipe | `POST /api/site/abonnements/{id}/occurrences/{occurrenceId}/fait` | JSON `{ note? }` ou multipart (`note`, `photo`) → 200 `{ occurrence, changed, subscription }` |
+| équipe | `POST /api/site/abonnements/{id}/occurrences/{occurrenceId}/absent { note? }` | 200 `{ occurrence, changed, subscription }` |
+| équipe | `POST /api/site/abonnements/creneaux/{slotId}/fait { absentSubscriptionIds?, note? }` | 200 `{ slotId, done, missed, unchanged, failed }` |
+| équipe | `POST /api/site/abonnements/{id}/occurrences/{occurrenceId}/correction { reason }` | 200 `{ occurrence, subscription }` |
+| équipe | `GET /api/site/abonnements/contestations` | contestations en attente (identité de l'abonné, commentaire, demande d'Assistance) |
+| équipe | `POST /api/site/abonnements/{id}/occurrences/{occurrenceId}/contestation { decision: kept \| returned, note? }` | 200 `{ occurrence, subscription }` |
+| équipe | `GET /api/site/abonnements/{id}/occurrences/{occurrenceId}/preuve` | la photo (image/jpeg) ; 404 `PROOF_NOT_FOUND` |
+| abonné | `POST /api/subscriptions/{id}/occurrences/{occurrenceId}/avis { decision, comment? }` | 200 `{ acknowledgement: { occurrenceId, customerAck, ticket, changed }, subscription }` |
+| abonné | `GET /api/subscriptions/{id}/occurrences/{occurrenceId}/preuve` | la photo de sa prestation |
+| abonné | `PATCH /api/subscriptions/{id}/courriels { doneEmails }` | 200 `{ doneEmails }` ; 422 `DONE_EMAILS_INVALID` |
+
+Exemple `GET /api/site/abonnements/aujourdhui` (onglet Abonnements de l'application de gestion mobile et gestion web) :
+
+```json
+{
+  "date": "2026-11-20", "timezone": "America/Toronto",
+  "counts": { "toMark": 2, "done": 1, "missed": 0 },
+  "sessions": [
+    { "slotId": 412, "benefitId": 7, "name": "Yoga", "startsAt": "2026-11-20T18:00:00-05:00", "endsAt": "2026-11-20T19:00:00-05:00",
+      "location": "Salle B", "capacity": 12, "staffUserId": 3, "booked": 3, "done": 1, "missed": 0, "lateCancelled": 0, "toMark": 2,
+      "appointments": [
+        { "occurrenceId": 9001, "subscriptionId": 42, "benefitId": 7, "name": "Yoga", "status": "done", "startsAt": "2026-11-20T18:00:00-05:00",
+          "endsAt": "2026-11-20T19:00:00-05:00", "doneAt": "2026-11-20T19:05:12-05:00", "hasProof": false, "customerAck": null,
+          "contestationPending": false, "note": null, "customer": { "id": 88, "firstname": "Julie", "lastname": "Martin" } },
+        { "occurrenceId": 9002, "subscriptionId": 43, "benefitId": 7, "name": "Yoga", "status": "scheduled", "startsAt": "2026-11-20T18:00:00-05:00",
+          "endsAt": "2026-11-20T19:00:00-05:00", "doneAt": null, "hasProof": false, "customerAck": null, "contestationPending": false,
+          "note": null, "customer": { "id": 91, "firstname": "Marc", "lastname": "Roy" } }
+      ] }
+  ],
+  "appointments": [
+    { "occurrenceId": 9100, "subscriptionId": 57, "benefitId": 9, "name": "Ménage", "status": "scheduled", "startsAt": "2026-11-20T10:30:00-05:00",
+      "endsAt": "2026-11-20T12:30:00-05:00", "doneAt": null, "hasProof": false, "customerAck": null, "contestationPending": false,
+      "note": null, "customer": { "id": 102, "firstname": "Anne", "lastname": "Côté" } }
+  ]
+}
+```
+
+Exemple `POST /api/site/abonnements/43/occurrences/9002/fait` (multipart `note`, `photo`) → 200 :
+
+```json
+{
+  "occurrence": { "occurrenceId": 9002, "subscriptionId": 43, "benefitId": 7, "name": "Yoga", "status": "done", "slotId": 412,
+    "startsAt": "2026-11-20T18:00:00-05:00", "endsAt": "2026-11-20T19:00:00-05:00", "doneAt": "2026-11-20T19:06:40-05:00",
+    "note": "Séance tenue", "hasProof": true, "customerAck": null, "doneBy": "Michel", "ackComment": null, "ticket": null, "resolution": null },
+  "changed": true,
+  "subscription": { "subscriptionId": 43, "status": "active", "balance": [ { "benefitId": 7, "name": "Yoga", "kind": "session", "available": 5,
+    "scheduled": 1, "used": 2, "carried": 0, "unlimited": false, "nextExpiry": "2026-12-20T00:00:00-05:00" } ], "upcoming": [], "delivered": [], "doneEmails": true, "…": "la fiche entière" }
+}
+```
+
+`POST …/absent` rend la même forme (`status: "missed"`, `hasProof: false`). Un second « fait » rend `changed: false`. Refus de la forme
+`{ "error": "NOT_YET_DUE", "code": "NOT_YET_DUE", "message": "Une date à venir se marque le jour même ou après." }`.
+
+Exemple `POST /api/site/abonnements/creneaux/412/fait { "absentSubscriptionIds": [44] }` → 200 :
+`{ "slotId": 412, "done": 2, "missed": 1, "unchanged": 0, "failed": [] }`.
+
+Outils de l'assistant du site (module Boutique ; aucune identité, ni note de l'équipe, ni photo) : lectures `get_today`,
+`get_contestations` (commentaire de l'abonné avec courriels et téléphones masqués, lu comme une donnée : essai d'injection) ; propositions
+confirmées par l'administrateur : `propose_mark_done` (fait, ou absent avec `absent: true`), `propose_mark_session_done` (absents par
+numéro d'abonnement, vérifiés dès l'aperçu). L'IA ne tranche jamais une contestation et ne pose jamais de photo.
 
 ### Codes des refus des abonnements (04/11/2026, application e-commerce mobile)
 

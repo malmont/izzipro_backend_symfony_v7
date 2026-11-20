@@ -217,7 +217,8 @@ class SubscriptionApiTest extends WebTestCase
         $read = $this->json($this->request('GET', '/api/subscriptions/' . $body['subscriptionId']));
         $this->assertSame('past_due', $read['status']);
         $this->assertSame([3500, 'CAD', 'https://invoice.stripe.test/i/in_test_2', 1, 4], [$read['latestInvoice']['amountDue'], $read['latestInvoice']['currency'], $read['latestInvoice']['hostedInvoiceUrl'], $read['latestInvoice']['attemptCount'], $read['latestInvoice']['maxAttempts']]);
-        $this->assertSame((new \DateTimeImmutable())->setTimestamp($next)->format(\DateTimeInterface::ATOM), $read['latestInvoice']['nextPaymentAttempt']);
+        // lot ABO-DATES : rendu à l'heure du magasin (avec le décalage) ; le même instant
+        $this->assertSame($next, (new \DateTimeImmutable($read['latestInvoice']['nextPaymentAttempt']))->getTimestamp());
         $this->assertSame(409, $this->request('POST', '/api/subscriptions', json_encode(['planId' => $plan['id']]))->getStatusCode(), 'impayé : toujours un abonnement en cours');
 
         // 4e essai refusé : résilié par le site (appel à Stripe), même si Stripe prévoyait encore un essai

@@ -84,6 +84,9 @@ final class NotificationCatalog
         'order_shipped' => [self::INDISPENSABLE, null],
         'order_notice' => [self::INDISPENSABLE, null], // remboursement, annulation, retour, reçu
         'subscription_notice' => [self::INDISPENSABLE, null], // les avis d'abonnement d'un client d'une boutique (lot ABO-2 : « séance annulée » par la boutique, Q2)
+        // lot ABO-3a : « prestation faite », au client ; comme tout courriel à un client, hors des niveaux (§ 1) ; l'abonné le coupe lui-même
+        // (`subscription.done_emails`, PATCH /api/subscriptions/{id}/courriels)
+        'subscription_done' => [self::INDISPENSABLE, null],
         'pos_receipt' => [self::INDISPENSABLE, null],
         'booking_customer' => [self::INDISPENSABLE, null], // accusé de réservation, réservation confirmée, annulée ou modifiée
         'customer_message' => [self::INDISPENSABLE, null], // message écrit par un client : contact, formulaire à étapes, financement (décision A du propriétaire)
@@ -140,7 +143,7 @@ final class NotificationCatalog
         'src/Services/Platform/PlatformAlertRecipient.php' => ['platform_alert_test'],
         'src/Incident/Services/BugReportMailer.php' => ['platform_bug_report_answer'],
         'src/Services/ReservationService/ReservationMailerService.php' => ['booking_customer', self::BOOKING_NEW, 'customer_message'], // customer_message : demande d'un formulaire à étapes
-        'src/Services/SubscriptionService/SubscriptionMailer.php' => ['subscription_notice'],
+        'src/Services/SubscriptionService/SubscriptionMailer.php' => ['subscription_notice', 'subscription_done'],
         'src/Support/Services/SupportAgentService.php' => ['support_agent_invitation'],
         'src/Support/Services/SupportMailer.php' => ['support_reply'],
         'src/UseCase/AccountUseCase/AdminEraseCustomerAccountUseCase.php' => ['account_deleted_notice'],

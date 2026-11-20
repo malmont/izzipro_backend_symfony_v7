@@ -50,6 +50,8 @@ class GroupWritesClassificationTest extends KernelTestCase
         'get_shop_bookings' => 'lecture', 'propose_booking_status' => 'commande',
         // lot ABO-CONF-b : produits porteurs
         'list_subscription_products' => 'lecture', 'propose_subscription_product' => 'catalogue',
+        // lot ABO-3a : « fait » et suivi (le directeur entré lit, il ne marque rien : ses routes sont fermées, famille « droits »)
+        'get_today' => 'lecture', 'get_contestations' => 'lecture', 'propose_mark_done' => 'droits', 'propose_mark_session_done' => 'droits',
     ];
 
     public function testEveryWriteEveryScreenAndEveryAssistantToolIsClassifiedForTheDirector(): void

@@ -1,0 +1,1212 @@
+{
+  "_lisezmoi": "Réponses complètes des routes du lot ABO-3a, capturées le 20/11/2026 sur la base de test (données fictives), heure du magasin America/Toronto (lot ABO-DATES : toutes les dates des fiches à l'heure du magasin, avec le décalage). Contrat : docs/boutique.md § « Fait et suivi des droits ».",
+  "GET /api/site/abonnements/aujourdhui": {
+    "date": "2026-11-20",
+    "timezone": "America/Toronto",
+    "counts": {
+      "toMark": 3,
+      "done": 0,
+      "missed": 0
+    },
+    "sessions": [
+      {
+        "slotId": 1,
+        "benefitId": 1,
+        "name": "Yoga",
+        "startsAt": "2026-11-20T13:35:57-05:00",
+        "endsAt": "2026-11-20T14:35:57-05:00",
+        "location": "Salle B",
+        "capacity": 12,
+        "staffUserId": null,
+        "booked": 2,
+        "done": 0,
+        "missed": 0,
+        "lateCancelled": 0,
+        "toMark": 2,
+        "appointments": [
+          {
+            "occurrenceId": 1,
+            "subscriptionId": 1,
+            "benefitId": 1,
+            "name": "Yoga",
+            "status": "scheduled",
+            "startsAt": "2026-11-20T13:35:57-05:00",
+            "endsAt": "2026-11-20T14:35:57-05:00",
+            "doneAt": null,
+            "hasProof": false,
+            "customerAck": null,
+            "contestationPending": false,
+            "note": null,
+            "customer": {
+              "id": 18,
+              "firstname": "Client",
+              "lastname": "Fait"
+            }
+          },
+          {
+            "occurrenceId": 5,
+            "subscriptionId": 2,
+            "benefitId": 1,
+            "name": "Yoga",
+            "status": "scheduled",
+            "startsAt": "2026-11-20T13:35:57-05:00",
+            "endsAt": "2026-11-20T14:35:57-05:00",
+            "doneAt": null,
+            "hasProof": false,
+            "customerAck": null,
+            "contestationPending": false,
+            "note": null,
+            "customer": {
+              "id": 19,
+              "firstname": "Client",
+              "lastname": "Deuxieme"
+            }
+          }
+        ]
+      },
+      {
+        "slotId": 2,
+        "benefitId": 1,
+        "name": "Yoga",
+        "startsAt": "2026-11-20T13:35:57-05:00",
+        "endsAt": "2026-11-20T14:35:57-05:00",
+        "location": null,
+        "capacity": 4,
+        "staffUserId": null,
+        "booked": 1,
+        "done": 0,
+        "missed": 0,
+        "lateCancelled": 0,
+        "toMark": 1,
+        "appointments": [
+          {
+            "occurrenceId": 2,
+            "subscriptionId": 1,
+            "benefitId": 1,
+            "name": "Yoga",
+            "status": "scheduled",
+            "startsAt": "2026-11-20T13:35:57-05:00",
+            "endsAt": "2026-11-20T14:35:57-05:00",
+            "doneAt": null,
+            "hasProof": false,
+            "customerAck": null,
+            "contestationPending": false,
+            "note": null,
+            "customer": {
+              "id": 18,
+              "firstname": "Client",
+              "lastname": "Fait"
+            }
+          }
+        ]
+      }
+    ],
+    "appointments": []
+  },
+  "POST …/fait (multipart note + photo)": {
+    "occurrence": {
+      "occurrenceId": 1,
+      "subscriptionId": 1,
+      "benefitId": 1,
+      "name": "Yoga",
+      "status": "done",
+      "slotId": 1,
+      "startsAt": "2026-11-20T13:35:57-05:00",
+      "endsAt": "2026-11-20T14:35:57-05:00",
+      "doneAt": "2026-11-20T15:35:57-05:00",
+      "note": "Séance tenue",
+      "hasProof": true,
+      "customerAck": null,
+      "doneBy": "Admin",
+      "ackComment": null,
+      "ticket": null,
+      "resolution": null
+    },
+    "changed": true,
+    "subscription": {
+      "subscriptionId": 1,
+      "status": "active",
+      "quantity": 1,
+      "currentPeriodEnd": "2026-12-20T15:35:56-05:00",
+      "cancelAtPeriodEnd": false,
+      "pausedAt": null,
+      "createdAt": "2026-11-20T15:35:56-05:00",
+      "billedPrice": {
+        "price": 3500,
+        "currency": "CAD",
+        "interval": "week",
+        "intervalCount": 1
+      },
+      "paymentIssue": null,
+      "customer": {
+        "id": 18,
+        "firstname": "Client",
+        "lastname": "Fait",
+        "email": "client-abo3a-sans-adresse@example.invalid"
+      },
+      "plan": {
+        "id": 1,
+        "name": "Panier hebdomadaire",
+        "price": 3500,
+        "currency": "CAD",
+        "interval": "week",
+        "intervalCount": 1,
+        "active": true,
+        "fulfillmentType": "none"
+      },
+      "benefits": [
+        {
+          "id": 1,
+          "benefitId": 1,
+          "kind": "session",
+          "name": "Yoga",
+          "description": null,
+          "durationMinutes": 60,
+          "location": null,
+          "quantity": 4,
+          "scheduling": "fixed_slots",
+          "slotChoice": "admin",
+          "cancelDeadlineHours": 24,
+          "carryOverMax": 4,
+          "proof": "none",
+          "summary": "4 séances Yoga par semaine ; créneaux attribués par l'équipe ; annulation sans frais jusqu'à 24 h avant ; jusqu'à 4 reportées à la période suivante."
+        }
+      ],
+      "canceledAt": null,
+      "fulfillmentTarget": null,
+      "orders": [],
+      "todo": [],
+      "history": [
+        {
+          "type": "done",
+          "benefitId": 1,
+          "quantity": 1,
+          "at": "2026-11-20T15:35:57-05:00",
+          "by": "Admin",
+          "note": "Séance tenue"
+        },
+        {
+          "type": "scheduled",
+          "benefitId": 1,
+          "quantity": 1,
+          "at": "2026-11-20T15:35:57-05:00",
+          "by": "Admin",
+          "note": null
+        },
+        {
+          "type": "scheduled",
+          "benefitId": 1,
+          "quantity": 1,
+          "at": "2026-11-20T15:35:57-05:00",
+          "by": "Admin",
+          "note": null
+        },
+        {
+          "type": "born",
+          "benefitId": null,
+          "quantity": 4,
+          "at": "2026-11-20T15:35:56-05:00",
+          "by": null,
+          "note": null
+        }
+      ],
+      "balance": [
+        {
+          "benefitId": 1,
+          "name": "Yoga",
+          "kind": "session",
+          "available": 2,
+          "scheduled": 1,
+          "used": 1,
+          "carried": 0,
+          "unlimited": false,
+          "nextExpiry": "2026-12-20T15:35:56-05:00"
+        }
+      ],
+      "upcoming": [],
+      "delivered": [
+        {
+          "occurrenceId": 1,
+          "benefitId": 1,
+          "name": "Yoga",
+          "status": "done",
+          "startsAt": "2026-11-20T13:35:57-05:00",
+          "doneAt": "2026-11-20T15:35:57-05:00",
+          "note": "Séance tenue",
+          "hasProof": true,
+          "customerAck": null,
+          "ackUntil": "2026-12-20T15:35:57-05:00",
+          "doneBy": "Admin",
+          "ackComment": null,
+          "ackAt": null,
+          "ticket": null,
+          "resolution": null
+        }
+      ],
+      "doneEmails": true,
+      "pauses": []
+    }
+  },
+  "POST …/fait (une seconde fois)": {
+    "occurrence": {
+      "occurrenceId": 1,
+      "subscriptionId": 1,
+      "benefitId": 1,
+      "name": "Yoga",
+      "status": "done",
+      "slotId": 1,
+      "startsAt": "2026-11-20T13:35:57-05:00",
+      "endsAt": "2026-11-20T14:35:57-05:00",
+      "doneAt": "2026-11-20T15:35:57-05:00",
+      "note": "Séance tenue",
+      "hasProof": true,
+      "customerAck": null,
+      "doneBy": "Admin",
+      "ackComment": null,
+      "ticket": null,
+      "resolution": null
+    },
+    "changed": false,
+    "subscription": {
+      "subscriptionId": 1,
+      "status": "active",
+      "quantity": 1,
+      "currentPeriodEnd": "2026-12-20T15:35:56-05:00",
+      "cancelAtPeriodEnd": false,
+      "pausedAt": null,
+      "createdAt": "2026-11-20T15:35:56-05:00",
+      "billedPrice": {
+        "price": 3500,
+        "currency": "CAD",
+        "interval": "week",
+        "intervalCount": 1
+      },
+      "paymentIssue": null,
+      "customer": {
+        "id": 18,
+        "firstname": "Client",
+        "lastname": "Fait",
+        "email": "client-abo3a-sans-adresse@example.invalid"
+      },
+      "plan": {
+        "id": 1,
+        "name": "Panier hebdomadaire",
+        "price": 3500,
+        "currency": "CAD",
+        "interval": "week",
+        "intervalCount": 1,
+        "active": true,
+        "fulfillmentType": "none"
+      },
+      "benefits": [
+        {
+          "id": 1,
+          "benefitId": 1,
+          "kind": "session",
+          "name": "Yoga",
+          "description": null,
+          "durationMinutes": 60,
+          "location": null,
+          "quantity": 4,
+          "scheduling": "fixed_slots",
+          "slotChoice": "admin",
+          "cancelDeadlineHours": 24,
+          "carryOverMax": 4,
+          "proof": "none",
+          "summary": "4 séances Yoga par semaine ; créneaux attribués par l'équipe ; annulation sans frais jusqu'à 24 h avant ; jusqu'à 4 reportées à la période suivante."
+        }
+      ],
+      "canceledAt": null,
+      "fulfillmentTarget": null,
+      "orders": [],
+      "todo": [],
+      "history": [
+        {
+          "type": "done",
+          "benefitId": 1,
+          "quantity": 1,
+          "at": "2026-11-20T15:35:57-05:00",
+          "by": "Admin",
+          "note": "Séance tenue"
+        },
+        {
+          "type": "scheduled",
+          "benefitId": 1,
+          "quantity": 1,
+          "at": "2026-11-20T15:35:57-05:00",
+          "by": "Admin",
+          "note": null
+        },
+        {
+          "type": "scheduled",
+          "benefitId": 1,
+          "quantity": 1,
+          "at": "2026-11-20T15:35:57-05:00",
+          "by": "Admin",
+          "note": null
+        },
+        {
+          "type": "born",
+          "benefitId": null,
+          "quantity": 4,
+          "at": "2026-11-20T15:35:56-05:00",
+          "by": null,
+          "note": null
+        }
+      ],
+      "balance": [
+        {
+          "benefitId": 1,
+          "name": "Yoga",
+          "kind": "session",
+          "available": 2,
+          "scheduled": 1,
+          "used": 1,
+          "carried": 0,
+          "unlimited": false,
+          "nextExpiry": "2026-12-20T15:35:56-05:00"
+        }
+      ],
+      "upcoming": [],
+      "delivered": [
+        {
+          "occurrenceId": 1,
+          "benefitId": 1,
+          "name": "Yoga",
+          "status": "done",
+          "startsAt": "2026-11-20T13:35:57-05:00",
+          "doneAt": "2026-11-20T15:35:57-05:00",
+          "note": "Séance tenue",
+          "hasProof": true,
+          "customerAck": null,
+          "ackUntil": "2026-12-20T15:35:57-05:00",
+          "doneBy": "Admin",
+          "ackComment": null,
+          "ackAt": null,
+          "ticket": null,
+          "resolution": null
+        }
+      ],
+      "doneEmails": true,
+      "pauses": []
+    }
+  },
+  "POST …/absent": {
+    "occurrence": {
+      "occurrenceId": 5,
+      "subscriptionId": 2,
+      "benefitId": 1,
+      "name": "Yoga",
+      "status": "missed",
+      "slotId": 1,
+      "startsAt": "2026-11-20T13:35:57-05:00",
+      "endsAt": "2026-11-20T14:35:57-05:00",
+      "doneAt": "2026-11-20T15:35:57-05:00",
+      "note": "Pas venu",
+      "hasProof": false,
+      "customerAck": null,
+      "doneBy": "Admin",
+      "ackComment": null,
+      "ticket": null,
+      "resolution": null
+    },
+    "changed": true,
+    "subscription": {
+      "subscriptionId": 2,
+      "status": "active",
+      "quantity": 1,
+      "currentPeriodEnd": "2026-12-20T15:35:56-05:00",
+      "cancelAtPeriodEnd": false,
+      "pausedAt": null,
+      "createdAt": "2026-11-20T15:35:56-05:00",
+      "billedPrice": {
+        "price": 3500,
+        "currency": "CAD",
+        "interval": "week",
+        "intervalCount": 1
+      },
+      "paymentIssue": null,
+      "customer": {
+        "id": 19,
+        "firstname": "Client",
+        "lastname": "Deuxieme",
+        "email": "abo3a-deux@example.invalid"
+      },
+      "plan": {
+        "id": 1,
+        "name": "Panier hebdomadaire",
+        "price": 3500,
+        "currency": "CAD",
+        "interval": "week",
+        "intervalCount": 1,
+        "active": true,
+        "fulfillmentType": "none"
+      },
+      "benefits": [
+        {
+          "id": 1,
+          "benefitId": 1,
+          "kind": "session",
+          "name": "Yoga",
+          "description": null,
+          "durationMinutes": 60,
+          "location": null,
+          "quantity": 4,
+          "scheduling": "fixed_slots",
+          "slotChoice": "admin",
+          "cancelDeadlineHours": 24,
+          "carryOverMax": 4,
+          "proof": "none",
+          "summary": "4 séances Yoga par semaine ; créneaux attribués par l'équipe ; annulation sans frais jusqu'à 24 h avant ; jusqu'à 4 reportées à la période suivante."
+        }
+      ],
+      "canceledAt": null,
+      "fulfillmentTarget": null,
+      "orders": [],
+      "todo": [],
+      "history": [
+        {
+          "type": "missed",
+          "benefitId": 1,
+          "quantity": 1,
+          "at": "2026-11-20T15:35:57-05:00",
+          "by": "Admin",
+          "note": "Pas venu"
+        },
+        {
+          "type": "scheduled",
+          "benefitId": 1,
+          "quantity": 1,
+          "at": "2026-11-20T15:35:57-05:00",
+          "by": "Admin",
+          "note": null
+        },
+        {
+          "type": "born",
+          "benefitId": null,
+          "quantity": 4,
+          "at": "2026-11-20T15:35:56-05:00",
+          "by": null,
+          "note": null
+        }
+      ],
+      "balance": [
+        {
+          "benefitId": 1,
+          "name": "Yoga",
+          "kind": "session",
+          "available": 3,
+          "scheduled": 0,
+          "used": 1,
+          "carried": 0,
+          "unlimited": false,
+          "nextExpiry": "2026-12-20T15:35:56-05:00"
+        }
+      ],
+      "upcoming": [],
+      "delivered": [
+        {
+          "occurrenceId": 5,
+          "benefitId": 1,
+          "name": "Yoga",
+          "status": "missed",
+          "startsAt": "2026-11-20T13:35:57-05:00",
+          "doneAt": "2026-11-20T15:35:57-05:00",
+          "note": "Pas venu",
+          "hasProof": false,
+          "customerAck": null,
+          "ackUntil": "2026-12-20T15:35:57-05:00",
+          "doneBy": "Admin",
+          "ackComment": null,
+          "ackAt": null,
+          "ticket": null,
+          "resolution": null
+        }
+      ],
+      "doneEmails": true,
+      "pauses": []
+    }
+  },
+  "POST …/correction": {
+    "occurrence": {
+      "occurrenceId": 5,
+      "subscriptionId": 2,
+      "benefitId": 1,
+      "name": "Yoga",
+      "status": "scheduled",
+      "slotId": 1,
+      "startsAt": "2026-11-20T13:35:57-05:00",
+      "endsAt": "2026-11-20T14:35:57-05:00",
+      "doneAt": null,
+      "note": null,
+      "hasProof": false,
+      "customerAck": null,
+      "doneBy": null,
+      "ackComment": null,
+      "ticket": null,
+      "resolution": null
+    },
+    "subscription": {
+      "subscriptionId": 2,
+      "status": "active",
+      "quantity": 1,
+      "currentPeriodEnd": "2026-12-20T15:35:56-05:00",
+      "cancelAtPeriodEnd": false,
+      "pausedAt": null,
+      "createdAt": "2026-11-20T15:35:56-05:00",
+      "billedPrice": {
+        "price": 3500,
+        "currency": "CAD",
+        "interval": "week",
+        "intervalCount": 1
+      },
+      "paymentIssue": null,
+      "customer": {
+        "id": 19,
+        "firstname": "Client",
+        "lastname": "Deuxieme",
+        "email": "abo3a-deux@example.invalid"
+      },
+      "plan": {
+        "id": 1,
+        "name": "Panier hebdomadaire",
+        "price": 3500,
+        "currency": "CAD",
+        "interval": "week",
+        "intervalCount": 1,
+        "active": true,
+        "fulfillmentType": "none"
+      },
+      "benefits": [
+        {
+          "id": 1,
+          "benefitId": 1,
+          "kind": "session",
+          "name": "Yoga",
+          "description": null,
+          "durationMinutes": 60,
+          "location": null,
+          "quantity": 4,
+          "scheduling": "fixed_slots",
+          "slotChoice": "admin",
+          "cancelDeadlineHours": 24,
+          "carryOverMax": 4,
+          "proof": "none",
+          "summary": "4 séances Yoga par semaine ; créneaux attribués par l'équipe ; annulation sans frais jusqu'à 24 h avant ; jusqu'à 4 reportées à la période suivante."
+        }
+      ],
+      "canceledAt": null,
+      "fulfillmentTarget": null,
+      "orders": [],
+      "todo": [],
+      "history": [
+        {
+          "type": "missed_undone",
+          "benefitId": 1,
+          "quantity": 1,
+          "at": "2026-11-20T15:35:57-05:00",
+          "by": "Admin",
+          "note": "Il était là"
+        },
+        {
+          "type": "missed",
+          "benefitId": 1,
+          "quantity": 1,
+          "at": "2026-11-20T15:35:57-05:00",
+          "by": "Admin",
+          "note": "Pas venu"
+        },
+        {
+          "type": "scheduled",
+          "benefitId": 1,
+          "quantity": 1,
+          "at": "2026-11-20T15:35:57-05:00",
+          "by": "Admin",
+          "note": null
+        },
+        {
+          "type": "born",
+          "benefitId": null,
+          "quantity": 4,
+          "at": "2026-11-20T15:35:56-05:00",
+          "by": null,
+          "note": null
+        }
+      ],
+      "balance": [
+        {
+          "benefitId": 1,
+          "name": "Yoga",
+          "kind": "session",
+          "available": 3,
+          "scheduled": 1,
+          "used": 0,
+          "carried": 0,
+          "unlimited": false,
+          "nextExpiry": "2026-12-20T15:35:56-05:00"
+        }
+      ],
+      "upcoming": [],
+      "delivered": [],
+      "doneEmails": true,
+      "pauses": []
+    }
+  },
+  "POST /api/site/abonnements/creneaux/{slotId}/fait": {
+    "slotId": 1,
+    "done": 1,
+    "missed": 0,
+    "unchanged": 1,
+    "failed": []
+  },
+  "refus NOT_YET_DUE": {
+    "error": "NOT_YET_DUE",
+    "code": "NOT_YET_DUE",
+    "message": "Une date à venir se marque le jour même ou après."
+  },
+  "POST /api/subscriptions/{id}/occurrences/{occ}/avis (contested)": {
+    "acknowledgement": {
+      "occurrenceId": 1,
+      "customerAck": "contested",
+      "ticket": "AS-000001",
+      "changed": true
+    },
+    "subscription": {
+      "id": 1,
+      "plan": {
+        "id": 1,
+        "productId": 14,
+        "name": "Panier hebdomadaire",
+        "interval": "week",
+        "intervalCount": 1,
+        "price": 3500,
+        "currency": "CAD",
+        "trialDays": 0,
+        "minimumTerms": 0,
+        "active": true,
+        "features": [
+          "8 à 10 légumes de saison",
+          "Livraison chaque mardi",
+          "Sans engagement"
+        ],
+        "description": "Pour cuisiner frais chaque semaine",
+        "highlighted": false,
+        "badge": null,
+        "productName": "Panier bio de la semaine",
+        "fulfillmentType": "none",
+        "benefits": []
+      },
+      "quantity": 1,
+      "status": "active",
+      "currentPeriodEnd": "2026-12-20T15:35:56-05:00",
+      "cancelAtPeriodEnd": false,
+      "address": null,
+      "carrier": null,
+      "shippingAmount": 0,
+      "createdAt": "2026-11-20T15:35:56-05:00",
+      "canceledAt": null,
+      "orders": [],
+      "latestInvoice": null,
+      "hasPaymentMethod": null,
+      "balance": [
+        {
+          "benefitId": 1,
+          "name": "Yoga",
+          "kind": "session",
+          "available": 1,
+          "scheduled": 2,
+          "used": 1,
+          "carried": 0,
+          "unlimited": false,
+          "nextExpiry": "2026-12-20T15:35:56-05:00"
+        }
+      ],
+      "cancellation": {
+        "allowed": true,
+        "cancellableFrom": null,
+        "scheduledAt": null
+      },
+      "billedPrice": {
+        "price": 3500,
+        "currency": "CAD",
+        "interval": "week",
+        "intervalCount": 1
+      },
+      "upcoming": [
+        {
+          "occurrenceId": 3,
+          "benefitId": 1,
+          "name": "Yoga",
+          "startsAt": "2026-11-25T10:00:00-05:00",
+          "endsAt": "2026-11-25T11:00:00-05:00",
+          "location": null,
+          "slotId": 3,
+          "cancellableUntil": "2026-11-24T10:00:00-05:00"
+        }
+      ],
+      "delivered": [
+        {
+          "occurrenceId": 1,
+          "benefitId": 1,
+          "name": "Yoga",
+          "status": "done",
+          "startsAt": "2026-11-20T13:35:57-05:00",
+          "doneAt": "2026-11-20T15:35:57-05:00",
+          "note": "Séance tenue",
+          "hasProof": true,
+          "customerAck": "contested",
+          "ackUntil": null
+        }
+      ],
+      "doneEmails": true
+    }
+  },
+  "POST …/avis (confirmed)": {
+    "acknowledgement": {
+      "occurrenceId": 2,
+      "customerAck": "confirmed",
+      "ticket": null,
+      "changed": true
+    },
+    "subscription": {
+      "id": 1,
+      "plan": {
+        "id": 1,
+        "productId": 14,
+        "name": "Panier hebdomadaire",
+        "interval": "week",
+        "intervalCount": 1,
+        "price": 3500,
+        "currency": "CAD",
+        "trialDays": 0,
+        "minimumTerms": 0,
+        "active": true,
+        "features": [
+          "8 à 10 légumes de saison",
+          "Livraison chaque mardi",
+          "Sans engagement"
+        ],
+        "description": "Pour cuisiner frais chaque semaine",
+        "highlighted": false,
+        "badge": null,
+        "productName": "Panier bio de la semaine",
+        "fulfillmentType": "none",
+        "benefits": []
+      },
+      "quantity": 1,
+      "status": "active",
+      "currentPeriodEnd": "2026-12-20T15:35:56-05:00",
+      "cancelAtPeriodEnd": false,
+      "address": null,
+      "carrier": null,
+      "shippingAmount": 0,
+      "createdAt": "2026-11-20T15:35:56-05:00",
+      "canceledAt": null,
+      "orders": [],
+      "latestInvoice": null,
+      "hasPaymentMethod": null,
+      "balance": [
+        {
+          "benefitId": 1,
+          "name": "Yoga",
+          "kind": "session",
+          "available": 1,
+          "scheduled": 1,
+          "used": 2,
+          "carried": 0,
+          "unlimited": false,
+          "nextExpiry": "2026-12-20T15:35:56-05:00"
+        }
+      ],
+      "cancellation": {
+        "allowed": true,
+        "cancellableFrom": null,
+        "scheduledAt": null
+      },
+      "billedPrice": {
+        "price": 3500,
+        "currency": "CAD",
+        "interval": "week",
+        "intervalCount": 1
+      },
+      "upcoming": [
+        {
+          "occurrenceId": 3,
+          "benefitId": 1,
+          "name": "Yoga",
+          "startsAt": "2026-11-25T10:00:00-05:00",
+          "endsAt": "2026-11-25T11:00:00-05:00",
+          "location": null,
+          "slotId": 3,
+          "cancellableUntil": "2026-11-24T10:00:00-05:00"
+        }
+      ],
+      "delivered": [
+        {
+          "occurrenceId": 2,
+          "benefitId": 1,
+          "name": "Yoga",
+          "status": "done",
+          "startsAt": "2026-11-20T13:35:57-05:00",
+          "doneAt": "2026-11-20T15:35:58-05:00",
+          "note": null,
+          "hasProof": false,
+          "customerAck": "confirmed",
+          "ackUntil": null
+        },
+        {
+          "occurrenceId": 1,
+          "benefitId": 1,
+          "name": "Yoga",
+          "status": "done",
+          "startsAt": "2026-11-20T13:35:57-05:00",
+          "doneAt": "2026-11-20T15:35:57-05:00",
+          "note": "Séance tenue",
+          "hasProof": true,
+          "customerAck": "contested",
+          "ackUntil": null
+        }
+      ],
+      "doneEmails": true
+    }
+  },
+  "GET /api/site/abonnements/contestations": {
+    "contestations": [
+      {
+        "occurrenceId": 1,
+        "subscriptionId": 1,
+        "benefitId": 1,
+        "name": "Yoga",
+        "status": "done",
+        "startsAt": "2026-11-20T13:35:57-05:00",
+        "doneAt": "2026-11-20T15:35:57-05:00",
+        "contestedAt": "2026-11-20T15:35:58-05:00",
+        "ticket": "AS-000001",
+        "comment": "La séance a été écourtée de moitié.",
+        "doneBy": "Admin",
+        "customer": {
+          "id": 18,
+          "firstname": "Client",
+          "lastname": "Fait"
+        }
+      }
+    ]
+  },
+  "POST …/contestation (kept)": {
+    "occurrence": {
+      "occurrenceId": 1,
+      "subscriptionId": 1,
+      "benefitId": 1,
+      "name": "Yoga",
+      "status": "done",
+      "slotId": 1,
+      "startsAt": "2026-11-20T13:35:57-05:00",
+      "endsAt": "2026-11-20T14:35:57-05:00",
+      "doneAt": "2026-11-20T15:35:57-05:00",
+      "note": "Séance tenue",
+      "hasProof": true,
+      "customerAck": "contested",
+      "doneBy": "Admin",
+      "ackComment": "La séance a été écourtée de moitié.",
+      "ticket": "AS-000001",
+      "resolution": "kept"
+    },
+    "subscription": {
+      "subscriptionId": 1,
+      "status": "active",
+      "quantity": 1,
+      "currentPeriodEnd": "2026-12-20T15:35:56-05:00",
+      "cancelAtPeriodEnd": false,
+      "pausedAt": null,
+      "createdAt": "2026-11-20T15:35:56-05:00",
+      "billedPrice": {
+        "price": 3500,
+        "currency": "CAD",
+        "interval": "week",
+        "intervalCount": 1
+      },
+      "paymentIssue": null,
+      "customer": {
+        "id": 18,
+        "firstname": "Client",
+        "lastname": "Fait",
+        "email": "client-abo3a-sans-adresse@example.invalid"
+      },
+      "plan": {
+        "id": 1,
+        "name": "Panier hebdomadaire",
+        "price": 3500,
+        "currency": "CAD",
+        "interval": "week",
+        "intervalCount": 1,
+        "active": true,
+        "fulfillmentType": "none"
+      },
+      "benefits": [
+        {
+          "id": 1,
+          "benefitId": 1,
+          "kind": "session",
+          "name": "Yoga",
+          "description": null,
+          "durationMinutes": 60,
+          "location": null,
+          "quantity": 4,
+          "scheduling": "fixed_slots",
+          "slotChoice": "admin",
+          "cancelDeadlineHours": 24,
+          "carryOverMax": 4,
+          "proof": "none",
+          "summary": "4 séances Yoga par semaine ; créneaux attribués par l'équipe ; annulation sans frais jusqu'à 24 h avant ; jusqu'à 4 reportées à la période suivante."
+        }
+      ],
+      "canceledAt": null,
+      "fulfillmentTarget": null,
+      "orders": [],
+      "todo": [],
+      "history": [
+        {
+          "type": "contest_kept",
+          "benefitId": 1,
+          "quantity": 1,
+          "at": "2026-11-20T15:35:58-05:00",
+          "by": "Admin",
+          "note": "Séance complète, vérifié"
+        },
+        {
+          "type": "confirmed",
+          "benefitId": 1,
+          "quantity": 1,
+          "at": "2026-11-20T15:35:58-05:00",
+          "by": "client",
+          "note": null
+        },
+        {
+          "type": "done",
+          "benefitId": 1,
+          "quantity": 1,
+          "at": "2026-11-20T15:35:58-05:00",
+          "by": "Admin",
+          "note": null
+        },
+        {
+          "type": "contested",
+          "benefitId": 1,
+          "quantity": 1,
+          "at": "2026-11-20T15:35:58-05:00",
+          "by": "client",
+          "note": "La séance a été écourtée de moitié."
+        },
+        {
+          "type": "scheduled",
+          "benefitId": 1,
+          "quantity": 1,
+          "at": "2026-11-20T15:35:58-05:00",
+          "by": "Admin",
+          "note": null
+        },
+        {
+          "type": "done",
+          "benefitId": 1,
+          "quantity": 1,
+          "at": "2026-11-20T15:35:57-05:00",
+          "by": "Admin",
+          "note": "Séance tenue"
+        },
+        {
+          "type": "scheduled",
+          "benefitId": 1,
+          "quantity": 1,
+          "at": "2026-11-20T15:35:57-05:00",
+          "by": "Admin",
+          "note": null
+        },
+        {
+          "type": "scheduled",
+          "benefitId": 1,
+          "quantity": 1,
+          "at": "2026-11-20T15:35:57-05:00",
+          "by": "Admin",
+          "note": null
+        },
+        {
+          "type": "born",
+          "benefitId": null,
+          "quantity": 4,
+          "at": "2026-11-20T15:35:56-05:00",
+          "by": null,
+          "note": null
+        }
+      ],
+      "balance": [
+        {
+          "benefitId": 1,
+          "name": "Yoga",
+          "kind": "session",
+          "available": 1,
+          "scheduled": 1,
+          "used": 2,
+          "carried": 0,
+          "unlimited": false,
+          "nextExpiry": "2026-12-20T15:35:56-05:00"
+        }
+      ],
+      "upcoming": [
+        {
+          "occurrenceId": 3,
+          "benefitId": 1,
+          "name": "Yoga",
+          "startsAt": "2026-11-25T10:00:00-05:00",
+          "endsAt": "2026-11-25T11:00:00-05:00",
+          "location": null,
+          "slotId": 3,
+          "cancellableUntil": "2026-11-24T10:00:00-05:00",
+          "staffUserId": null,
+          "source": "team"
+        }
+      ],
+      "delivered": [
+        {
+          "occurrenceId": 2,
+          "benefitId": 1,
+          "name": "Yoga",
+          "status": "done",
+          "startsAt": "2026-11-20T13:35:57-05:00",
+          "doneAt": "2026-11-20T15:35:58-05:00",
+          "note": null,
+          "hasProof": false,
+          "customerAck": "confirmed",
+          "ackUntil": null,
+          "doneBy": "Admin",
+          "ackComment": null,
+          "ackAt": "2026-11-20T15:35:58-05:00",
+          "ticket": null,
+          "resolution": null
+        },
+        {
+          "occurrenceId": 1,
+          "benefitId": 1,
+          "name": "Yoga",
+          "status": "done",
+          "startsAt": "2026-11-20T13:35:57-05:00",
+          "doneAt": "2026-11-20T15:35:57-05:00",
+          "note": "Séance tenue",
+          "hasProof": true,
+          "customerAck": "contested",
+          "ackUntil": null,
+          "doneBy": "Admin",
+          "ackComment": "La séance a été écourtée de moitié.",
+          "ackAt": "2026-11-20T15:35:58-05:00",
+          "ticket": "AS-000001",
+          "resolution": "kept"
+        }
+      ],
+      "doneEmails": true,
+      "pauses": []
+    }
+  },
+  "PATCH /api/subscriptions/{id}/courriels": {
+    "doneEmails": false
+  },
+  "GET /api/subscriptions/{id} (abonné)": {
+    "id": 1,
+    "plan": {
+      "id": 1,
+      "productId": 14,
+      "name": "Panier hebdomadaire",
+      "interval": "week",
+      "intervalCount": 1,
+      "price": 3500,
+      "currency": "CAD",
+      "trialDays": 0,
+      "minimumTerms": 0,
+      "active": true,
+      "features": [
+        "8 à 10 légumes de saison",
+        "Livraison chaque mardi",
+        "Sans engagement"
+      ],
+      "description": "Pour cuisiner frais chaque semaine",
+      "highlighted": false,
+      "badge": null,
+      "productName": "Panier bio de la semaine",
+      "fulfillmentType": "none",
+      "benefits": []
+    },
+    "quantity": 1,
+    "status": "active",
+    "currentPeriodEnd": "2026-12-20T15:35:56-05:00",
+    "cancelAtPeriodEnd": false,
+    "address": null,
+    "carrier": null,
+    "shippingAmount": 0,
+    "createdAt": "2026-11-20T15:35:56-05:00",
+    "canceledAt": null,
+    "orders": [],
+    "latestInvoice": null,
+    "hasPaymentMethod": null,
+    "balance": [
+      {
+        "benefitId": 1,
+        "name": "Yoga",
+        "kind": "session",
+        "available": 1,
+        "scheduled": 1,
+        "used": 2,
+        "carried": 0,
+        "unlimited": false,
+        "nextExpiry": "2026-12-20T15:35:56-05:00"
+      }
+    ],
+    "cancellation": {
+      "allowed": true,
+      "cancellableFrom": null,
+      "scheduledAt": null
+    },
+    "billedPrice": {
+      "price": 3500,
+      "currency": "CAD",
+      "interval": "week",
+      "intervalCount": 1
+    },
+    "upcoming": [
+      {
+        "occurrenceId": 3,
+        "benefitId": 1,
+        "name": "Yoga",
+        "startsAt": "2026-11-25T10:00:00-05:00",
+        "endsAt": "2026-11-25T11:00:00-05:00",
+        "location": null,
+        "slotId": 3,
+        "cancellableUntil": "2026-11-24T10:00:00-05:00"
+      }
+    ],
+    "delivered": [
+      {
+        "occurrenceId": 2,
+        "benefitId": 1,
+        "name": "Yoga",
+        "status": "done",
+        "startsAt": "2026-11-20T13:35:57-05:00",
+        "doneAt": "2026-11-20T15:35:58-05:00",
+        "note": null,
+        "hasProof": false,
+        "customerAck": "confirmed",
+        "ackUntil": null
+      },
+      {
+        "occurrenceId": 1,
+        "benefitId": 1,
+        "name": "Yoga",
+        "status": "done",
+        "startsAt": "2026-11-20T13:35:57-05:00",
+        "doneAt": "2026-11-20T15:35:57-05:00",
+        "note": "Séance tenue",
+        "hasProof": true,
+        "customerAck": "contested",
+        "ackUntil": null
+      }
+    ],
+    "doneEmails": false
+  }
+}

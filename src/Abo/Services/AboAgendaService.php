@@ -873,7 +873,9 @@ class AboAgendaService
     private function assertRoom(Connection $conn, int $slotId, ?int $ownSubscription): void
     {
         $capacity = (int) $conn->fetchOne('SELECT capacity FROM benefit_slot WHERE id = ?', [$slotId]);
-        $booked = (int) $conn->fetchOne("SELECT COUNT(*) FROM benefit_occurrence WHERE slot_id = ? AND status = 'scheduled'", [$slotId]);
+        // relecture neuve d'ABO-3a : un « fait » ou un « absent » posé le jour même, avant l'heure, garde sa place (aucune surréservation
+        // si le constat est ensuite corrigé)
+        $booked = (int) $conn->fetchOne("SELECT COUNT(*) FROM benefit_occurrence WHERE slot_id = ? AND status IN ('scheduled', 'done', 'missed')", [$slotId]);
         $held = (int) ($ownSubscription === null
             ? $conn->fetchOne('SELECT COUNT(*) FROM benefit_slot_hold WHERE slot_id = ? AND expires_at > ?', [$slotId, self::utc(new \DateTimeImmutable())])
             : $conn->fetchOne('SELECT COUNT(*) FROM benefit_slot_hold WHERE slot_id = ? AND expires_at > ? AND (subscription_id IS NULL OR subscription_id <> ?)', [$slotId, self::utc(new \DateTimeImmutable()), $ownSubscription]));
@@ -908,7 +910,7 @@ class AboAgendaService
         }
         $out = [];
         $types = [\Doctrine\DBAL\ArrayParameterType::INTEGER];
-        foreach ($this->conn()->fetchAllAssociative("SELECT slot_id, COUNT(*) AS n FROM benefit_occurrence WHERE slot_id IN (?) AND status = 'scheduled' GROUP BY slot_id", [$ids], $types) as $r) {
+        foreach ($this->conn()->fetchAllAssociative("SELECT slot_id, COUNT(*) AS n FROM benefit_occurrence WHERE slot_id IN (?) AND status IN ('scheduled', 'done', 'missed') GROUP BY slot_id", [$ids], $types) as $r) {
             $out[(int) $r['slot_id']]['booked'] = (int) $r['n'];
         }
         foreach ($this->conn()->fetchAllAssociative('SELECT slot_id, COUNT(*) AS n FROM benefit_slot_hold WHERE slot_id IN (?) AND expires_at > ? GROUP BY slot_id', [$ids, self::utc(new \DateTimeImmutable())], [\Doctrine\DBAL\ArrayParameterType::INTEGER, \PDO::PARAM_STR]) as $r) {

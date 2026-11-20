@@ -22,7 +22,8 @@ class AboFollowUpService
     public function __construct(private readonly TenantEntityManagerProvider $emProvider, private readonly BenefitService $benefits, private readonly StoreClock $clock,
         private readonly ?AboRightsService $rights = null, // lot ABO-1 : solde, à faire, historique
         private readonly ?AboCatalogService $catalog = null, // lot ABO-CONF : le prix que paie l'abonné (son époque), pas celui du jour
-        private readonly ?AboAgendaService $agenda = null) // lot ABO-2 : les prochaines dates
+        private readonly ?AboAgendaService $agenda = null, // lot ABO-2 : les prochaines dates
+        private readonly ?AboDeliveryService $delivery = null) // lot ABO-3a : les prestations faites ou manquées
     {
     }
 
@@ -96,7 +97,7 @@ class AboFollowUpService
             throw new AboException(404, 'SUBSCRIPTION_NOT_FOUND', 'Abonnement introuvable.');
         }
         // commandes d'échéance : même forme que la fiche d'abonnement du client (SubscriptionOutputDto), total en centimes
-        $orders = array_map(fn (Order $o) => ['id' => (int) $o->getId(), 'reference' => (string) $o->getReference(), 'date' => $o->getOrderDate()?->format(\DateTimeInterface::ATOM), 'total' => (int) round((float) $o->getTotalAmount())],
+        $orders = array_map(fn (Order $o) => ['id' => (int) $o->getId(), 'reference' => (string) $o->getReference(), 'date' => $this->at($o->getOrderDate()), 'total' => (int) round((float) $o->getTotalAmount())],
             $em->getRepository(Order::class)->findBy(['subscription' => $s], ['id' => 'DESC'], 24));
 
         return $this->row($s, $withIdentity) + [
@@ -106,7 +107,11 @@ class AboFollowUpService
             'todo' => $this->rights?->todo($s, $locale) ?? [], 'history' => $this->rights?->history($s, $withIdentity) ?? [], 'balance' => $this->rights?->balance($s, $locale) ?? [],
             // lot ABO-2 : les 10 prochaines dates, avec leur numéro (déplacer, annuler) ; l'intervenant et la source pour l'équipe, jamais pour le modèle
             'upcoming' => $this->agenda?->upcoming($s, $withIdentity, $locale) ?? [],
-            'pauses' => $withIdentity ? $s->getPauses() : array_map(fn (array $p) => array_intersect_key($p, array_flip(['from', 'until', 'resumedAt'])), $s->getPauses()),
+            // lot ABO-3a : les prestations faites ou manquées (90 jours) ; « par qui », la note et l'avis de l'abonné pour l'équipe, jamais pour le modèle
+            'delivered' => array_map(fn (array $d) => $withIdentity ? $d : ['ack' => $d['customerAck']] + array_diff_key($d, ['note' => 1, 'customerAck' => 1]), $this->delivery?->delivered($s, $withIdentity, $locale) ?? []),
+            'doneEmails' => $s->wantsDoneEmails(),
+            // lot ABO-DATES : les dates des pauses, rangées en UTC, rendues à l'heure du magasin
+            'pauses' => array_map(fn (array $p) => $this->pauseAt($withIdentity ? $p : array_intersect_key($p, array_flip(['from', 'until', 'resumedAt']))), $s->getPauses()),
         ];
     }
 
@@ -127,7 +132,7 @@ class AboFollowUpService
             'billedPrice' => $this->catalog?->billedPrice($s), // relecture neuve d'ABO-CONF : un abonné en cours garde le prix de son époque
             // l'impayé : montant et essai, jamais le lien de paiement (il ouvre la facture du client)
             'paymentIssue' => $issue !== null ? ['amountDue' => (int) ($issue['amountDue'] ?? 0), 'currency' => (string) ($issue['currency'] ?? ''), 'attemptCount' => (int) ($issue['attemptCount'] ?? 0),
-                'maxAttempts' => (int) ($issue['maxAttempts'] ?? 0), 'nextPaymentAttempt' => $issue['nextPaymentAttempt'] ?? null] : null,
+                'maxAttempts' => (int) ($issue['maxAttempts'] ?? 0), 'nextPaymentAttempt' => $this->at($issue['nextPaymentAttempt'] ?? null)] : null,
         ];
         if ($withIdentity) {
             $u = $s->getUser();
@@ -137,8 +142,25 @@ class AboFollowUpService
         return $row;
     }
 
-    private function at(?\DateTimeInterface $at): ?string
+    /** Lot ABO-DATES (20/11/2026) : toute date de la fiche à l'heure du magasin, avec le décalage ; un texte ATOM rangé en UTC compris */
+    private function at(\DateTimeInterface|string|null $at): ?string
     {
-        return $at === null ? null : \DateTimeImmutable::createFromInterface($at)->setTimezone($this->clock->timezone())->format(\DATE_ATOM);
+        return $this->clock->atom($at);
+    }
+
+    /**
+     * @param array<string, mixed> $pause
+     *
+     * @return array<string, mixed>
+     */
+    private function pauseAt(array $pause): array
+    {
+        foreach (['from', 'until', 'resumedAt'] as $k) {
+            if (isset($pause[$k]) && is_string($pause[$k])) {
+                $pause[$k] = $this->at($pause[$k]);
+            }
+        }
+
+        return $pause;
     }
 }
