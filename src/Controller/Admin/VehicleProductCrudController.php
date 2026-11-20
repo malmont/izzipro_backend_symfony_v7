@@ -22,6 +22,22 @@ use EasyCorp\Bundle\EasyAdminBundle\Field\TextField;
 
 class VehicleProductCrudController extends BaseTenantCrudController
 {
+    use SubscriptionToggleGuardTrait; // case « Abonnement » : un véhicule ne porte pas d'abonnement (lot ABO-CONF-b)
+
+    public function persistEntity(\Doctrine\ORM\EntityManagerInterface $entityManager, $entityInstance): void
+    {
+        $changed = $this->guardSubscriptionToggle($entityManager, $entityInstance);
+        parent::persistEntity($entityManager, $entityInstance);
+        $this->recordSubscriptionToggle($entityInstance, $changed);
+    }
+
+    public function updateEntity(\Doctrine\ORM\EntityManagerInterface $entityManager, $entityInstance): void
+    {
+        $changed = $this->guardSubscriptionToggle($entityManager, $entityInstance);
+        parent::updateEntity($entityManager, $entityInstance);
+        $this->recordSubscriptionToggle($entityInstance, $changed);
+    }
+
     public static function getEntityFqcn(): string
     {
         return VehicleProduct::class;

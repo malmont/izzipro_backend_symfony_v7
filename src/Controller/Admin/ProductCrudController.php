@@ -38,6 +38,7 @@ use EasyCorp\Bundle\EasyAdminBundle\Field\ChoiceField;
 class ProductCrudController extends BaseTenantCrudController
 {
     use CsrfProtectedActionTrait;
+    use SubscriptionToggleGuardTrait; // case « Abonnement » : mêmes règles que la gestion web (lot ABO-CONF-b)
 
     private AdminUrlGenerator $adminUrlGenerator;
 
@@ -47,7 +48,6 @@ class ProductCrudController extends BaseTenantCrudController
         private readonly CatalogBarcodeService $barcodes, // codes-barres du catalogue (lot CB-1, 15/11/2026, `docs/codes-barres.md`)
         private readonly ?\App\Services\OrderService\TaxCategoryAudit $taxAudit = null, // alerte « catégorie sans taxe » (F18 partie 2a)
         private readonly ?\App\Services\BoutiqueSettingsService\TenantCurrencyProvider $currency = null, // devise du site (libellés, 07/11/2026)
-        private readonly ?\App\Abo\Services\AboCarrierService $carriers = null, // case « Abonnement » : mêmes règles que la gestion web (lot ABO-CONF-b)
     ) {
         parent::__construct($emProvider);
         $this->adminUrlGenerator = $adminUrlGenerator;
@@ -197,44 +197,19 @@ class ProductCrudController extends BaseTenantCrudController
 
     public function persistEntity(\Doctrine\ORM\EntityManagerInterface $entityManager, $entityInstance): void
     {
+        $changed = $this->guardSubscriptionToggle($entityManager, $entityInstance);
         parent::persistEntity($entityManager, $entityInstance);
+        $this->recordSubscriptionToggle($entityInstance, $changed);
         $this->warnAboutBarcode($entityInstance, null);
     }
 
     public function updateEntity(\Doctrine\ORM\EntityManagerInterface $entityManager, $entityInstance): void
     {
         $before = $entityInstance instanceof Product ? $this->barcodes->storedCode($entityInstance) : null;
-        $this->guardSubscriptionToggle($entityManager, $entityInstance);
+        $changed = $this->guardSubscriptionToggle($entityManager, $entityInstance);
         parent::updateEntity($entityManager, $entityInstance);
+        $this->recordSubscriptionToggle($entityInstance, $changed);
         $this->warnAboutBarcode($entityInstance, $before);
-    }
-
-    /**
-     * Lot ABO-CONF-b : la case « Abonnement » (fiche et bascule de la liste) suit les règles de la gestion web. Un produit dont une formule a
-     * eu un abonné reste porteur (avant : décoché en silence, ses formules sortaient de la vente) ; un véhicule ou le porteur d'une formule
-     * branchée ne s'active pas ici. Refus : la case est remise et le motif s'affiche ; décocher un porteur à formules actives est permis,
-     * avec l'avertissement qui les nomme.
-     */
-    private function guardSubscriptionToggle(\Doctrine\ORM\EntityManagerInterface $em, mixed $product): void
-    {
-        if ($this->carriers === null || !$product instanceof Product || $product->getId() === null) {
-            return;
-        }
-        $stored = $em->getConnection()->fetchOne('SELECT subscription_enabled FROM product WHERE id = ?', [$product->getId()]);
-        if ($stored === false || (bool) $stored === $product->isSubscriptionEnabled()) {
-            return;
-        }
-        // l'état enregistré, le temps de juger le geste (les règles lisent le produit tel qu'il est)
-        $wanted = $product->isSubscriptionEnabled();
-        $product->setSubscriptionEnabled((bool) $stored);
-        try {
-            foreach ($this->carriers->assertCanSet($product, $wanted) as $warning) {
-                $this->addFlash('warning', sprintf('Ces formules sortent de la vente : %s.', implode(', ', $warning['plans'] ?? [])));
-            }
-            $product->setSubscriptionEnabled($wanted);
-        } catch (\App\Abo\Services\AboException $e) {
-            $this->addFlash('danger', $e->getMessage()); // la case reste comme elle était
-        }
     }
 
     /**

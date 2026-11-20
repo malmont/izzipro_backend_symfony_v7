@@ -44,10 +44,10 @@ class PosFavoriteCrudController extends BaseTenantCrudController
         return [
             IdField::new('id')->onlyOnIndex(),
             AssociationField::new('product', 'Produit')->setRequired(true)
-                ->setFormTypeOption('query_builder', fn (EntityRepository $r) => $r->createQueryBuilder('p')->where('p.isPos = true')->andWhere('p.saleEnabled = true')->andWhere('p.rentalEnabled = false')->andWhere('p.subscriptionEnabled = false OR p.price > 0')->orderBy('p.name', 'ASC'))
+                ->setFormTypeOption('query_builder', fn (EntityRepository $r) => $r->createQueryBuilder('p')->where('p.isPos = true')->andWhere('p.saleEnabled = true')->andWhere('p.rentalEnabled = false')->andWhere('p.subscriptionEnabled = false OR p.price > 0 OR EXISTS (SELECT pv.id FROM App\Entity\ProductVariant pv WHERE pv.product = p AND pv.price > 0)')->orderBy('p.name', 'ASC'))
                 ->setHelp('Produits vendables en caisse seulement.'),
             AssociationField::new('productVariant', 'Variante précise')->setRequired(false)
-                ->setFormTypeOption('query_builder', fn (EntityRepository $r) => $r->createQueryBuilder('v')->join('v.product', 'p')->where('p.isPos = true')->andWhere('p.saleEnabled = true')->andWhere('p.rentalEnabled = false')->andWhere('p.subscriptionEnabled = false OR p.price > 0')->orderBy('p.name', 'ASC')->addOrderBy('v.id', 'ASC'))
+                ->setFormTypeOption('query_builder', fn (EntityRepository $r) => $r->createQueryBuilder('v')->join('v.product', 'p')->where('p.isPos = true')->andWhere('p.saleEnabled = true')->andWhere('p.rentalEnabled = false')->andWhere('p.subscriptionEnabled = false OR COALESCE(v.price, p.price) > 0')->orderBy('p.name', 'ASC')->addOrderBy('v.id', 'ASC'))
                 ->setHelp('Facultatif : vide, la caisse demande la variante si le produit en a plusieurs. Une variante choisie fixe le produit.'),
             AssociationField::new('cashRegister', 'Poste')->setRequired(false)->setHelp('Vide : tout le site.'),
             IntegerField::new('position', 'Position')->setHelp('Ordre dans la grille (0 en premier).'),

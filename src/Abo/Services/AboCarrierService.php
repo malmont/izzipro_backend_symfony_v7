@@ -4,6 +4,7 @@ namespace App\Abo\Services;
 
 use App\Entity\Categories;
 use App\Entity\Product;
+use App\Entity\ProductVariant;
 use App\Entity\SubscriptionPlan;
 use App\Entity\VehicleProduct;
 use App\Services\TenantEntityManagerProvider;
@@ -81,10 +82,16 @@ class AboCarrierService
         if ($product->isSubscriptionEnabled() !== $enabled) {
             $product->setSubscriptionEnabled($enabled);
             $this->emProvider->getEntityManager()->flush();
-            $this->audit?->record('product_subscription', (int) $product->getId(), $enabled ? 'enable' : 'disable', ['subscriptionEnabled' => !$enabled], ['subscriptionEnabled' => $enabled]);
+            $this->recordToggle($product, $enabled);
         }
 
         return ['product' => $this->view($product), 'warnings' => $warnings];
+    }
+
+    /** Le geste au journal (`product_subscription`) : API, assistant et EasyAdmin */
+    public function recordToggle(Product $product, bool $enabled): void
+    {
+        $this->audit?->record('product_subscription', (int) $product->getId(), $enabled ? 'enable' : 'disable', ['subscriptionEnabled' => !$enabled], ['subscriptionEnabled' => $enabled]);
     }
 
     /**
@@ -115,32 +122,39 @@ class AboCarrierService
     }
 
     /**
-     * Le porteur créé avec sa formule (`newProduct`), NON persisté : la formule le persiste dans sa propre transaction.
+     * Le porteur créé avec sa formule (`newProduct`), NON persisté et SANS catégorie : rien n'y touche une entité gérée, l'aperçu (web ou
+     * assistant) peut le jeter sans risque. Une variante (prix 0, stock 0) : la commande née d'une période payée la demande. Sans
+     * expédition : un abonnement ne se livre pas par défaut. `persistCarrier` le range et l'écrit, dans la transaction de la formule.
      *
      * @param array<string, mixed> $newProduct { names: { fr, en? } }
      * @throws AboException 422 PRODUCT_CHOICE_REQUIRED
      */
-    public function draftCarrier(array $newProduct, bool $persistCategory = true): Product
+    public function draftCarrier(array $newProduct): Product
     {
         $names = is_array($newProduct['names'] ?? null) ? $newProduct['names'] : [];
         $name = mb_substr(trim(strip_tags((string) ($names['fr'] ?? reset($names) ?: ''))), 0, 255);
         if ($name === '') {
             throw new AboException(422, 'PRODUCT_CHOICE_REQUIRED', 'Donnez un nom au produit porteur.', 'newProduct');
         }
-        $em = $this->emProvider->getEntityManager();
         $product = (new Product())->setName($name)->setDescription(null)->setPrice(0.0)->setQuantity(0)->setSlug($this->uniqueSlug($name))
             ->setCreatedAt(new \DateTimeImmutable())->setIsWeb(self::CARRIER_VISIBLE)->setIsPos(false)->setIsPreOrder(false)
-            ->setSaleEnabled(false)->setSubscriptionEnabled(true);
+            ->setSaleEnabled(false)->setSubscriptionEnabled(true)->setRequiresShipping(false);
+        $product->addVariant((new ProductVariant())->setPrice(0)->setStockQuantity(0));
+
+        return $product;
+    }
+
+    /** Range le porteur dans la catégorie « Abonnements » (créée au besoin) et le persiste : à appeler DANS la transaction de la formule */
+    public function persistCarrier(Product $carrier): void
+    {
+        $em = $this->emProvider->getEntityManager();
         $category = $em->getRepository(Categories::class)->findOneBy(['name' => self::CARRIER_CATEGORY]);
-        if ($category === null && $persistCategory) { // l'aperçu ne crée rien
+        if ($category === null) {
             $category = (new Categories())->setName(self::CARRIER_CATEGORY);
             $em->persist($category);
         }
-        if ($category !== null) {
-            $product->addCategory($category);
-        }
-
-        return $product;
+        $carrier->addCategory($category);
+        $em->persist($carrier); // la variante suit (cascade)
     }
 
     /** @return list<string> les noms des formules actives d'un produit (celles qui sortiraient de la vente) */

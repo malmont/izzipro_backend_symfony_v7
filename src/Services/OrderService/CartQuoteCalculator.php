@@ -127,6 +127,11 @@ final class CartQuoteCalculator
                 // Prix de vente (lot VAR) : VariantPriceResolver ; interrupteur éteint ou sans promotion de variante = l'expression d'avant
                 $sale = $this->variantPrices?->sale($variant) ?? ['unitPrice' => (int) round($variant->getPrice() ?? $product->getEffectivePrice()), 'promotion' => null];
                 $line['unitPrice'] = $sale['unitPrice'];
+                if ($product->isSubscriptionEnabled() && $line['unitPrice'] <= 0) {
+                    // lot ABO-CONF-b : jamais d'achat seul à 0 sur un porteur, même si le produit a un prix et que la variante vaut 0
+                    $errors[] = CartQuoteException::error($path, 'SUBSCRIPTION_ONLY', 'ce produit se vend par abonnement seulement');
+                    continue;
+                }
                 if ($sale['promotion'] !== null) {
                     $line['promotion'] = $sale['promotion']; // clé absente sans promotion de variante
                 }

@@ -77,7 +77,7 @@ class AboCatalogService
         $old = $creating ? null : $this->auditState($plan);
         $locked = $creating ? null : $this->lockedState($plan);
         $plan ??= (new SubscriptionPlan())->setCurrency($this->currency->code())->setActive(true);
-        [$data, $carrier] = $this->takeNewProduct($data, $creating, false);
+        [$data, $carrier] = $this->takeNewProduct($data, $creating);
         if ($carrier !== null) {
             $plan->setProduct($carrier);
         }
@@ -88,7 +88,7 @@ class AboCatalogService
         $this->validatePlan($plan);
         $em->wrapInTransaction(function () use ($em, $plan, $before, $by, $creating, $carrier) {
             if ($carrier !== null) {
-                $em->persist($carrier); // dans la même transaction : formule refusée = aucun produit créé
+                $this->carriers?->persistCarrier($carrier); // dans la même transaction : formule refusée = aucun produit ni catégorie créés
             }
             if ($creating) {
                 $em->persist($plan);
@@ -310,7 +310,7 @@ class AboCatalogService
         // lot ABO-CONF-b : les prestations à venir (même forme que le PUT des prestations) et le porteur à créer, sans rien écrire
         $benefitRows = $data['benefits'] ?? null;
         unset($data['benefits']);
-        [$data, $carrier] = $this->takeNewProduct($data, $plan === null, true);
+        [$data, $carrier] = $this->takeNewProduct($data, $plan === null);
         if ($carrier !== null) {
             $probe->setProduct($carrier);
         }
@@ -405,7 +405,7 @@ class AboCatalogService
      * @return array{0: array<string, mixed>, 1: ?\App\Entity\Product} les données sans `newProduct`, et le porteur (non persisté)
      * @throws AboException
      */
-    private function takeNewProduct(array $data, bool $creating, bool $preview): array
+    private function takeNewProduct(array $data, bool $creating): array
     {
         $hasNew = array_key_exists('newProduct', $data);
         if (!$creating) {
@@ -424,7 +424,7 @@ class AboCatalogService
         if ($this->carriers === null || !is_array($data['newProduct'])) {
             throw new AboException(422, 'PRODUCT_CHOICE_REQUIRED', 'Donnez un nom au produit porteur.', 'newProduct');
         }
-        $carrier = $this->carriers->draftCarrier($data['newProduct'], !$preview);
+        $carrier = $this->carriers->draftCarrier($data['newProduct']);
         unset($data['newProduct']);
 
         return [$data, $carrier];

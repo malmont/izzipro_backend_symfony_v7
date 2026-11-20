@@ -1159,17 +1159,27 @@ ajustent et répondent, mais ne créent rien. Les formules de la plateforme et d
   422 `MUST_BE_BOOLEAN`, 404 `PRODUCT_NOT_FOUND`. Directeur entré : refusé (raison `payment`) ; agence entrée : permis, mêmes règles.
 - **Porteur créé avec sa formule** : `POST …/formules` (et l'aperçu) accepte `newProduct: { names: { fr, en? } }` À LA PLACE de `productId`
   (ni l'un ni l'autre, ou les deux : 422 `PRODUCT_CHOICE_REQUIRED` ; à la modification : 422 `FIELD_UNKNOWN`). Créé dans la même transaction
-  (formule refusée = aucun produit) : prix 0, vente directe coupée, abonnement activé, catégorie « Abonnements » ; VISIBLE dans la boutique
+  (formule refusée = aucun produit ni catégorie) : prix 0, vente directe coupée, abonnement activé, sans expédition, une variante à prix 0 et
+  stock 0 (la commande née d'une période payée la demande), catégorie « Abonnements » (liée et créée au besoin dans la transaction seulement,
+  jamais à l'aperçu) ; VISIBLE dans la boutique
   (décision du propriétaire, `AboCarrierService::CARRIER_VISIBLE`) : sa fiche mène à la grille des formules. L'aperçu dit « Un produit
   porteur sera créé : <nom>. » et rend `newProduct: { name }`.
-- **Jamais achetable seul à 0** (`Product::isSubscriptionOnly`, `isSellableAlone`) : un porteur à prix 0 ou à vente coupée est refusé par le
-  devis du panier, de la commande et de la caisse (422 `QUOTE_INVALID`, ligne `SUBSCRIPTION_ONLY`), écarté de la caisse hors ligne et des
-  favoris ; sa fiche donne `sale.enabled` faux et `subscription.only` vrai (le front montre la grille, et « sans stock » n'est pas une
-  rupture). Aucun flux ni export du catalogue n'existe aujourd'hui.
+- **Jamais achetable seul à 0** (`Product::isSubscriptionOnly`, `isSellableAlone`) : un porteur à vente coupée, ou sans AUCUN prix positif
+  (ni le produit, promotion en cours comprise, ni une de ses variantes), est refusé par le devis du panier, de la commande et de la caisse
+  (422 `QUOTE_INVALID`, ligne `SUBSCRIPTION_ONLY`), écarté de la caisse hors ligne et des favoris ; sa fiche donne `sale.enabled` faux et
+  `subscription.only` vrai (le front montre la grille, et « sans stock » n'est pas une rupture). La ligne est aussi jugée au prix de la
+  variante vendue : sur un produit dont l'abonnement est activé, une ligne à 0 est refusée (`SUBSCRIPTION_ONLY`) même si le produit a un
+  prix, et le paquet hors ligne écarte ses variantes à 0 ; un produit à 0 dont une variante a un prix se vend seul normalement. Caisse hors
+  ligne : un paquet émis AVANT qu'un produit devienne porteur à 0 (ou avant la mise en ligne du lot) le vend encore jusqu'à son échéance
+  (`packValidityHours`), la synchronisation acceptant les variantes du paquet déclaré ; c'est le fonctionnement du hors ligne, sans
+  correction prévue. Aucun flux ni export du catalogue n'existe aujourd'hui.
 - **Aperçu avec prestations** : `POST …/formules/apercu` accepte `benefits` (même forme que le PUT des prestations) et la phrase les cite ;
   une prestation inconnue est un avertissement `BENEFIT_NOT_FOUND`.
-- **EasyAdmin** : la case « Abonnement » de la fiche produit suit les mêmes règles (un porteur à abonnés n'est plus décoché en silence).
-- **Assistant** : `list_subscription_products`, `propose_subscription_product` (l'aperçu NOMME les formules qui sortent de la vente),
+- **EasyAdmin** : la case « Abonnement » des fiches produit ET véhicule suit les mêmes règles (`SubscriptionToggleGuardTrait` : un porteur à
+  abonnés n'est plus décoché en silence, un véhicule ne s'active pas, même à la création) ; le geste accepté est journalisé
+  (`product_subscription`) comme par l'API ; un directeur de groupe entré ne change pas la case (comme la route, raison `payment`).
+- **Assistant** : `list_subscription_products`, `propose_subscription_product` (l'aperçu donne le nombre de formules qui sortent de la
+  vente et nomme les trois premières ; la confirmation est refusée si la liste a changé depuis la proposition : `PLANS_CHANGED`),
   `propose_plan` avec `newProduct` ; toujours confirmé.
 - Essais : `tests/Functional/Abo/AboCarrierTest.php`.
 

@@ -135,7 +135,7 @@ class AboAssistantTools
                 case 'propose_plan':
                     // lot ABO-CONF-b : un porteur créé avec la formule (newProduct), à la place d'un produit existant
                     $newProduct = !isset($input['productId']) && is_array($input['newProduct'] ?? null) ? $input['newProduct'] : null;
-                    $product = $newProduct !== null ? $this->carriersOrFail()->draftCarrier($newProduct, false)
+                    $product = $newProduct !== null ? $this->carriersOrFail()->draftCarrier($newProduct)
                         : $this->emProvider->getEntityManager()->getRepository(Product::class)->find((int) ($input['productId'] ?? 0));
                     if ($product === null || !$product->isSubscriptionEnabled()) {
                         throw new AboException(422, 'PRODUCT_NOT_SUBSCRIBABLE', 'Choisissez un produit porteur dont l\'abonnement est activé (Produits, « Modes de vente »).', 'productId');
@@ -179,9 +179,11 @@ class AboAssistantTools
                     $enabled = ($input['enabled'] ?? null) === true;
                     $warnings = $this->carriersOrFail()->assertCanSet($product, $enabled);
                     $hidden = $warnings[0]['plans'] ?? [];
+                    // résumé borné (le résumé est coupé plus loin) : le nombre d'abord, puis les premiers noms ; la liste entière est gardée pour la confirmation
+                    $named = implode(', ', array_map(static fn (string $n) => '« ' . mb_substr($n, 0, 40) . ' »', array_slice($hidden, 0, 3))) . (count($hidden) > 3 ? sprintf(' et %d autre(s)', count($hidden) - 3) : '');
 
-                    return [['productId' => (int) $product->getId(), 'enabled' => $enabled], sprintf('%s l\'abonnement sur « %s »%s', $enabled ? 'Activer' : 'Désactiver', (string) $product->getName(),
-                        $hidden !== [] ? sprintf(' : ces formules SORTENT DE LA VENTE (les abonnés n\'en ont pas) : %s', implode(', ', array_map(static fn (string $n) => '« ' . $n . ' »', $hidden))) : ''), null, 'subscription_plans'];
+                    return [['productId' => (int) $product->getId(), 'enabled' => $enabled, 'hiddenPlans' => $hidden], sprintf('%s l\'abonnement sur « %s »%s', $enabled ? 'Activer' : 'Désactiver', (string) $product->getName(),
+                        $hidden !== [] ? sprintf(' : %d formule(s) SORTENT DE LA VENTE (les abonnés n\'en ont pas) : %s', count($hidden), $named) : ''), null, 'subscription_plans'];
                 case 'set_plan_benefits':
                     $plan = $this->planOrFail((int) ($input['planId'] ?? 0));
                     if ($plan->hasFulfillment()) {
@@ -328,7 +330,15 @@ class AboAssistantTools
 
                 return ['planId' => (int) $plan->getId(), 'created' => 1, 'benefits' => count($rows)];
             case 'propose_subscription_product':
-                $r = $this->carriersOrFail()->setSubscription($this->productOrFail((int) ($input['productId'] ?? 0)), ($input['enabled'] ?? null) === true, 'assistant');
+                $product = $this->productOrFail((int) ($input['productId'] ?? 0));
+                $enabled = ($input['enabled'] ?? null) === true;
+                // les formules qui sortent de la vente doivent être celles qui ont été nommées à l'aperçu : une formule créée entre-temps = refus
+                $now = $this->carriersOrFail()->assertCanSet($product, $enabled)[0]['plans'] ?? [];
+                $shown = is_array($input['hiddenPlans'] ?? null) ? array_map('strval', $input['hiddenPlans']) : [];
+                if ($now !== $shown) {
+                    throw new AboException(409, 'PLANS_CHANGED', 'Les formules de ce produit ont changé depuis la proposition : demandez une nouvelle proposition.', 'productId');
+                }
+                $r = $this->carriersOrFail()->setSubscription($product, $enabled, 'assistant');
 
                 return ['productId' => (int) ($input['productId'] ?? 0), 'written' => 1, 'warnings' => count($r['warnings'])];
             case 'propose_plan_update':

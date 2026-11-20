@@ -68,7 +68,10 @@ class PosOfflinePackService
                 continue;
             }
             $variants = [];
-            foreach (\App\Dto\ProductCommerceDto::orderedVariants($product) as $variant) { // ordre fixe par identifiant (11/11/2026) : l'ETag ne change plus sans changement réel
+            foreach (\App\Dto\ProductCommerceDto::orderedVariants($product) as $variant) {
+                if ($product->isSubscriptionEnabled() && (int) round((float) ($variant->getPrice() ?? $product->getPrice())) <= 0) {
+                    continue; // lot ABO-CONF-b : la variante à 0 d'un porteur ne se vend jamais seule, même hors ligne
+                } // ordre fixe par identifiant (11/11/2026) : l'ETag ne change plus sans changement réel
                 $variants[] = [
                     'id' => (int) $variant->getId(), 'label' => trim(implode(' / ', array_filter([$variant->getColor()?->getName(), $variant->getSize()?->getName()]))) ?: null,
                     'price' => $variant->getPrice(), 'barcode' => $variant->getBarcode(), 'stock' => $variant->getStockQuantity(),
@@ -84,6 +87,9 @@ class PosOfflinePackService
                 if ($variantPromotions !== []) {
                     $prices[(int) $variant->getId()]['variantPromotions'] = $variantPromotions; // instantané v4 : rejouées à l'heure de vente
                 }
+            }
+            if ($variants === [] && !$product->getVariants()->isEmpty()) {
+                continue; // porteur dont toutes les variantes valent 0 : rien à vendre seul
             }
             $products[] = [
                 'id' => (int) $product->getId(), 'code' => $product->getCode(), 'barcode' => $product->getBarcode(), 'name' => $product->getName(),

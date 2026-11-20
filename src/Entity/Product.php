@@ -1072,13 +1072,30 @@ class Product implements TranslatableInterface, DemoContentInterface
 
     /**
      * Lot ABO-CONF-b (20/11/2026, exigence du chef) : un produit porteur d'abonnement qui ne se vend PAS seul. Vrai si l'abonnement est
-     * activé et que la vente directe est coupée (porteur créé avec sa formule) ou que son prix vaut 0. Jamais d'achat seul à 0 : le devis
-     * du panier et de la caisse le refuse (SUBSCRIPTION_ONLY), la caisse hors ligne et les favoris l'écartent, la fiche le dit
-     * (`sale.enabled` faux, `subscription.only` vrai : la fiche mène à la grille des formules, et « sans stock » n'est pas une rupture).
+     * activé et que la vente directe est coupée (porteur créé avec sa formule) ou qu'AUCUN prix n'est positif : ni celui du produit (promotion
+     * en cours comprise), ni celui d'une variante (un site peut porter ses prix sur les variantes). Jamais d'achat seul à 0 : le devis
+     * du panier et de la caisse le refuse (SUBSCRIPTION_ONLY, aussi pour une ligne dont la variante vaut 0), la caisse hors ligne et les
+     * favoris l'écartent, la fiche le dit (`sale.enabled` faux, `subscription.only` vrai : la fiche mène à la grille des formules, et
+     * « sans stock » n'est pas une rupture).
      */
     public function isSubscriptionOnly(): bool
     {
-        return $this->subscriptionEnabled && (!$this->saleEnabled || (float) $this->price <= 0.0);
+        return $this->subscriptionEnabled && (!$this->saleEnabled || !$this->hasPositivePrice());
+    }
+
+    /** Un prix positif quelque part : produit (promotion en cours comprise) ou une de ses variantes */
+    private function hasPositivePrice(): bool
+    {
+        if ((float) $this->price > 0.0 || $this->getEffectivePrice() > 0.0) {
+            return true;
+        }
+        foreach ($this->variants as $variant) {
+            if (($variant->getPrice() ?? 0) > 0) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /** Vendable seul (panier, caisse) : mode « vente » activé et pas « abonnement seulement » */
