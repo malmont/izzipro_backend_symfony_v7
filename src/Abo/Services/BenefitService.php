@@ -234,7 +234,7 @@ class BenefitService
         $b = $pb->getBenefit();
         $plan = $pb->getPlan();
         $name = (string) $b?->getName($locale);
-        $period = self::period((string) $plan?->getInterval(), (int) $plan?->getIntervalCount(), $en);
+        $every = AboWording::every((string) $plan?->getInterval(), (int) $plan?->getIntervalCount(), $en); // « par mois », « toutes les 2 semaines »
         $q = $pb->getQuantity();
         $unit = match ($b?->getKind()) {
             Benefit::KIND_SESSION => $en ? ($q === 1 ? 'session' : 'sessions') : ($q === 1 ? 'séance' : 'séances'),
@@ -243,7 +243,7 @@ class BenefitService
         };
         $parts = [$q === null
             ? ($en ? sprintf('Unlimited %s', $name) : sprintf('%s sans limite', $name))
-            : sprintf($en ? '%d %s %s per %s' : '%d %s %s par %s', $q, $unit, $name, $period)];
+            : sprintf('%d %s %s %s', $q, $unit, $name, $every)];
         $parts[] = match ($pb->getScheduling()) {
             PlanBenefit::SCHEDULING_CLIENT => $en ? 'you choose your dates when subscribing' : 'vous choisissez vos dates à la souscription',
             PlanBenefit::SCHEDULING_ADMIN => $en ? 'dates set by the team' : 'dates fixées par l\'équipe',
@@ -267,17 +267,4 @@ class BenefitService
         return mb_strtoupper(mb_substr($text, 0, 1)) . mb_substr($text, 1) . '.';
     }
 
-    private static function period(string $interval, int $count, bool $en): string
-    {
-        $unit = match ($interval) {
-            'week' => $en ? 'week' : 'semaine',
-            'year' => $en ? 'year' : 'an',
-            default => $en ? 'month' : 'mois',
-        };
-        if ($count <= 1) {
-            return $unit;
-        }
-
-        return $en ? sprintf('%d %ss', $count, $unit) : sprintf('%d %s', $count, $unit === 'mois' ? 'mois' : $unit . 's');
-    }
 }

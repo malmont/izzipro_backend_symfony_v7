@@ -327,12 +327,12 @@ class AboCatalogService
     {
         $en = str_starts_with($locale, 'en');
         $amount = self::money($plan->getPrice(), $plan->getCurrency(), $en);
-        $unit = ['week' => $en ? 'week' : 'semaine', 'year' => $en ? 'year' : 'an'][$plan->getInterval()] ?? ($en ? 'month' : 'mois');
+        $interval = (string) $plan->getInterval();
         $n = $plan->getIntervalCount();
-        $every = $n <= 1 ? ($en ? "per $unit" : "par $unit") : ($en ? "every $n {$unit}s" : sprintf('tous les %d %s', $n, $unit === 'mois' ? 'mois' : ($unit === 'semaine' ? 'semaines' : 'ans')));
+        // une seule règle d'accord (« toutes les 2 semaines », « tous les 3 mois », « every 2 weeks ») : AboWording
         $parts = [$plan->isSinglePeriod()
-            ? ($en ? sprintf('%s, paid once, valid %d %s%s, no renewal.', $amount, $n, $unit, $n > 1 ? 's' : '') : sprintf('%s, payé une fois, valable %d %s, sans renouvellement.', $amount, $n, $unit === 'semaine' && $n > 1 ? 'semaines' : ($unit === 'an' && $n > 1 ? 'ans' : $unit)))
-            : sprintf('%s %s.', $amount, $every)];
+            ? sprintf($en ? '%s, paid once, valid %s, no renewal.' : '%s, payé une fois, valable %s, sans renouvellement.', $amount, AboWording::duration($interval, $n, $en))
+            : sprintf('%s %s.', $amount, AboWording::every($interval, $n, $en))];
         if ($plan->getTrialDays() > 0) {
             $parts[] = $en ? sprintf('Free trial of %d days.', $plan->getTrialDays()) : sprintf('Essai gratuit de %d jours.', $plan->getTrialDays());
         }

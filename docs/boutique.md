@@ -1000,7 +1000,9 @@ Socle de l'abonnement universel : une formule livre des **prestations** ; aucun 
   BENEFIT_KIND_RESERVED, PLAN_BENEFIT_QUANTITY_INVALID, PLAN_BENEFIT_SCHEDULING_INVALID, PLAN_BENEFIT_RULES_INVALID,
   PLAN_BENEFIT_DUPLICATE ; 409 BENEFIT_IN_USE : une prestation livrée ne se supprime pas, elle se désactive) et phrase « ce que verra
   l'abonné » calculée par le serveur, en français et en anglais (« 8 séances Yoga par semaine ; vous choisissez vos créneaux ;
-  annulation sans frais jusqu'à 24 h avant ; jusqu'à 8 reportées à la période suivante. »).
+  annulation sans frais jusqu'à 24 h avant ; jusqu'à 8 reportées à la période suivante. »). Rythme accordé par une seule règle
+  (`App\Abo\Services\AboWording`, 20/11/2026) : « par semaine / mois / an » pour une période, « toutes les 2 semaines », « tous les
+  3 mois », « tous les 2 ans » pour plusieurs ; « per week », « every 2 weeks » ; une carte à une seule période : « valable 2 semaines ».
 - **EasyAdmin** (section « Boutique : accueil et pages ») : « Prestations », « Prestations des formules » (filtres formule et prestation,
   colonne « Ce que verra l'abonné »), et sur la fiche d'une formule, « Prestations livrées ».
 - **Grille publique** : `GET /api/subscription-plans` rend `benefits[]` pour chaque formule (`[]` sans prestation) : `{ id, benefitId,

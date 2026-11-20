@@ -150,10 +150,9 @@ class AboAssistantTools
                     $rows = $this->benefitRows($input['benefits'] ?? []);
                     $data = ['productId' => (int) $product->getId(), 'names' => $names, 'price' => $price, 'interval' => $interval, 'intervalCount' => max(1, (int) ($input['intervalCount'] ?? 1)), 'benefits' => $rows];
 
-                    return [$data, sprintf('Créer la formule « %s » sur « %s » : %s %s par %s%s, avec %s', (string) ($names['fr'] ?? reset($names)), (string) $product->getName(),
-                        number_format($price / 100, 2, ',', ' '), $this->catalog?->siteCurrency() ?? $this->currencyFor($product), self::intervalLabel($interval), // la devise imposée : celle du site
-                        $data['intervalCount'] > 1 ? ' (tous les ' . $data['intervalCount'] . ')' : '',
-                        $this->rowsSummary($rows)), null, 'subscription_plans'];
+                    return [$data, sprintf('Créer la formule « %s » sur « %s » : %s %s %s, avec %s', (string) ($names['fr'] ?? reset($names)), (string) $product->getName(),
+                        number_format($price / 100, 2, ',', ' '), $this->catalog?->siteCurrency() ?? $this->currencyFor($product), // la devise imposée : celle du site
+                        AboWording::every($interval, $data['intervalCount'], false), $this->rowsSummary($rows)), null, 'subscription_plans'];
                 case 'propose_plan_update':
                     $plan = $this->planOrFail((int) ($input['planId'] ?? 0));
                     $data = array_intersect_key($input, array_flip(['price', 'interval', 'intervalCount', 'names', 'active']));
@@ -546,10 +545,5 @@ class AboAssistantTools
     private static function kindLabel(string $kind): string
     {
         return match ($kind) { Benefit::KIND_SESSION => 'séance', Benefit::KIND_SERVICE => 'service', Benefit::KIND_QUOTA => 'quota', default => $kind };
-    }
-
-    private static function intervalLabel(string $interval): string
-    {
-        return match ($interval) { 'week' => 'semaine', 'year' => 'an', default => 'mois' };
     }
 }
