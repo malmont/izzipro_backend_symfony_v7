@@ -42,6 +42,7 @@ class AboStaffWorkService
     {
         $tz = $this->clock->timezone();
         $day = $date === null || $date === '' ? (new \DateTimeImmutable('now', $tz))->format('Y-m-d') : self::day0($date, $tz);
+        self::assertWindow(new \DateTimeImmutable($day, $tz), $tz, self::AHEAD_DAYS, 'date');
         [$start, $end] = $this->clock->range($day, $day);
         $items = $this->items((int) $staff->getId(), $start, $end, $locale);
         $slots = $this->conn()->fetchAllAssociative('SELECT sl.id, sl.benefit_id, sl.starts_at, sl.ends_at, sl.location, sl.capacity FROM benefit_slot sl JOIN benefit b ON b.id = sl.benefit_id
@@ -86,9 +87,8 @@ class AboStaffWorkService
         $tz = $this->clock->timezone();
         $today = new \DateTimeImmutable('today', $tz);
         $first = $from === null || $from === '' ? $today : new \DateTimeImmutable(self::day0($from, $tz), $tz);
-        if ($first < $today->modify('-' . self::BACK_DAYS . ' days') || $first > $today->modify('+' . self::AHEAD_DAYS . ' days')) {
-            throw new AboException(422, 'DATE_OUT_OF_RANGE', sprintf('Une date de %d jours en arrière à %d jours devant.', self::BACK_DAYS, self::AHEAD_DAYS), 'from');
-        }
+        // relecture neuve : les 14 jours tiennent dans la fenêtre (jamais plus de 14 jours devant)
+        self::assertWindow($first, $tz, self::AHEAD_DAYS - 13, 'from');
         $last = $first->modify('+13 days');
         [$start, $end] = $this->clock->range($first->format('Y-m-d'), $last->format('Y-m-d'));
 
@@ -102,7 +102,7 @@ class AboStaffWorkService
      */
     public function markDone(User $staff, int $occurrenceId, ?string $note, ?UploadedFile $photo, string $host, string $locale): array
     {
-        $r = $this->delivery->markDone($this->owned($staff, $occurrenceId), $occurrenceId, $note, $photo, self::by($staff), $host, $locale);
+        $r = $this->delivery->markDone($this->owned($staff, $occurrenceId), $occurrenceId, $note, $photo, self::by($staff), $host, $locale, (int) $staff->getId());
 
         return ['occurrence' => $this->one((int) $staff->getId(), $occurrenceId, $locale), 'changed' => $r['changed']];
     }
@@ -110,7 +110,7 @@ class AboStaffWorkService
     /** @return array{occurrence: array<string, mixed>, changed: bool} */
     public function markMissed(User $staff, int $occurrenceId, ?string $note, string $locale): array
     {
-        $r = $this->delivery->markMissed($this->owned($staff, $occurrenceId), $occurrenceId, $note, self::by($staff), $locale);
+        $r = $this->delivery->markMissed($this->owned($staff, $occurrenceId), $occurrenceId, $note, self::by($staff), $locale, (int) $staff->getId());
 
         return ['occurrence' => $this->one((int) $staff->getId(), $occurrenceId, $locale), 'changed' => $r['changed']];
     }
@@ -125,7 +125,9 @@ class AboStaffWorkService
     public function markSession(User $staff, int $slotId, mixed $absentOccurrences, ?string $note, string $host, string $locale): array
     {
         $staffId = (int) $staff->getId();
-        $mine = $this->conn()->fetchOne('SELECT 1 FROM benefit_slot sl JOIN benefit b ON b.id = sl.benefit_id WHERE sl.id = ? AND COALESCE(sl.staff_user_id, b.default_staff_user_id) = ?', [$slotId, $staffId]);
+        // relecture neuve : une séance de la fenêtre seulement (jamais une séance oubliée depuis des mois, qui enverrait un courriel à chacun)
+        $mine = $this->conn()->fetchOne('SELECT 1 FROM benefit_slot sl JOIN benefit b ON b.id = sl.benefit_id WHERE sl.id = ? AND COALESCE(sl.staff_user_id, b.default_staff_user_id) = ? AND sl.starts_at >= ?',
+            [$slotId, $staffId, self::utc((new \DateTimeImmutable())->modify('-' . self::BACK_DAYS . ' days'))]);
         if ($mine === false) {
             throw new AboException(404, 'SLOT_NOT_FOUND', 'Créneau introuvable.', 'slotId');
         }
@@ -223,6 +225,15 @@ class AboStaffWorkService
     private static function by(User $staff): string
     {
         return trim((string) $staff->getFirstname()) ?: (string) $staff->getUserIdentifier();
+    }
+
+    /** Un jour du magasin dans la fenêtre : de 30 jours en arrière à `$ahead` jours devant @throws AboException 422 DATE_OUT_OF_RANGE */
+    private static function assertWindow(\DateTimeImmutable $day, \DateTimeZone $tz, int $ahead, string $field): void
+    {
+        $today = new \DateTimeImmutable('today', $tz);
+        if ($day < $today->modify('-' . self::BACK_DAYS . ' days') || $day > $today->modify('+' . $ahead . ' days')) {
+            throw new AboException(422, 'DATE_OUT_OF_RANGE', sprintf('Une date de %d jours en arrière à %d jours devant.', self::BACK_DAYS, self::AHEAD_DAYS), $field);
+        }
     }
 
     /** @throws AboException 422 DATE_INVALID */

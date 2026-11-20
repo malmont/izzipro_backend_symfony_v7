@@ -66,12 +66,18 @@ class AboThreadService
     public function postByCustomer(Subscription $subscription, User $customer, mixed $body, string $host, string $locale): array
     {
         $text = self::text($body);
-        $since = self::utc((new \DateTimeImmutable())->modify('-1 day'));
-        $sent = (int) $this->conn()->fetchOne('SELECT COUNT(*) FROM subscription_message WHERE subscription_id = ? AND author = ? AND created_at > ?', [$subscription->getId(), SubscriptionMessage::AUTHOR_CUSTOMER, $since]);
-        if ($sent >= self::CUSTOMER_DAILY_MAX) {
-            throw new AboException(429, 'THREAD_RATE_LIMITED', sprintf('%d messages par jour au plus : la boutique vous répond dès que possible.', self::CUSTOMER_DAILY_MAX));
-        }
-        $message = $this->add($subscription, SubscriptionMessage::AUTHOR_CUSTOMER, $text, (int) $customer->getId(), self::firstname($customer));
+        // relecture neuve : compté puis écrit sous le verrou de la ligne de l'abonnement (deux envois simultanés ne dépassent jamais 20) ;
+        // une contestation (ABO-3a) n'entre pas dans le compte
+        $message = $this->conn()->transactional(function (Connection $conn) use ($subscription, $customer, $text) {
+            $conn->fetchOne('SELECT id FROM subscription WHERE id = ? FOR UPDATE', [$subscription->getId()]);
+            $since = self::utc((new \DateTimeImmutable())->modify('-1 day'));
+            $sent = (int) $conn->fetchOne('SELECT COUNT(*) FROM subscription_message WHERE subscription_id = ? AND author = ? AND occurrence_id IS NULL AND created_at > ?', [$subscription->getId(), SubscriptionMessage::AUTHOR_CUSTOMER, $since]);
+            if ($sent >= self::CUSTOMER_DAILY_MAX) {
+                throw new AboException(429, 'THREAD_RATE_LIMITED', sprintf('%d messages par jour au plus : la boutique vous répond dès que possible.', self::CUSTOMER_DAILY_MAX));
+            }
+
+            return $this->add($subscription, SubscriptionMessage::AUTHOR_CUSTOMER, $text, (int) $customer->getId(), self::firstname($customer));
+        });
         $this->notifyTeam($subscription, $host);
 
         return ['message' => $this->view($message, false)];
@@ -123,9 +129,11 @@ class AboThreadService
      */
     public function unreadThreads(bool $withIdentity, string $locale = 'fr'): array
     {
-        $rows = $this->conn()->fetchAllAssociative('SELECT m.subscription_id, COUNT(*) AS unread, MAX(m.created_at) AS last_at, u.firstname, u.lastname, p.names
-            FROM subscription_message m JOIN subscription s ON s.id = m.subscription_id LEFT JOIN "user" u ON u.id = s.user_id LEFT JOIN subscription_plan p ON p.id = s.plan_id
-            WHERE m.author = ? AND m.read_at IS NULL GROUP BY m.subscription_id, u.firstname, u.lastname, p.names ORDER BY MAX(m.created_at) DESC LIMIT 100', [SubscriptionMessage::AUTHOR_CUSTOMER]);
+        // relecture neuve : `names` est du JSON, que PostgreSQL ne sait pas grouper ; le compte d'abord, les noms ensuite
+        $rows = $this->conn()->fetchAllAssociative('SELECT t.subscription_id, t.unread, t.last_at, u.firstname, u.lastname, p.names
+            FROM (SELECT subscription_id, COUNT(*) AS unread, MAX(created_at) AS last_at FROM subscription_message WHERE author = ? AND read_at IS NULL GROUP BY subscription_id) t
+            JOIN subscription s ON s.id = t.subscription_id LEFT JOIN "user" u ON u.id = s.user_id LEFT JOIN subscription_plan p ON p.id = s.plan_id
+            ORDER BY t.last_at DESC LIMIT 100', [SubscriptionMessage::AUTHOR_CUSTOMER]);
 
         return array_map(function (array $r) use ($withIdentity, $locale) {
             $names = is_string($r['names']) ? (json_decode($r['names'], true) ?: []) : [];
@@ -165,7 +173,9 @@ class AboThreadService
     {
         $limit = self::utc(($now ?? new \DateTimeImmutable())->modify('-' . self::KEEP_MONTHS . ' months'));
 
-        return (int) $this->conn()->executeStatement("DELETE FROM subscription_message m USING subscription s WHERE s.id = m.subscription_id AND s.status = 'canceled' AND s.canceled_at IS NOT NULL AND s.canceled_at < ?", [$limit]);
+        // relecture neuve : toute fin d'abonnement (résilié, jamais payé), datée par la résiliation ou, à défaut, par la dernière modification
+        return (int) $this->conn()->executeStatement("DELETE FROM subscription_message m USING subscription s WHERE s.id = m.subscription_id AND s.status IN ('canceled', 'incomplete_expired')
+            AND COALESCE(s.canceled_at, s.updated_at) < ?", [$limit]);
     }
 
     // ---- interne ----------------------------------------------------------------------------------------------------------------------------

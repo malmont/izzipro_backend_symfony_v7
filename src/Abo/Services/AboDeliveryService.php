@@ -70,7 +70,7 @@ class AboDeliveryService
      * @return array{occurrence: array<string, mixed>, changed: bool}
      * @throws AboException 404 OCCURRENCE_NOT_FOUND, 409 NOT_YET_DUE | OCCURRENCE_NOT_SCHEDULED | OCCURRENCE_ALREADY_MARKED, 422 PROOF_TOO_LARGE | PROOF_FORMAT
      */
-    public function markDone(Subscription $subscription, int $occurrenceId, ?string $note, ?UploadedFile $photo, ?string $by, string $host = '', string $locale = 'fr'): array
+    public function markDone(Subscription $subscription, int $occurrenceId, ?string $note, ?UploadedFile $photo, ?string $by, string $host = '', string $locale = 'fr', ?int $onlyStaff = null): array
     {
         $note = self::clean($note, self::NOTE_MAX);
         $proof = null;
@@ -83,9 +83,10 @@ class AboDeliveryService
         }
         $used = false;
         try {
-            $changed = $this->locked($subscription, function () use ($subscription, $occurrenceId, $note, $proof, $by, &$used) {
-                return $this->conn()->transactional(function (Connection $conn) use ($subscription, $occurrenceId, $note, $proof, $by, &$used) {
+            $changed = $this->locked($subscription, function () use ($subscription, $occurrenceId, $note, $proof, $by, $onlyStaff, &$used) {
+                return $this->conn()->transactional(function (Connection $conn) use ($subscription, $occurrenceId, $note, $proof, $by, $onlyStaff, &$used) {
                     $o = $this->row($conn, $subscription, $occurrenceId);
+                    $this->assertStaffOf($conn, $occurrenceId, $onlyStaff);
                     if ($o['status'] === BenefitOccurrence::STATUS_DONE && $o['scheduled_at'] !== null) {
                         return false; // déjà fait : rien de changé, aucun second courriel (la photo envoyée de nouveau n'est pas gardée)
                     }
@@ -121,11 +122,12 @@ class AboDeliveryService
      * @return array{occurrence: array<string, mixed>, changed: bool}
      * @throws AboException 404 OCCURRENCE_NOT_FOUND, 409 NOT_YET_DUE | OCCURRENCE_NOT_SCHEDULED | OCCURRENCE_ALREADY_MARKED
      */
-    public function markMissed(Subscription $subscription, int $occurrenceId, ?string $note, ?string $by, string $locale = 'fr'): array
+    public function markMissed(Subscription $subscription, int $occurrenceId, ?string $note, ?string $by, string $locale = 'fr', ?int $onlyStaff = null): array
     {
         $note = self::clean($note, self::NOTE_MAX);
-        $changed = $this->locked($subscription, fn () => $this->conn()->transactional(function (Connection $conn) use ($subscription, $occurrenceId, $note, $by) {
+        $changed = $this->locked($subscription, fn () => $this->conn()->transactional(function (Connection $conn) use ($subscription, $occurrenceId, $note, $by, $onlyStaff) {
             $o = $this->row($conn, $subscription, $occurrenceId);
+            $this->assertStaffOf($conn, $occurrenceId, $onlyStaff);
             if ($o['status'] === BenefitOccurrence::STATUS_MISSED) {
                 return false;
             }
@@ -181,7 +183,7 @@ class AboDeliveryService
             }
             $isAbsent = in_array((int) $r['subscription_id'], $absent, true);
             try {
-                $res = $isAbsent ? $this->markMissed($subscription, (int) $r['id'], $note, $by, $locale) : $this->markDone($subscription, (int) $r['id'], $note, null, $by, $host, $locale);
+                $res = $isAbsent ? $this->markMissed($subscription, (int) $r['id'], $note, $by, $locale, $onlyStaff) : $this->markDone($subscription, (int) $r['id'], $note, null, $by, $host, $locale, $onlyStaff);
                 $res['changed'] ? ++$out[$isAbsent ? 'missed' : 'done'] : ++$out['unchanged'];
             } catch (AboException $e) {
                 $out['failed'][] = ['occurrenceId' => (int) $r['id'], 'subscriptionId' => (int) $r['subscription_id'], 'code' => $e->errorCode];
@@ -328,7 +330,12 @@ class AboDeliveryService
             $this->journal($subscription, 'occurrence_' . $decision, ['occurrenceId' => $occurrenceId]);
             if ($decision === BenefitOccurrence::ACK_CONTESTED) {
                 // lot ABO-3b (plan § 8) : TOUJOURS dans le fil ; une demande d'Assistance EN PLUS quand le module est actif
-                $this->thread?->recordContestation($subscription, $customer, $occurrenceId, $text);
+                try {
+                    $this->thread?->recordContestation($subscription, $customer, $occurrenceId, $text);
+                } catch (\Throwable $e) {
+                    // relecture neuve : l'avis est déjà gardé ; le fil en panne ne fait ni 500 ni perdre la demande d'Assistance
+                    $this->logger->error('Abonnements : contestation non écrite dans le fil (' . $e::class . ').');
+                }
                 $ticket = $this->openTicket($customer, $subscription, $o, $text, $locale);
             }
         }
@@ -558,6 +565,23 @@ class AboDeliveryService
         $o = $conn->fetchAssociative('SELECT * FROM benefit_occurrence WHERE id = ? AND subscription_id = ? FOR UPDATE', [$occurrenceId, $subscription->getId()]);
 
         return $o !== false ? $o : throw new AboException(404, 'OCCURRENCE_NOT_FOUND', 'Droit introuvable.', 'occurrenceId');
+    }
+
+    /**
+     * Lot ABO-3b, relecture neuve : le geste d'un intervenant relit, sous le verrou, que la date est toujours la sienne (une date réaffectée
+     * entre son contrôle et son geste : 404, comme une date qui n'existe pas)
+     *
+     * @throws AboException 404 OCCURRENCE_NOT_FOUND
+     */
+    private function assertStaffOf(Connection $conn, int $occurrenceId, ?int $onlyStaff): void
+    {
+        if ($onlyStaff === null) {
+            return;
+        }
+        $staff = $conn->fetchOne('SELECT ' . AboStaffService::EFFECTIVE . ' FROM benefit_occurrence o JOIN benefit b ON b.id = o.benefit_id LEFT JOIN benefit_slot sl ON sl.id = o.slot_id WHERE o.id = ?', [$occurrenceId]);
+        if ($staff === false || $staff === null || (int) $staff !== $onlyStaff) {
+            throw new AboException(404, 'OCCURRENCE_NOT_FOUND', 'Date introuvable.', 'occurrenceId');
+        }
     }
 
     /** @param array<string, mixed> $o @throws AboException 409 OCCURRENCE_ALREADY_MARKED | OCCURRENCE_NOT_SCHEDULED | NOT_YET_DUE */

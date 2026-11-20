@@ -33,6 +33,13 @@ class BenefitService
     /** @throws AboException 422 */
     public function validateBenefit(Benefit $benefit): void
     {
+        // lot ABO-3b : l'intervenant par défaut porte le rôle d'intervenant
+        if (($staff = $benefit->getDefaultStaffUserId()) !== null) {
+            $user = $this->emProvider->getEntityManager()->find(\App\Entity\User::class, $staff);
+            if (!$user instanceof \App\Entity\User || !in_array(\App\Security\TeamRoles::STAFF_PROVIDER, $user->getRoles(), true)) {
+                throw new AboException(422, 'STAFF_INVALID', 'Intervenant : un compte qui porte le rôle d\'intervenant (« Intervenants » du suivi des abonnements).', 'defaultStaffUserId');
+            }
+        }
         if (!in_array($benefit->getKind(), Benefit::KINDS, true)) {
             throw new AboException(422, 'BENEFIT_KIND_INVALID', 'Type de prestation inconnu : séance, service ou quota.', 'kind');
         }
@@ -155,11 +162,7 @@ class BenefitService
             if ($staff !== null && !is_int($staff)) {
                 throw new AboException(422, 'STAFF_INVALID', 'Intervenant : un compte qui porte le rôle d\'intervenant, ou null.', 'defaultStaffUserId');
             }
-            $user = $staff !== null ? $this->emProvider->getEntityManager()->find(\App\Entity\User::class, $staff) : null;
-            if ($staff !== null && (!$user instanceof \App\Entity\User || !in_array(\App\Security\TeamRoles::STAFF_PROVIDER, $user->getRoles(), true))) {
-                throw new AboException(422, 'STAFF_INVALID', 'Intervenant : un compte qui porte le rôle d\'intervenant (« Intervenants » du suivi des abonnements).', 'defaultStaffUserId');
-            }
-            $benefit->setDefaultStaffUserId($staff);
+            $benefit->setDefaultStaffUserId($staff); // le rôle est vérifié par validateBenefit (écran web, assistant, EasyAdmin)
         }
         if (array_key_exists('active', $data)) {
             if (!is_bool($data['active'])) {

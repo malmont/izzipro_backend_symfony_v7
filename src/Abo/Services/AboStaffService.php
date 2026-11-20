@@ -103,7 +103,8 @@ class AboStaffService
             }
             $this->roles->set($user, self::ROLE, true, ['abonnements']);
 
-            return ['staff' => $this->row($user), 'changed' => true, 'invitation' => null];
+            // relecture neuve : un intervenant retiré avant d'avoir choisi son mot de passe, invité de nouveau, reçoit un lien neuf
+            return ['staff' => $this->row($user), 'changed' => true, 'invitation' => $this->isPending($user) ? $this->send($user, $by, is_string($locale) ? $locale : null) : null];
         }
         $user = (new User())->setEmail($email)->setUsername($email)->setFirstname($names['firstName'])->setLastname($names['lastName'])
             ->setRoles([])->setIsVerified(false)->setSignupChannel(User::SIGNUP_STAFF_INVITE);
@@ -205,10 +206,16 @@ class AboStaffService
 
     // ---- interne ----------------------------------------------------------------------------------------------------------------------------
 
-    /** Un client : un compte qui a souscrit ou commandé sur le site */
+    /**
+     * Un client : un compte qui a souscrit, commandé sur la boutique web ou mobile (jamais une vente en caisse, où le compte est le
+     * caissier), ou qui appartient à une application de clients (boutique, Living Memory). Relecture neuve : le rôle ROLE_USER_INTERNET ne
+     * le dit pas (tout intervenant le porte).
+     */
     private function isCustomer(int $userId): bool
     {
-        return $this->conn()->fetchOne('SELECT 1 FROM subscription WHERE user_id = ? UNION ALL SELECT 1 FROM "order" WHERE user_id = ? LIMIT 1', [$userId, $userId]) !== false;
+        return $this->conn()->fetchOne('SELECT 1 FROM subscription WHERE user_id = ?
+            UNION ALL SELECT 1 FROM "order" o JOIN order_source s ON s.id = o.order_source_id WHERE o.user_id_id = ? AND s.name IN (\'Ecommerce\', \'Mobile_app\')
+            UNION ALL SELECT 1 FROM user_app_membership WHERE user_id = ? AND app IN (\'boutique\', \'livingmemory\') LIMIT 1', [$userId, $userId, $userId]) !== false;
     }
 
     private function isPending(User $user): bool

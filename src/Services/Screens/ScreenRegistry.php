@@ -80,7 +80,7 @@ final class ScreenRegistry
         // lot ABO-0 : le suivi des abonnements (gestion web et application de gestion mobile) : identité des abonnés, impayés
         'abonnements' => ['family' => self::VENTE, 'module' => 'module.boutique'],
         // lot ABO-3b : l'intervenant, SES dates seulement (le prénom de l'abonné, l'adresse d'une prestation chez le client)
-        'abonnements.intervenant' => ['family' => self::VENTE, 'module' => 'module.boutique', 'roles' => ['ROLE_ADMIN', 'ROLE_STAFF_PROVIDER']],
+        'abonnements.intervenant' => ['family' => self::VENTE, 'module' => 'module.boutique', 'roles' => ['ROLE_STAFF_PROVIDER']], // l'administrateur suit tout par « abonnements »
         // lot ABO-CONF : créer et configurer les formules et les prestations (le catalogue des abonnements), comme le catalogue des produits
         'abonnements.formules' => self::SHOP,
         'imports.commandes' => ['family' => self::VENTE, 'module' => 'module.boutique'],
