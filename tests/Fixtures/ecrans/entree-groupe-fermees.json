@@ -428,6 +428,8 @@
     "rights POST /api/site/group-same-company/1/confirm",
     "rights POST /api/site/group-same-company/1/refuse",
     "rights POST /api/site/group-transfers/1/send",
+    "rights POST /api/site/reservations-boutique/1/annuler",
+    "rights POST /api/site/reservations-boutique/1/confirmer",
     "rights POST /api/site/taxes/verify",
     "rights PUT /api/agency/sites/1/modules/1",
     "security DELETE /api/app-keys/1",

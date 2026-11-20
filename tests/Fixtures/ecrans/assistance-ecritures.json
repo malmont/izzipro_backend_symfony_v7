@@ -10,6 +10,8 @@
     "clients": {
         "allowed": [
             "PATCH /api/form-submissions/{id}",
+            "POST /api/site/reservations-boutique/{id}/annuler",
+            "POST /api/site/reservations-boutique/{id}/confirmer",
             "PUT /api/contacts/{id}"
         ],
         "refused": [

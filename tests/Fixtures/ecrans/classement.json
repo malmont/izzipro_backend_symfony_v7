@@ -689,7 +689,11 @@
     ],
     "clients.reservations": [
         "GET /api/reservations",
-        "POST /api/reservations/{id}/confirm"
+        "GET /api/site/reservations-boutique",
+        "GET /api/site/reservations-boutique/{id}",
+        "POST /api/reservations/{id}/confirm",
+        "POST /api/site/reservations-boutique/{id}/annuler",
+        "POST /api/site/reservations-boutique/{id}/confirmer"
     ],
     "codes-barres": [
         "GET /api/gestion/codes-barres/manquants",
@@ -1331,6 +1335,8 @@
     "ventes.commandes": [
         "GET /api/orders",
         "GET /api/payments",
+        "GET /api/site/commandes/a-traiter",
+        "GET /api/site/commandes/{id}",
         "POST /api/order/cancel/{id}",
         "POST /api/shipping/buy",
         "POST /api/shipping/parcels"
