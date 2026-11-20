@@ -367,7 +367,7 @@ class AboDeliveryService
         foreach ($rows as $r) {
             $item = ['occurrenceId' => (int) $r['id'], 'subscriptionId' => (int) $r['subscription_id'], 'benefitId' => (int) $r['benefit_id'], 'name' => $this->benefitName((int) $r['benefit_id'], $locale),
                 'status' => (string) $r['status'], 'startsAt' => $this->at(self::fromUtc($r['scheduled_at'])), 'endsAt' => $this->at(self::fromUtc($r['scheduled_end'])),
-                'doneAt' => $this->at(self::fromUtc($r['done_at'])), 'hasProof' => $r['proof_path'] !== null, 'customerAck' => $r['customer_ack'], 'contestationPending' => $r['customer_ack'] === BenefitOccurrence::ACK_CONTESTED && $r['ack_resolution'] === null]
+                'doneAt' => $this->at(self::fromUtc($r['done_at'])), 'hasProof' => $r['proof_path'] !== null, ($withIdentity ? 'customerAck' : 'ack') => $r['customer_ack'], 'contestationPending' => $r['customer_ack'] === BenefitOccurrence::ACK_CONTESTED && $r['ack_resolution'] === null]
                 + ($withIdentity ? ['note' => $r['note'], 'customer' => $customers[(int) $r['subscription_id']] ?? null] : []);
             $key = match ((string) $r['status']) { 'scheduled' => 'toMark', 'done' => 'done', 'missed' => 'missed', default => null };
             if ($key !== null) {

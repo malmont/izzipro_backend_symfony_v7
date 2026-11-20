@@ -146,7 +146,9 @@ class AboDeliveryController extends AbstractController
     /** @param array{path: string, mime: string, sha256: ?string} $file */
     private static function image(array $file): BinaryFileResponse
     {
-        $response = new BinaryFileResponse($file['path'], 200, ['Content-Type' => $file['mime'], 'X-Content-Type-Options' => 'nosniff', 'Cache-Control' => 'private, no-store']);
+        // `public: false` : BinaryFileResponse se déclare publique par défaut (un cache partagé garderait la photo d'un abonné)
+        $response = new BinaryFileResponse($file['path'], 200, ['Content-Type' => $file['mime'], 'X-Content-Type-Options' => 'nosniff'], false);
+        $response->headers->set('Cache-Control', 'private, no-store');
         $response->setContentDisposition(ResponseHeaderBag::DISPOSITION_INLINE, 'preuve.jpg');
         if ($file['sha256'] !== null) {
             $response->headers->set('X-Proof-Sha256', $file['sha256']);

@@ -108,7 +108,7 @@ class AboFollowUpService
             // lot ABO-2 : les 10 prochaines dates, avec leur numéro (déplacer, annuler) ; l'intervenant et la source pour l'équipe, jamais pour le modèle
             'upcoming' => $this->agenda?->upcoming($s, $withIdentity, $locale) ?? [],
             // lot ABO-3a : les prestations faites ou manquées (90 jours) ; « par qui », la note et l'avis de l'abonné pour l'équipe, jamais pour le modèle
-            'delivered' => array_map(fn (array $d) => $withIdentity ? $d : array_diff_key($d, ['note' => 1]), $this->delivery?->delivered($s, $withIdentity, $locale) ?? []),
+            'delivered' => array_map(fn (array $d) => $withIdentity ? $d : ['ack' => $d['customerAck']] + array_diff_key($d, ['note' => 1, 'customerAck' => 1]), $this->delivery?->delivered($s, $withIdentity, $locale) ?? []),
             'doneEmails' => $s->wantsDoneEmails(),
             'pauses' => $withIdentity ? $s->getPauses() : array_map(fn (array $p) => array_intersect_key($p, array_flip(['from', 'until', 'resumedAt'])), $s->getPauses()),
         ];
