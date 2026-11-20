@@ -10,6 +10,7 @@
 #   ops/bascule/bascule.sh retour <commit d'avant> <n>   retour arrière : code et cache d'avant
 #   ops/bascule/bascule.sh logs <depuis, ISO UTC>   erreurs du journal et codes du serveur web depuis cet instant
 #   ops/bascule/bascule.sh workers                  le worker des courriels bat-il ?
+#   ops/bascule/bascule.sh essai-echange            essai à blanc des échanges du vendor et de public/bundles (dossiers d'essai)
 #   ops/bascule/bascule.sh menage [--oui]           anciens caches de bascule : liste, puis suppression avec --oui (garde les 3 derniers)
 #   ops/bascule/bascule.sh fin                      supprime le jeton de contrôle
 #
@@ -79,9 +80,32 @@ restart_workers() {
 # Échange atomique de deux dossiers (renameat2, RENAME_EXCHANGE) : aucun instant sans cache
 exchange() { docker exec -u www-data "$APP" perl -e 'my $r = syscall(316, -100, $ARGV[0], -100, $ARGV[1], 2); print "échange : rc=$r $!\n"; exit($r == 0 ? 0 : 1)' "/var/www/var/swap_stage$1/dev" /var/www/var/cache/dev; }
 
-# Échange atomique du vendor (lot TACHES-0) : même appel que le cache, en root explicite (-u 0 : l'image tourne en www-data, et le vendor
-# appartient à root) ; aucun instant sans vendor
-exchange_vendor() { docker exec -u 0 "$APP" perl -e 'my $r = syscall(316, -100, $ARGV[0], -100, $ARGV[1], 2); print "échange du vendor : rc=$r $!\n"; exit($r == 0 ? 0 : 1)' "/var/www/var/vendor_stage$1" /var/www/vendor; }
+# Échange atomique de deux dossiers en root explicite (-u 0 : l'image tourne en www-data, et le vendor appartient à root) : <source> <cible> <nom>
+swap_root() { docker exec -u 0 "$APP" perl -e 'my $r = syscall(316, -100, $ARGV[0], -100, $ARGV[1], 2); print "échange $ARGV[2] : rc=$r $!\n"; exit($r == 0 ? 0 : 1)' "$1" "$2" "$3"; }
+# Échange du vendor (lot TACHES-0) : aucun instant sans vendor
+# Chemins fixes (jamais lus de l'environnement) ; seul « essai-echange » les remplace par des dossiers d'essai
+VSTAGE=/var/www/var/vendor_stage; VDST=/var/www/vendor; BSTAGE=/var/www/var/bundles_stage; BDST=/var/www/public/bundles
+exchange_vendor() { swap_root "$VSTAGE$1" "$VDST" "du vendor"; }
+# Échange des fichiers publics des paquets (public/bundles, ignoré par git, train 123) : EasyAdmin lit son manifeste dans le vendor et
+# demande des fichiers à empreinte (app.<empreinte>.js) ; un vendor changé sans eux laisse /admin sans style ni scripts (404)
+exchange_bundles() { swap_root "$BSTAGE$1" "$BDST" "des fichiers publics des paquets"; }
+# Le vendor ET public/bundles, dans cet ordre ; si le second échange échoue, le premier est défait (rien n'a bougé)
+exchange_packages() {
+  exchange_vendor "$1" || { echo "ÉCHEC DE L'ÉCHANGE DU VENDOR : rien n'a bougé"; return 1; }
+  exchange_bundles "$1" || { echo "ÉCHEC DE L'ÉCHANGE DE public/bundles : vendor remis"; exchange_vendor "$1"; return 1; }
+}
+
+# Fichiers d'EasyAdmin servis ? Chaque fichier du manifeste que le vendor EN LIGNE déclare (celui que lisent les pages /admin) est demandé
+# au serveur web : tous en 200, sinon retour arrière. Une page /admin anonyme renvoie à la connexion, qui ne charge pas ces fichiers.
+ea_assets() {
+  local f n=0 bad=0 c
+  for f in $(docker exec "$APP" php -r '$m = json_decode((string) @file_get_contents("/var/www/vendor/easycorp/easyadmin-bundle/public/manifest.json"), true); foreach ((array) $m as $v) { if (is_string($v) && preg_match("#^[A-Za-z0-9._/-]+$#", $v) && !str_contains($v, "..")) echo ltrim($v, "/"), "\n"; }'); do
+    n=$((n + 1)); c=$(curl -s -o /dev/null -w '%{http_code}' -H "Host: $FRONT_HOST" "$BASE_URL/bundles/easyadmin/$f")
+    [ "$c" = 200 ] || { bad=$((bad + 1)); echo "ATTENTION fichier d'EasyAdmin $f : $c"; }
+  done
+  echo "fichiers d'EasyAdmin (manifeste du vendor en ligne) : $n, dont $bad hors 200$([ "$n" -gt 0 ] && [ "$bad" = 0 ] && echo ' : OK' || echo ' : RETOUR ARRIÈRE IMMÉDIAT')"
+  [ "$n" -gt 0 ] && [ "$bad" = 0 ]
+}
 
 # Ancien cache lisible à son ancien chemin après l'échange : une requête ou un worker démarrés sur l'ancien conteneur de services
 # chargent encore ses fichiers par var/cache/dev/Container<ancien>/… Un lien de ce nom est posé AVANT l'échange dans le cache qui va
@@ -107,6 +131,7 @@ after_checks() {
   else
     echo "authentification : pas de jeton de contrôle, $keys clé(s) visibles$([ "$keys" = 2 ] || echo ' : RETOUR ARRIÈRE IMMÉDIAT')"
   fi
+  ea_assets
 }
 
 # Pages publiques de TOUS les sites (lecture seule) : réglages et composants de la page d'accueil en 200, route protégée en 401
@@ -147,6 +172,24 @@ fin)
   docker exec -u www-data "$APP" rm -f /var/www/var/swap_token.txt && echo "jeton de contrôle supprimé"
   ;;
 workers) worker_email maintenant ;;
+essai-echange)
+  # Essai à blanc des échanges du vendor et de public/bundles, dans le conteneur en ligne, en root, sur des dossiers d'essai placés comme
+  # les vrais (var/ ↔ racine, var/ ↔ public/ : même montage) : bascule, retour, puis second échange en échec (le vendor doit revenir).
+  # Rien d'autre n'est touché ; les dossiers d'essai sont supprimés à la fin. Puis le contrôle des fichiers d'EasyAdmin, en lecture.
+  lock; E=essai$$
+  VSTAGE=/var/www/var/.vstage_; VDST=/var/www/.essai_vendor_$E; BSTAGE=/var/www/var/.bstage_; BDST=/var/www/public/.essai_bundles_$E
+  docker exec -u 0 "$APP" sh -c "mkdir $VSTAGE$E $VDST $BSTAGE$E $BDST && echo nouveau > $VSTAGE$E/m && echo ancien > $VDST/m && echo nouveau > $BSTAGE$E/m && echo ancien > $BDST/m" || { echo "DOSSIERS D'ESSAI IMPOSSIBLES"; exit 1; }
+  st() { docker exec "$APP" sh -c "echo vendor=\$(cat $VDST/m) bundles=\$(cat $BDST/m 2>/dev/null || echo absent) / de côté : vendor=\$(cat $VSTAGE$E/m) bundles=\$(cat $BSTAGE$E/m 2>/dev/null || echo absent)"; }
+  ok=0
+  exchange_packages "$E"; r=$(st); echo "après la bascule : $r"; [ "$r" = "vendor=nouveau bundles=nouveau / de côté : vendor=ancien bundles=ancien" ] && ok=$((ok + 1))
+  exchange_packages "$E"; r=$(st); echo "après le retour : $r"; [ "$r" = "vendor=ancien bundles=ancien / de côté : vendor=nouveau bundles=nouveau" ] && ok=$((ok + 1))
+  docker exec -u 0 "$APP" rm -rf "$BSTAGE$E"
+  exchange_packages "$E" && echo "ANOMALIE : l'échange aurait dû échouer"; r=$(st); echo "après un second échange en échec : $r"; [ "$r" = "vendor=ancien bundles=ancien / de côté : vendor=nouveau bundles=absent" ] && ok=$((ok + 1))
+  docker exec -u 0 "$APP" rm -rf "$VSTAGE$E" "$VDST" "$BSTAGE$E" "$BDST"
+  echo "essai à blanc des échanges : $ok / 3 conformes ; dossiers d'essai restants : $(docker exec "$APP" sh -c "ls -d $VSTAGE$E $VDST $BSTAGE$E $BDST 2>/dev/null | wc -l")"
+  ea_assets
+  [ "$ok" = 3 ]
+  ;;
 vendor)
   # Lot TACHES-0 : un composer.lock changé. Le vendor en ligne est copié (dans un conteneur provisoire de la MÊME image, en root comme lui : -u 0,
   # l'image tourne en www-data)
@@ -201,6 +244,21 @@ build)
     -v "$L/docker/php/uploads.ini":/usr/local/etc/php/conf.d/uploads.ini:ro -v "$L/docker/php/zz-opcache-perf.ini":/usr/local/etc/php/conf.d/zz-opcache-perf.ini:ro \
     --tmpfs /var/www/var/log:uid=33,gid=33 -w /var/www "$IMAGE" sh -c 'php bin/console cache:warmup --no-interaction 2>&1 | grep -i error | head -3; php bin/console lint:container 2>&1 | grep -E "OK|ERROR"; php bin/console doctrine:schema:validate --skip-sync 2>&1 | grep -E "OK|ERROR"; php bin/console debug:router --format=json 2>/dev/null | php -r "echo count(json_decode(stream_get_contents(STDIN), true)), \" routes\n\";"'
   echo "cache construit : $(ls "$L/var/swap_stage$3/dev" | grep -c Container) conteneur(s) de services ; $(stat -c '%U:%G' "$L/var/swap_stage$3/dev")"
+  if [ "$VENDOR_SRC" != "$L/vendor" ]; then
+    # Train 123 : les fichiers publics des paquets du vendor préparé (assets:install en COPIE, pas en liens), dans l'environnement du site,
+    # posés dans var/bundles_stage<n> ; « switch » les échangera avec public/bundles en même temps que le vendor
+    [ -e "$L/var/bundles_stage$3" ] && { echo "bundles_stage$3 DÉJÀ LÀ : prendre un numéro neuf (aucune suppression ici)"; exit 1; }
+    mkdir -p "$L/var/bundles_stage$3" && chmod 777 "$L/var/bundles_stage$3"
+    docker run --rm -u 33:33 --network "$NETWORK" --env-file "$ENVF" -v "$BUILD_WORKTREE":/var/www:ro -v "$L/.env":/var/www/.env:ro \
+      -v "$VENDOR_SRC":/var/www/vendor:ro -v "$L/var/swap_stage$3":/var/www/var/cache -v "$L/jwt":/var/www/config/jwt:ro \
+      -v "$L/var/bundles_stage$3":/out/bundles --tmpfs /var/www/var/log:uid=33,gid=33 -w /var/www "$IMAGE" \
+      php bin/console assets:install /out --no-interaction 2>&1 | grep -iE 'error|copy|symlink|installed' | head -5
+    # chaque fichier du manifeste d'EasyAdmin du vendor préparé est-il là ?
+    MISS=$(docker run --rm -u 33:33 -v "$VENDOR_SRC":/v:ro -v "$L/var/bundles_stage$3":/b:ro "$IMAGE" php -r '$m = json_decode((string) @file_get_contents("/v/easycorp/easyadmin-bundle/public/manifest.json"), true); if (!$m) { echo "MANIFESTE ILLISIBLE"; exit; } foreach ($m as $v) { if (is_string($v) && !is_file("/b/easyadmin/" . ltrim($v, "/"))) echo $v, " "; }' 2>&1)
+    LINKS=$(find "$L/var/bundles_stage$3" -type l | wc -l)
+    echo "public/bundles préparé : $(ls "$L/var/bundles_stage$3" | tr '\n' ' '); $(find "$L/var/bundles_stage$3" -type f | wc -l) fichier(s), $LINKS lien(s) ; manquants au manifeste d'EasyAdmin : ${MISS:-aucun}"
+    [ -z "$MISS" ] && [ "$LINKS" = 0 ] || { echo "public/bundles PRÉPARÉ INCOMPLET : ne pas lancer switch"; exit 1; }
+  fi
   ;;
 photo)
   # Aucune suppression : un nom neuf à chaque photo. Lectures : une par ligne de var/bascule.lectures, sur le site de contrôle :
@@ -236,10 +294,12 @@ switch)
   pause 2
   link_old_container "$3"
   date -u +%FT%T > "$L/var/bascule.heure"; T0=$(date +%s.%N)
-  # lot TACHES-0 : le vendor d'abord (composer.lock changé), puis le code et le cache ; l'ancien vendor reste dans var/vendor_stage<n>
+  # lot TACHES-0 : le vendor et public/bundles d'abord (composer.lock changé), puis le code et le cache ; l'ancien vendor reste dans
+  # var/vendor_stage<n>, l'ancien public/bundles dans var/bundles_stage<n>
   if [ -n "$(git diff --name-only HEAD "$2" -- composer.lock)" ]; then
     [ -f "$L/var/vendor_stage$3/autoload.php" ] || { echo "COMPOSER.LOCK CHANGÉ ET VENDOR PRÉPARÉ ABSENT : lancer « vendor » puis « build »"; exit 1; }
-    exchange_vendor "$3" || { echo "ÉCHEC DE L'ÉCHANGE DU VENDOR : rien d'autre n'a bougé"; exit 1; }
+    [ -d "$L/var/bundles_stage$3/easyadmin" ] || { echo "COMPOSER.LOCK CHANGÉ ET public/bundles PRÉPARÉ ABSENT : relancer « build » (rien n'a bougé)"; exit 1; }
+    exchange_packages "$3" || exit 1
   fi
   git merge -q --ff-only "$2" && exchange "$3" || { echo "ÉCHEC DE LA BASCULE : vérifier l'état (git log -1, var/cache/dev) avant toute autre commande"; exit 1; }
   echo "bascule en $(awk -v a="$T0" -v b="$(date +%s.%N)" 'BEGIN{printf "%.2f", b-a}') s à $(cat "$L/var/bascule.heure") UTC ; retour arrière : « retour $(git rev-parse --short "HEAD@{1}") $3 »"
@@ -255,10 +315,12 @@ retour)
   git merge-base --is-ancestor "$2" HEAD || { echo "CE COMMIT N'EST PAS UN ANCÊTRE DE L'ARBRE EN LIGNE : $2"; exit 1; }
   link_old_container "$3"
   date -u +%FT%T > "$L/var/bascule.heure"; T0=$(date +%s.%N)
-  # lot TACHES-0 : le composer.lock revient en arrière ? l'ancien vendor attend dans var/vendor_stage<n> depuis l'échange
+  # lot TACHES-0 : le composer.lock revient en arrière ? l'ancien vendor attend dans var/vendor_stage<n> et l'ancien public/bundles dans
+  # var/bundles_stage<n> depuis l'échange
   if [ -n "$(git diff --name-only "$2" HEAD -- composer.lock)" ]; then
     [ -f "$L/var/vendor_stage$3/autoload.php" ] || { echo "VENDOR D'AVANT ABSENT : var/vendor_stage$3 (rien n'a bougé)"; exit 1; }
-    exchange_vendor "$3" || { echo "ÉCHEC DE L'ÉCHANGE DU VENDOR : rien d'autre n'a bougé"; exit 1; }
+    [ -d "$L/var/bundles_stage$3/easyadmin" ] || { echo "public/bundles D'AVANT ABSENT : var/bundles_stage$3 (rien n'a bougé)"; exit 1; }
+    exchange_packages "$3" || exit 1
   fi
   git reset -q --hard "$2" && exchange "$3" || { echo "ÉCHEC DU RETOUR ARRIÈRE : vérifier l'état (git log -1, var/cache/dev)"; exit 1; }
   echo "retour arrière en $(awk -v a="$T0" -v b="$(date +%s.%N)" 'BEGIN{printf "%.2f", b-a}') s à $(cat "$L/var/bascule.heure") UTC : $(git log -1 --format=%h) ; le cache remis en avant reste dans var/swap_stage$3 (pour revenir : « switch <commit> $3 »)"
@@ -291,6 +353,6 @@ menage)
   echo "supprimés : ${#DEL[@]} ; espace libéré : $(( ($(df --output=avail -k "$L/var" | tail -1) - BEFORE) / 1024 )) Mo ; restants : $(ls -d "$L"/var/swap_stage* 2>/dev/null | wc -l)"
   ;;
 *)
-  sed -n '2,17p' "$HERE/$(basename "$0")"; exit 1
+  sed -n '2,18p' "$HERE/$(basename "$0")"; exit 1
   ;;
 esac
