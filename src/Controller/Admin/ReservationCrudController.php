@@ -35,7 +35,8 @@ class ReservationCrudController extends BaseTenantCrudController
     public function __construct(
         TenantEntityManagerProvider $emProvider,
         private ReservationMailerService $mailerService,
-        private AdminUrlGenerator $adminUrlGenerator
+        private AdminUrlGenerator $adminUrlGenerator,
+        private ?\App\Services\ReservationService\ShopBookingService $bookings = null, // lot CMD-WEB-1 : le geste a un seul code
     ) {
         parent::__construct($emProvider);
     }
@@ -78,11 +79,11 @@ class ReservationCrudController extends BaseTenantCrudController
             return $this->redirect($context->getReferrer() ?: $this->adminUrlGenerator->setController(self::class)->setAction('index')->generateUrl());
         }
 
-        $tenantEm = $this->emProvider->getEntityManager();
-        $reservation->setStatus('confirmed');
-        $tenantEm->flush();
+        if (!$this->changeStatus($reservation, 'confirmed')) {
+            $this->addFlash('info', sprintf('Réservation #%d déjà confirmée : aucun courriel renvoyé.', $reservation->getId()));
 
-        $this->mailerService->sendStatusChangeEmail($reservation, 'confirmed');
+            return $this->redirect($context->getReferrer() ?: $this->adminUrlGenerator->setController(self::class)->setAction('index')->generateUrl());
+        }
         $this->addFlash('success', sprintf('✅ Réservation #%d de %s confirmée ! Un email a été envoyé à %s.', $reservation->getId(), $reservation->getClientName(), $reservation->getClientEmail()));
 
         return $this->redirect($context->getReferrer() ?: $this->adminUrlGenerator->setController(self::class)->setAction('index')->generateUrl());
@@ -102,14 +103,33 @@ class ReservationCrudController extends BaseTenantCrudController
             return $this->redirect($context->getReferrer() ?: $this->adminUrlGenerator->setController(self::class)->setAction('index')->generateUrl());
         }
 
-        $tenantEm = $this->emProvider->getEntityManager();
-        $reservation->setStatus('cancelled');
-        $tenantEm->flush();
+        if (!$this->changeStatus($reservation, 'cancelled')) {
+            $this->addFlash('info', sprintf('Réservation #%d déjà annulée : aucun courriel renvoyé.', $reservation->getId()));
 
-        $this->mailerService->sendStatusChangeEmail($reservation, 'cancelled');
+            return $this->redirect($context->getReferrer() ?: $this->adminUrlGenerator->setController(self::class)->setAction('index')->generateUrl());
+        }
         $this->addFlash('info', sprintf('ℹ️ Réservation #%d de %s annulée. Un email a été envoyé à %s.', $reservation->getId(), $reservation->getClientName(), $reservation->getClientEmail()));
 
         return $this->redirect($context->getReferrer() ?: $this->adminUrlGenerator->setController(self::class)->setAction('index')->generateUrl());
+    }
+
+    /**
+     * Lot CMD-WEB-1 : confirmer ou annuler passe par le service partagé avec la gestion web et l'assistant (ligne verrouillée, journal,
+     * courriel une seule fois) ; comme avant : toutes les lignes de l'écran (entretiens de Mémoires Vivantes compris), et un rendez-vous
+     * annulé peut être reconfirmé.
+     */
+    /** @return bool l'état a changé (un courriel est parti) */
+    private function changeStatus(Reservation $reservation, string $status): bool
+    {
+        if ($this->bookings === null) {
+            $reservation->setStatus($status);
+            $this->emProvider->getEntityManager()->flush();
+            $this->mailerService->sendStatusChangeEmail($reservation, $status);
+
+            return true;
+        }
+
+        return $this->bookings->changeStatus((int) $reservation->getId(), $status, false, (string) $this->getUser()?->getUserIdentifier(), 'fr', null, true)['changed'];
     }
 
     public function createEditForm(EntityDto $entityDto, KeyValueStore $formOptions, AdminContext $context): FormInterface

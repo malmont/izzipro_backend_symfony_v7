@@ -82,7 +82,9 @@ class SiteAssistantTest extends WebTestCase
         $this->assertSame('claude-sonnet-5-5', $payload['model']);
         $this->assertSame(['get_settings', 'get_readiness', 'open_screen', 'set_site_settings', 'get_domain_status', 'set_custom_domain', 'delegate_to_editor', 'estimate_product_dimensions', 'request_feature', 'set_entreprise_fields', 'get_orders_todo', 'get_order', 'get_help', 'get_controls', 'get_configuration_paths', 'refund_order', 'cancel_order', 'capture_order', 'resend_order_email', 'ship_order', 'propose_setup_batch',
             // lot IA-A : les outils sans module, ou d'un module actif sur le site de test
-            'get_storefront_checklist', 'get_modules', 'start_loss_exercise', 'toggle_module', 'start_module_trial', 'request_agency_assistance'], array_column($payload['tools'], 'name'), 'palier complet (mode démo de la plateforme)');
+            'get_storefront_checklist', 'get_modules', 'start_loss_exercise', 'toggle_module', 'start_module_trial', 'request_agency_assistance',
+            // lot CMD-WEB-1 : rendez-vous de la boutique (sans module)
+            'get_shop_bookings', 'propose_booking_status'], array_column($payload['tools'], 'name'), 'palier complet (mode démo de la plateforme)');
         $this->assertStringContainsString('CHEMINEMENT', $payload['system']);
         $second = FakeLandingAiClient::$requests[1];
         $this->assertSame('tool_result', $second['messages'][2]['content'][0]['type'], 'résultats d\'outils renvoyés à l\'IA');

@@ -193,6 +193,17 @@ personnelle au-delà du compte et de ce que le client écrit ou joint. Migration
 `category`, `customer_read_at` de `support_ticket`), script `scripts/migrate_all_v2_support_app.sh`. Essais :
 `tests/Functional/Support/SupportCustomerAppTest.php`.
 
+## Commandes et rendez-vous de la boutique pour l'agent (lot CMD-WEB-1, 20/11/2026)
+
+Hors du module, un compte Assistance seul n'ouvre QUE ces six routes (`SupportScopeSubscriber::OPEN`, et les règles précises de
+`security.yaml`) :
+- `GET /api/site/commandes/a-traiter` et `GET /api/site/commandes/{id}`, en vue limitée (sans identifiant Stripe, sans reçu, sans
+  contenu brut du journal, sans aucune action), y compris depuis un ticket par son `orderId` ;
+- la liste, la fiche, la confirmation et l'annulation des rendez-vous de la boutique (`/api/site/reservations-boutique`).
+
+Tout le reste garde 403 `SUPPORT_SCOPE_ONLY`, paiements compris ; `SupportRoleMatrixTest` le vérifie. Le contrat complet est dans
+`docs/contrat-web-commandes.md`.
+
 ## Décisions restantes (lot 2 et suivants)
 
 Prix et essai de l'offre « support » ; adresse de réception des courriels (domaine, MX, fournisseur : Mailgun, SES ou IMAP) ; le chat (lot 4)

@@ -294,7 +294,7 @@ class ExternalServicesAndAiQuotaGuardTest extends WebTestCase
     private function deleteCsrfToken(): string
     {
         $crawler = $this->crud(UserCrudController::class, 'index');
-        $token = (string) $crawler->filter('#delete-form input[name="token"]')->attr('value');
+        $token = (string) $crawler->filter('#action-confirmation-form input[name="token"]')->attr('value');
         $this->assertNotEmpty($token);
 
         return $token;

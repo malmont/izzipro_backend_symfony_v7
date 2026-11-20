@@ -154,14 +154,18 @@ services:
             - { name: kernel.event_listener, event: kernel.request, method: onKernelRequest, priority: 50 }
 
 
+    # Symfony 7 n'inscrit plus les abonnés Doctrine (étiquette doctrine.event_subscriber ignorée sans erreur) : les cinq
+    # gardes ci-dessous sont des écouteurs, une étiquette par événement. Les priorités gardent l'ordre de la 6.4 sur
+    # onFlush : produit utilisé (50), cache (40), conservation (30), abonnements (20), taxe (10), puis les écouteurs à 0.
     App\EventSubscriber\CacheInvalidationSubscriber:
         tags:
-            - { name: doctrine.event_subscriber }
+            - { name: doctrine.event_listener, event: onFlush, priority: 40 }
 
     # Cycle de vie des abonnements (console de pilotage, lot 3 bis, 04/11/2026) : changements de statut ou de période → SubscriptionStatusChangedEvent
     App\EventSubscriber\SubscriptionLifecycleSubscriber:
         tags:
-            - { name: doctrine.event_subscriber }
+            - { name: doctrine.event_listener, event: onFlush, priority: 20 }
+            - { name: doctrine.event_listener, event: postFlush, priority: 20 }
 
     # Garde de conservation des données de vente (A1, 30/10/2026) : suppression refusée, modifications observées ou refusées
     App\Services\ArchiveService\PosArchiveService:
@@ -170,17 +174,18 @@ services:
 
     App\EventSubscriber\RetentionGuardSubscriber:
         tags:
-            - { name: doctrine.event_subscriber }
+            - { name: doctrine.event_listener, event: onFlush, priority: 30 }
+            - { name: doctrine.event_listener, event: postPersist, priority: 30 }
 
     # Article ou variante avec une histoire (ART-SUPPR, 12/11/2026) : suppression refusée (PRODUCT_IN_USE), avant la garde de conservation
     App\EventSubscriber\ProductUsageGuardSubscriber:
         tags:
-            - { name: doctrine.event_subscriber, priority: 10 }
+            - { name: doctrine.event_listener, event: onFlush, priority: 50 }
 
     # Taxe utilisée (PAYS-1, 12/11/2026) : taux, libellé, code… figés et suppression refusée (TAX_IN_USE)
     App\EventSubscriber\TaxInUseGuardSubscriber:
         tags:
-            - { name: doctrine.event_subscriber }
+            - { name: doctrine.event_listener, event: onFlush, priority: 10 }
 
     App\Services\TenantConnectionManager:
         arguments:

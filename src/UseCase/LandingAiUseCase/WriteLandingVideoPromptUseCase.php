@@ -7,7 +7,7 @@ use App\Services\LandingAiService\LandingAiException;
 use App\Services\LandingAiService\LandingAiQuotaService;
 use App\Services\LandingAiService\LandingAiVideoPromptWriter;
 use App\Services\TenantConnectionProvider;
-use Symfony\Component\RateLimiter\RateLimiterFactory;
+use Symfony\Component\RateLimiter\RateLimiterFactoryInterface;
 
 /**
  * POST /api/landingpage-ai/video-prompt : contrôles, limite par minute (commune à l'assistant), réservation d'un
@@ -22,7 +22,7 @@ class WriteLandingVideoPromptUseCase
         private readonly LandingAiVideoPromptWriter $writer,
         private readonly LandingAiQuotaService $quota,
         private readonly TenantConnectionProvider $tenantProvider,
-        private readonly RateLimiterFactory $landingAiTenantLimiter
+        private readonly RateLimiterFactoryInterface $landingAiTenantLimiter
     ) {
     }
 

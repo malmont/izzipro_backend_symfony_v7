@@ -372,7 +372,7 @@ class InventoryMovementsLockTest extends WebTestCase
 
         // Suppression d'un ajustement libre : acceptée avec le jeton CSRF d'EasyAdmin
         $detailCrawler = $this->client->request('GET', $this->adminUrl(InventoryMovementsCrudController::class, 'detail', $freeId));
-        $token = (string) $detailCrawler->filter('#delete-form input[name="token"]')->attr('value');
+        $token = (string) $detailCrawler->filter('#action-confirmation-form input[name="token"]')->attr('value');
         $this->assertNotSame('', $token);
         $this->client->request('POST', $this->adminUrl(InventoryMovementsCrudController::class, 'delete', $freeId), ['token' => $token]);
         $this->assertSame(302, $this->client->getResponse()->getStatusCode());

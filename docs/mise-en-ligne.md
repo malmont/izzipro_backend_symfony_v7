@@ -37,7 +37,8 @@ de réécrire un cache.
 | Étape | Commande | Ce qu'on attend |
 |---|---|---|
 | 1. Jeton de contrôle | `ops/bascule/bascule.sh jeton` | « jeton écrit » (jamais affiché) |
-| 2. Cache du nouveau code | `ops/bascule/bascule.sh build <commit> <n>` | gardes passées, conteneur de services « OK », schéma « OK », nombre de routes |
+| 1 bis. Paquets, si `composer.lock` change | `ops/bascule/bascule.sh vendor <commit> <n>` | « vendor préparé : N paquet(s), N au composer.lock, 0 écart » (§ 2 bis) |
+| 2. Cache du nouveau code | `ops/bascule/bascule.sh build <commit> <n>` | gardes passées, conteneur de services « OK », schéma « OK », nombre de routes ; si `composer.lock` change : « public/bundles préparé : …, 0 lien ; manquants au manifeste d'EasyAdmin : aucun » |
 | 3. Photo « avant » | `ops/bascule/bascule.sh photo <nom>-avant` | aucune réponse 5xx ; tous les sites en 200 / 200 / 401 |
 | 4. Migration, si le lot en a une | `scripts/migrate_all_v2_<sujet>.sh` | toutes les bases, **avant** l'échange du code (§ 3) |
 | 5. Bascule | `ops/bascule/bascule.sh switch <commit> <n>` | « bascule en 0,x s », worker des courriels vivant, lecture authentifiée 200, 2 clés |
@@ -50,6 +51,33 @@ de réécrire un cache.
 Puis : compte rendu **court** (5 à 10 lignes : ce qui change, chiffres clés, ce qui reste à faire, décisions à prendre ; le détail va
 dans la fiche du lot), et les suites propres au lot (minuteur à installer, worker à relancer, droits à accorder). Une commande
 `systemctl enable` ou `disable` n'est jamais lancée par une session : elle est donnée au propriétaire.
+
+### 2 bis. Un `composer.lock` changé : l'étape `vendor` (20/11/2026, préparée au lot TACHES-0, livrée au train 122 avec Symfony 7.4)
+
+La construction du cache monte le `vendor/` en lecture seule. Un paquet ajouté ou changé doit donc être prêt AVANT `build`, sans toucher
+au vendor en ligne.
+- `vendor <commit> <n>` copie le vendor en ligne dans `var/vendor_stage<n>`, dans un conteneur provisoire de la même image, en root
+  comme lui. Il y lance `composer install --no-interaction --no-scripts --no-plugins` avec les options d'aujourd'hui : paquets de dev
+  compris, car `APP_ENV=dev` charge DebugBundle, WebProfilerBundle et MakerBundle et les essais lancent phpunit depuis ce vendor ;
+  classmap optimisée du `composer.json`. Il vérifie ensuite que le vendor préparé correspond au `composer.lock` du commit, paquet par
+  paquet. Le code du commit est monté en lecture seule (la classmap de son `src/`).
+- `build` refuse un `composer.lock` changé sans vendor préparé, et construit le cache avec ce vendor.
+- `build` prépare aussi `public/bundles` (ignoré par git) pour ce vendor : `assets:install` en COPIE, jamais en liens, dans
+  l'environnement du site, posé dans `var/bundles_stage<n>`. Il vérifie que chaque fichier du manifeste d'EasyAdmin du vendor préparé
+  y est. Raison (train 123, constat de la relecture des pertes) : EasyAdmin lit son manifeste dans le vendor et demande des fichiers à
+  empreinte (`app.<empreinte>.js`) ; un vendor changé avec l'ancien `public/bundles` laisse tout `/admin` sans style ni scripts (404),
+  et `composer install --no-scripts` ne lance pas `assets:install`.
+- `switch` échange d'abord le vendor puis `public/bundles` (échanges atomiques des deux dossiers, en root : aucun instant sans vendor
+  ni sans fichiers publics), puis le code et le cache. Si le second échange échoue, le vendor est remis aussitôt. L'ancien vendor
+  reste dans `var/vendor_stage<n>`, l'ancien `public/bundles` dans `var/bundles_stage<n>`.
+- `retour` les remet par les mêmes échanges, quand le `composer.lock` revient en arrière.
+- Après `switch` et `retour`, le contrôle des fichiers d'EasyAdmin demande au serveur web chaque fichier du manifeste du vendor EN
+  LIGNE (celui que lisent les pages `/admin`) : un seul hors 200, retour arrière immédiat. Une page `/admin` anonyme renvoie à la page
+  de connexion, qui ne charge pas ces fichiers : le contrôle passe donc par le manifeste.
+- `essai-echange` : essai à blanc des deux échanges dans le conteneur en ligne, sur des dossiers d'essai placés comme les vrais
+  (bascule, retour, second échange en échec avec vendor remis), puis le contrôle des fichiers d'EasyAdmin. À lancer avant toute
+  bascule qui change le `composer.lock`.
+- Après la bascule, les workers repartent sur le nouveau vendor : `switch` les arrête déjà (`messenger:stop-workers`).
 
 **Repère `{{unique}}`** (16/11/2026) : dans le corps d'une lecture `POST`, il devient une valeur neuve à chaque photo. Une route limitée
 par adresse (« mot de passe oublié » : 3 par heure) ne bute ainsi pas sur les passages de la photo elle-même.

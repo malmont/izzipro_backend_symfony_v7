@@ -114,6 +114,8 @@ class GroupTransferService
 
     /** Plus longue recherche dans le catalogue d'une boutique (millisecondes), comme une boutique de « Toutes les boutiques » */
     public const SEARCH_TIMEOUT_MS = 3000;
+    /** @var array<int, array<string, string>> lot G-5c : noms des boutiques par groupe, lus une fois par requête */
+    private array $siteNames = [];
 
     /**
      * Le directeur cherche les VARIANTES d'une boutique du groupe (la source d'un transfert), au siège : nom, référence, code-barres, stock
@@ -633,12 +635,72 @@ class GroupTransferService
             throw new GroupException('TRANSFER_NOT_FOUND', 404, 'Transfert introuvable.');
         }
         $iso = static fn (mixed $at): ?string => $at === null ? null : (new \DateTimeImmutable((string) $at, new \DateTimeZone('UTC')))->format(\DATE_ATOM);
-        $out = ['id' => (int) $t['id'], 'source' => (string) $t['source_tenant_code'], 'target' => (string) $t['target_tenant_code'], 'state' => (string) $t['state'],
+        $out = ['id' => (int) $t['id'], 'source' => (string) $t['source_tenant_code'], 'target' => (string) $t['target_tenant_code'],
+            'sourceName' => $this->siteName((int) $t['group_id'], (string) $t['source_tenant_code']), 'targetName' => $this->siteName((int) $t['group_id'], (string) $t['target_tenant_code']), 'state' => (string) $t['state'],
             'currency' => $t['currency'], 'requestedAt' => $iso($t['requested_at']), 'sentAt' => $iso($t['sent_at']), 'receivedAt' => $iso($t['received_at']),
             'cancelledAt' => $iso($t['cancelled_at']), 'partlyReceived' => (bool) ($t['_partly'] ?? false), 'targetOrderId' => $t['target_commande_id'] === null ? null : (int) $t['target_commande_id']];
         if ($withLines) {
+            $lines = $this->transfers->lines((int) $t['id']);
+            $names = $this->lineNames((string) $t['source_tenant_code'], array_map(static fn (array $l): int => (int) $l['source_variant_id'], $lines));
             $out['lines'] = array_map(static fn (array $l): array => ['line' => (int) $l['line_no'], 'sourceVariantId' => (int) $l['source_variant_id'], 'targetVariantId' => $l['target_variant_id'] === null ? null : (int) $l['target_variant_id'],
-                'quantity' => (int) $l['quantity']] + ($withCost ? ['unitCostCents' => $l['unit_cost_cents'] === null ? null : (int) $l['unit_cost_cents']] : []), $this->transfers->lines((int) $t['id']));
+                'quantity' => (int) $l['quantity']] + ($names[(int) $l['source_variant_id']] ?? ['product' => null, 'variant' => null])
+                + ($withCost ? ['unitCostCents' => $l['unit_cost_cents'] === null ? null : (int) $l['unit_cost_cents']] : []), $lines);
+        }
+
+        return $out;
+    }
+
+    /** Lot G-5c : le nom du site (base maître, boutiques du groupe), le code pour une boutique sortie du groupe ou sans nom */
+    private function siteName(int $groupId, string $code): string
+    {
+        if (!isset($this->siteNames[$groupId])) {
+            $this->siteNames[$groupId] = [];
+            foreach ($this->groups->shopDatabases($groupId) as $row) {
+                $this->siteNames[$groupId][(string) $row['tenant_code']] = (string) ($row['name'] ?? '');
+            }
+        }
+        $name = $this->siteNames[$groupId][$code] ?? '';
+
+        return $name !== '' ? $name : $code;
+    }
+
+    /**
+     * Lot G-5c (20/11/2026, demande de MAUI par le chef) : le nom de l'article et la variante (taille, couleur) de chaque ligne, lus dans la base de
+     * la SOURCE (l'administrateur voit ce qu'il envoie ; même forme que les lignes de commande). Lecture seule et bornée ; une base injoignable ou
+     * une variante supprimée donnent `null`, jamais une panne de la liste. Aucun coût.
+     *
+     * @param list<int> $variantIds
+     * @return array<int, array{product: array{id: int, name: string}, variant: array{id: int, size: ?string, color: ?string}}>
+     */
+    private function lineNames(string $source, array $variantIds): array
+    {
+        $ids = array_values(array_unique(array_filter($variantIds, static fn (int $id): bool => $id > 0)));
+        $db = $ids === [] ? null : ($this->databases->tenant($source)['dbname'] ?? null);
+        if ($db === null) {
+            return [];
+        }
+        try {
+            $pdo = $this->databases->pdo((string) $db);
+            $pdo->beginTransaction();
+            try {
+                $pdo->exec('SET TRANSACTION READ ONLY');
+                $pdo->exec('SET LOCAL statement_timeout = ' . self::SEARCH_TIMEOUT_MS);
+                $stmt = $pdo->prepare('SELECT v.id AS variant_id, p.id AS product_id, p.name, s.name AS size, c.name AS color FROM product_variant v JOIN product p ON p.id = v.product_id
+                    LEFT JOIN size s ON s.id = v.size_id LEFT JOIN color c ON c.id = v.color_id WHERE v.id IN (' . implode(',', array_fill(0, count($ids), '?')) . ')');
+                $stmt->execute($ids);
+                $rows = $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+            } finally {
+                $pdo->inTransaction() && $pdo->rollBack();
+            }
+        } catch (\Throwable $e) {
+            $this->logger->warning('[groupe] noms des lignes d\'un transfert non lus', ['source' => $source, 'error' => $e::class]);
+
+            return [];
+        }
+        $out = [];
+        foreach ($rows as $r) {
+            $out[(int) $r['variant_id']] = ['product' => ['id' => (int) $r['product_id'], 'name' => (string) $r['name']],
+                'variant' => ['id' => (int) $r['variant_id'], 'size' => $r['size'] !== null ? (string) $r['size'] : null, 'color' => $r['color'] !== null ? (string) $r['color'] : null]];
         }
 
         return $out;

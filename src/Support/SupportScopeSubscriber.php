@@ -22,6 +22,16 @@ class SupportScopeSubscriber implements EventSubscriberInterface
     public const CODE = 'SUPPORT_SCOPE_ONLY';
     /** Rôles qui donnent un autre accès que l'assistance : un compte qui en a un n'est pas « Assistance seul » */
     private const OTHER_ROLES = ['ROLE_ADMIN', 'ROLE_SUPER_ADMIN', 'ROLE_USER_INTERNET', 'ROLE_USER_POS', 'ROLE_POS_MANAGER', 'ROLE_COMPANY', 'ROLE_CONSULTANT'];
+    /**
+     * Lot CMD-WEB-1 (20/11/2026, matrice validée par le chef) : hors du module, les SEULES routes ouvertes au compte Assistance, [méthode,
+     * chemin exact] : les commandes en lecture (vue limitée, `OrderDeskView`), y compris depuis un ticket ; les rendez-vous de la boutique
+     * (lire, confirmer, annuler : son profil). Toute autre route garde le refus SUPPORT_SCOPE_ONLY.
+     */
+    public const OPEN = [
+        ['GET', '#^/api/site/commandes/(a-traiter|\d+)\z#'],
+        ['GET', '#^/api/site/reservations-boutique(/\d+)?\z#'],
+        ['POST', '#^/api/site/reservations-boutique/\d+/(confirmer|annuler)\z#'],
+    ];
 
     public function __construct(private readonly TokenStorageInterface $tokens, #[Autowire(service: 'security.access_map')] private readonly AccessMapInterface $accessMap)
     {
@@ -41,6 +51,11 @@ class SupportScopeSubscriber implements EventSubscriberInterface
         }
         if (!self::supportOnly($this->tokens->getToken()?->getRoleNames() ?? [])) {
             return;
+        }
+        foreach (self::OPEN as [$method, $pattern]) {
+            if ($request->getMethod() === $method && preg_match($pattern, $path)) {
+                return; // lot CMD-WEB-1 : la règle d'accès de security.yaml exige encore ROLE_SUPPORT ou ROLE_ADMIN
+            }
         }
         if ($path === \App\Services\Screens\ScreenRegistry::CONTEXTS_PATH) {
             return; // lot AG-3a : le compte lit SES contextes (son mode, ses sites, ses écrans) ; rien d'autre ne s'ouvre

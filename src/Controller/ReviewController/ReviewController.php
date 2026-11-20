@@ -11,7 +11,7 @@ use App\UseCase\ReviewUseCase\SubmitReviewUseCase;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
-use Symfony\Component\RateLimiter\RateLimiterFactory;
+use Symfony\Component\RateLimiter\RateLimiterFactoryInterface;
 use Symfony\Component\Routing\Annotation\Route;
 
 /**
@@ -27,7 +27,7 @@ class ReviewController extends AbstractController
         private readonly GetReviewEligibilityUseCase $eligibility,
         private readonly SubmitReviewUseCase $submit,
         private readonly ManageOwnReviewUseCase $own,
-        private readonly RateLimiterFactory $reviewSubmitLimiter
+        private readonly RateLimiterFactoryInterface $reviewSubmitLimiter
     ) {
     }
 

@@ -44,6 +44,8 @@ class GroupWritesClassificationTest extends KernelTestCase
         // lot ABO-1 : gestes du quotidien sur un abonnement
         'get_expiring_rights' => 'lecture', 'propose_use' => 'commande', 'propose_gift' => 'commande', 'propose_pause' => 'commande', 'propose_resume' => 'commande',
         'propose_cancel_subscription' => 'argent',
+        // lot CMD-WEB-1 : rendez-vous de la boutique
+        'get_shop_bookings' => 'lecture', 'propose_booking_status' => 'commande',
     ];
 
     public function testEveryWriteEveryScreenAndEveryAssistantToolIsClassifiedForTheDirector(): void

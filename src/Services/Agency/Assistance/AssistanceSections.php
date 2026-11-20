@@ -51,7 +51,10 @@ final class AssistanceSections
             ['POST', '/api/shipping/parcels'],
         ],
         'clients' => [
-            // (confirmer un rendez-vous n'est pas permis : la route exige un compte du site)
+            // (confirmer un rendez-vous par /api/reservations n'est pas permis : la route exige un compte du site) ; lot CMD-WEB-1 : les
+            // rendez-vous de la BOUTIQUE se confirment et s'annulent par leurs routes de la gestion web (geste d'exploitation, matrice du chef)
+            ['POST', '/api/site/reservations-boutique/{id}/confirmer'],
+            ['POST', '/api/site/reservations-boutique/{id}/annuler'],
             ['PUT', '/api/contacts/{id}'],
             ['PATCH', '/api/form-submissions/{id}'],
         ],

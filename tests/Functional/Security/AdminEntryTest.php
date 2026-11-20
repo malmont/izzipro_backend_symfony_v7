@@ -454,9 +454,13 @@ class AdminEntryTest extends WebTestCase
         }
         $color = rawurlencode('App\\Controller\\Admin\\ColorCrudController');
         $list = $this->page('GET', '/admin?crudAction=index&crudControllerFqcn=' . $color, MV_TEST_TENANT2_HOST);
-        $token = (string) (new \Symfony\Component\DomCrawler\Crawler($list))->filter('[data-action-name="batchDelete"]')->attr('data-action-csrf-token');
+        $button = (new \Symfony\Component\DomCrawler\Crawler($list))->filter('[data-action-name="batchDelete"]');
+        $token = (string) $button->attr('data-action-csrf-token');
         $this->assertNotSame('', $token);
-        $batch = fn (string $entity, array $ids): Response => $this->batch($color, $entity, $ids, $token);
+        // l'adresse de l'action telle que le navigateur l'envoie (EasyAdmin 4.29 y lit l'écran d'origine)
+        $url = html_entity_decode((string) $button->attr('data-action-url'));
+        $this->assertStringContainsString('crudAction=batchDelete', $url);
+        $batch = fn (string $entity, array $ids): Response => $this->batch($url, $entity, $ids, $token);
         $this->assertSame(403, $batch('App\\Entity\\Size', $colors)->getStatusCode(), 'une autre entité que celle de l\'écran');
         $this->assertSame(2, (int) $this->pdo(MV_TEST_TENANT2_DB)->query('SELECT COUNT(*) FROM color WHERE id IN (' . implode(',', $colors) . ')')->fetchColumn());
         $this->assertSame(302, $batch('App\\Entity\\Color', $colors)->getStatusCode());
@@ -464,10 +468,10 @@ class AdminEntryTest extends WebTestCase
     }
 
     /** @param list<int> $ids */
-    private function batch(string $controller, string $entity, array $ids, string $token): Response
+    private function batch(string $url, string $entity, array $ids, string $token): Response
     {
-        $this->client->request('POST', 'https://' . MV_TEST_TENANT2_HOST . '/admin?crudAction=batchDelete&crudControllerFqcn=' . $controller,
-            ['batchActionName' => 'batchDelete', 'entityFqcn' => $entity, 'batchActionEntityIds' => $ids, 'batchActionCsrfToken' => $token, 'batchActionUrl' => '/admin'], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT2_HOST]);
+        $this->client->request('POST', str_starts_with($url, 'http') ? $url : 'https://' . MV_TEST_TENANT2_HOST . $url,
+            ['batchActionName' => 'batchDelete', 'entityFqcn' => $entity, 'batchActionEntityIds' => $ids, 'batchActionCsrfToken' => $token, 'batchActionUrl' => $url], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT2_HOST]);
 
         return $this->client->getResponse();
     }

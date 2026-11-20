@@ -106,7 +106,7 @@ class UserCrudController extends BaseTenantCrudController
         return parent::configureFilters($filters)->add(ApplicationFilter::new($this->memberships));
     }
 
-    public function edit(\EasyCorp\Bundle\EasyAdminBundle\Context\AdminContext $context)
+    public function edit(\EasyCorp\Bundle\EasyAdminBundle\Context\AdminContext $context): \EasyCorp\Bundle\EasyAdminBundle\Config\KeyValueStore|\Symfony\Component\HttpFoundation\Response
     {
         $user = $context->getEntity()->getInstance();
         if ($user instanceof User) {

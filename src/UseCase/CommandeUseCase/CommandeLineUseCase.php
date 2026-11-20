@@ -34,7 +34,9 @@ class CommandeLineUseCase
     {
         [$lines, $total] = $this->emProvider->getEntityManager()->getRepository(CommandeLine::class)->toReceive($page, $limit);
 
-        return [array_map(fn (CommandeLine $l) => CommandeProductAttachmentService::lineArray($l) + ['commande' => ['id' => $l->getCommande()->getId(), 'name' => $l->getCommande()->getName(), 'date' => $l->getCommande()->getDate()?->format('Y-m-d H:i:s')]], $lines), $total];
+        // lot G-5c : `groupTransfer`, la commande d'arrivée d'un transfert du groupe (verrouillée ; même valeur que le DTO de la commande)
+        return [array_map(fn (CommandeLine $l) => CommandeProductAttachmentService::lineArray($l) + ['commande' => ['id' => $l->getCommande()->getId(), 'name' => $l->getCommande()->getName(), 'date' => $l->getCommande()->getDate()?->format('Y-m-d H:i:s'),
+            'groupTransfer' => $l->getCommande()->isGroupTransfer()]], $lines), $total];
     }
 
     /** @param array<string, mixed> $data */

@@ -52,4 +52,11 @@ class PaymentService
             ->getQuery()
             ->getResult();
     }
+    /** Lot CMD-WEB-1 : une page des paiements (`null` : toutes les sources), même fenêtre de jours que la liste entière */
+    public function getPaymentsPageByOrderSource(?int $orderSourceId, ?int $days, int $offset, int $limit): array
+    {
+        $since = $days ? (new DateTime())->modify("-$days days") : null;
+
+        return $this->emProvider->getEntityManager()->getRepository(Payments::class)->pageBySource($orderSourceId, $since, $offset, $limit);
+    }
 }

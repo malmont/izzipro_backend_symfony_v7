@@ -5,7 +5,7 @@ Ce qui est commun à tout le backend. Chaque module a sa fiche (voir « Modules 
 
 ## En bref
 
-- **Symfony 6.4, PHP 8.3, PostgreSQL 15, Redis 7**, dans Docker (`docker-compose.yml`). Une seule application sert
+- **Symfony 7.4 (LTS), PHP 8.3, PostgreSQL 15, Redis 7**, API Platform 3.4, Doctrine ORM 2.20, EasyAdmin 4.29, dans Docker (`docker-compose.yml`). Une seule application sert
   **plusieurs clients (tenants)**, chacun avec **sa propre base**.
 - Frontend : autre dépôt (Next.js, `Izzipro_next`) ; il appelle `/api/*` avec l'en-tête `X-Tenant-Host`. Sa doc :
   `AGENTS.md` et `docs/architecture.md` de ce dépôt-là.
@@ -371,6 +371,17 @@ boutique (`templates/`), dépôts qui étendent `ServiceEntityRepository` (45, s
 - **JSON libre** (compositions, réglages) : décoder en objets (`json_decode($json, false)`) et réencoder avec
   `JSON_PRESERVE_ZERO_FRACTION`, sinon `{}` devient `[]` et `1.0` devient `1`.
 - **Langue** : textes et commentaires en français ; noms de classes et de méthodes en anglais.
+- **Écouteurs Doctrine** (montée Symfony 7.4, 20/11/2026) : `#[AsDoctrineListener(event: …)]` ou une étiquette
+  `doctrine.event_listener` PAR événement (`config/services.yaml`), jamais `doctrine.event_subscriber` : Symfony 7
+  ignore cette étiquette SANS ERREUR (le conteneur se construit, la garde ne tourne plus). L'ordre sur `onFlush` se
+  règle par `priority`. Garde-fou : `tests/Functional/Doctrine/DoctrineGuardsWiringTest.php`.
+- **Attributs seulement** (Symfony 7.4) : contraintes, groupes et métadonnées en attributs PHP (`#[Assert\…]`, `#[Groups]`…) ;
+  une annotation en commentaire de doc n'est plus lue, sans erreur (un `PUT /api/landingpage-settings` « {} » vidait la landing).
+- **Sérialisation sans groupes** (Symfony 7.4) : une méthode `isActive()` donne la clé `active` (la 6.4 gardait `isActive`
+  quand la propriété `$isActive` existait). Aucune réponse ne sérialise d'entité sans groupes aujourd'hui (mesuré le
+  20/11/2026) : une nouvelle réponse passe par un DTO ou un tableau, jamais par l'entité.
+- **Refus 403 des API** : `ApiExceptionSubscriber` rend « Accès refusé. » pour tout message de Symfony qui commence par
+  « Access Denied. » (depuis la 7.3, il nomme les rôles exigés : jamais rendus au client).
 
 ### Dates et heures dans EasyAdmin (lot EA-FUSEAU, 12/11/2026)
 

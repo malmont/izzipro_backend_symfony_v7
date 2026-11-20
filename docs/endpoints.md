@@ -261,7 +261,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (734)
+## Boutique et commun (728)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -849,20 +849,8 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | DELETE | `/api/site-content/demo` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\SiteContentController\SiteContentController::deleteDemo` |
 | GET | `/api/site-content/demo` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\SiteContentController\SiteContentController::demo` |
 | POST | `/api/site-content/seed` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\SiteContentController\SiteContentController::seed` |
-| POST | `/api/site/abonnements/formules/apercu` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Abo\Controller\AboCatalogController::preview` |
 | GET | `/api/site/abonnements/formules/{id}/abonnes` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Abo\Controller\AboFollowUpController::subscribers` |
-| POST | `/api/site/abonnements/formules/{id}/archiver` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Abo\Controller\AboCatalogController::archive` |
-| PUT | `/api/site/abonnements/formules/{id}/prestations` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Abo\Controller\AboCatalogController::setBenefits` |
-| POST | `/api/site/abonnements/formules/{id}/reactiver` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Abo\Controller\AboCatalogController::reactivate` |
-| DELETE | `/api/site/abonnements/formules/{id}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Abo\Controller\AboCatalogController::delete` |
-| GET | `/api/site/abonnements/formules/{id}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Abo\Controller\AboCatalogController::plan` |
-| PATCH | `/api/site/abonnements/formules/{id}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Abo\Controller\AboCatalogController::update` |
 | GET | `/api/site/abonnements/formules` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Abo\Controller\AboFollowUpController::plans` |
-| POST | `/api/site/abonnements/formules` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Abo\Controller\AboCatalogController::create` |
-| DELETE | `/api/site/abonnements/prestations/{id}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Abo\Controller\AboCatalogController::deleteBenefit` |
-| PATCH | `/api/site/abonnements/prestations/{id}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Abo\Controller\AboCatalogController::updateBenefit` |
-| GET | `/api/site/abonnements/prestations` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Abo\Controller\AboCatalogController::benefits` |
-| POST | `/api/site/abonnements/prestations` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Abo\Controller\AboCatalogController::createBenefit` |
 | POST | `/api/site/abonnements/{id}/droits` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Abo\Controller\AboFollowUpController::gift` |
 | POST | `/api/site/abonnements/{id}/pause` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Abo\Controller\AboFollowUpController::pause` |
 | POST | `/api/site/abonnements/{id}/reprise` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Abo\Controller\AboFollowUpController::resume` |
@@ -881,6 +869,8 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | POST | `/api/site/charter/document` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\SiteFeaturesController\SiteCharterController::document` |
 | GET | `/api/site/charter` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\SiteFeaturesController\SiteCharterController::show` |
 | PUT | `/api/site/charter` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\SiteFeaturesController\SiteCharterController::update` |
+| GET | `/api/site/commandes/a-traiter` | ROLE_SUPPORT ou ROLE_ADMIN | `Controller\SiteFeaturesController\SiteOrderDeskController::todo` |
+| GET | `/api/site/commandes/{id}` | ROLE_SUPPORT ou ROLE_ADMIN | `Controller\SiteFeaturesController\SiteOrderDeskController::sheet` |
 | POST | `/api/site/domain/check` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\SiteFeaturesController\SiteDomainController::check` |
 | DELETE | `/api/site/domain` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\SiteFeaturesController\SiteDomainController::delete` |
 | GET | `/api/site/domain` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\SiteFeaturesController\SiteDomainController::show` |
@@ -914,6 +904,10 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/api/site/imports` | ROLE_ADMIN | `Import\Controller\SiteImportController::list` |
 | POST | `/api/site/imports` | ROLE_ADMIN | `Import\Controller\SiteImportController::upload` |
 | GET | `/api/site/readiness` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\SiteFeaturesController\SiteReadinessController::show` |
+| POST | `/api/site/reservations-boutique/{id}/annuler` | ROLE_SUPPORT ou ROLE_ADMIN | `Controller\SiteFeaturesController\SiteShopBookingController::cancel` |
+| POST | `/api/site/reservations-boutique/{id}/confirmer` | ROLE_SUPPORT ou ROLE_ADMIN | `Controller\SiteFeaturesController\SiteShopBookingController::confirm` |
+| GET | `/api/site/reservations-boutique/{id}` | ROLE_SUPPORT ou ROLE_ADMIN | `Controller\SiteFeaturesController\SiteShopBookingController::one` |
+| GET | `/api/site/reservations-boutique` | ROLE_SUPPORT ou ROLE_ADMIN | `Controller\SiteFeaturesController\SiteShopBookingController::list` |
 | GET | `/api/site/shipping` | ROLE_ADMIN | `Controller\SiteFeaturesController\SiteShippingController::index` |
 | GET | `/api/site/storefront/checklist` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\StorefrontController\StorefrontController::checklist` |
 | POST | `/api/site/storefront/close` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\StorefrontController\StorefrontController::close` |
@@ -1040,7 +1034,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/shared-media` | aucune règle | `Controller\SharedMediaApiController\SharedMediaApiController::list` |
 | GET, HEAD | `/uploads/{path}` | aucune règle | `Controller\Storage\BucketSimulatorController::serve` |
 
-## Administration (EasyAdmin) (131)
+## Administration (EasyAdmin) (130)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -1113,7 +1107,6 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | POST | `/admin/plateforme/alertes/essai` | ROLE_SUPER_ADMIN | `Controller\Admin\PlatformConsoleAdminController::alertEmailTest` |
 | POST | `/admin/plateforme/alertes` | ROLE_SUPER_ADMIN | `Controller\Admin\PlatformConsoleAdminController::alertEmail` |
 | POST | `/admin/plateforme/boutique` | ROLE_SUPER_ADMIN | `Controller\Admin\PlatformConsoleAdminController::shop` |
-| POST | `/admin/plateforme/commission-abonnements` | ROLE_SUPER_ADMIN | `Controller\Admin\PlatformConsoleAdminController::subscriptionFee` |
 | POST | `/admin/plateforme/demande/{id}/{decision}` | ROLE_SUPER_ADMIN | `Controller\Admin\PlatformConsoleAdminController::request` |
 | POST | `/admin/plateforme/droit/{id}/{action}` | ROLE_SUPER_ADMIN | `Controller\Admin\PlatformConsoleAdminController::act` |
 | POST | `/admin/plateforme/expedition/{id}/annuler` | ROLE_SUPER_ADMIN | `Controller\Admin\PlatformConsoleAdminController::lossShipmentCancel` |
