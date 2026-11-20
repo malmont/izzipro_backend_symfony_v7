@@ -15,7 +15,6 @@ use Symfony\Component\Console\Attribute\AsCommand;
 #[AsCommand(name: 'app:tenant:migrate-db', description: 'Migre un seul tenant (nom de la base).')]
 class MigrateTenantCommand extends Command
 {
-    protected static $defaultName = 'app:tenant:migrate-db';
     private TenantConnectionManager $manager;
 
     public function __construct(TenantConnectionManager $manager)

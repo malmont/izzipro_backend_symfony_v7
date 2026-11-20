@@ -69,7 +69,7 @@ class TenantController extends AbstractController
      * frontend web, qui n'est pas modifiée. Pas de redirection vers la création d'un site.
      */
     #[Route('/api/tenant/check-mobile', name: 'api_tenant_check_mobile', methods: ['GET'])]
-    public function checkMobile(Request $request, TenantConnectionManager $tenantManager, \App\Services\TenantPublicHostResolver $hosts, \Symfony\Component\RateLimiter\RateLimiterFactory $tenantShortCodeIpLimiter): JsonResponse
+    public function checkMobile(Request $request, TenantConnectionManager $tenantManager, \App\Services\TenantPublicHostResolver $hosts, \Symfony\Component\RateLimiter\RateLimiterFactoryInterface $tenantShortCodeIpLimiter): JsonResponse
     {
         $raw = (string) $request->headers->get('X-Tenant-Host', '');
         $input = strtolower(trim($raw));

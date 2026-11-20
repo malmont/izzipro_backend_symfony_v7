@@ -6,6 +6,7 @@ use App\Entity\User;
 use App\Security\TeamRoles;
 use Symfony\Component\Security\Core\Authentication\Token\TokenInterface;
 use Symfony\Component\Security\Core\Authorization\Voter\Voter;
+use Symfony\Component\Security\Core\Authorization\Voter\Vote;
 
 /**
  * Attribut `BOUSSOLE_TEAM` (lot BOUSSOLE-CONSEILLER, 13/11/2026) : l'utilisateur travaille pour la Boussole ESG du site, conseiller
@@ -21,7 +22,7 @@ final class BoussoleTeamVoter extends Voter
         return $attribute === self::ATTRIBUTE;
     }
 
-    protected function voteOnAttribute(string $attribute, mixed $subject, TokenInterface $token): bool
+    protected function voteOnAttribute(string $attribute, mixed $subject, TokenInterface $token, ?Vote $vote = null): bool
     {
         return self::isTeam($token->getUser());
     }

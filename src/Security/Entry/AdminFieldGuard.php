@@ -9,6 +9,7 @@ use EasyCorp\Bundle\EasyAdminBundle\Provider\AdminContextProvider;
 use EasyCorp\Bundle\EasyAdminBundle\Security\AuthorizationChecker;
 use EasyCorp\Bundle\EasyAdminBundle\Security\Permission;
 use Symfony\Bundle\SecurityBundle\Security;
+use Symfony\Component\Security\Core\Authorization\AccessDecision;
 use Symfony\Component\DependencyInjection\Attribute\AsDecorator;
 use Symfony\Component\DependencyInjection\Attribute\AutowireDecorated;
 use Symfony\Component\Security\Core\Authorization\AuthorizationCheckerInterface;
@@ -55,7 +56,7 @@ final class AdminFieldGuard implements AuthorizationCheckerInterface
     ) {
     }
 
-    public function isGranted(mixed $attribute, mixed $subject = null): bool
+    public function isGranted(mixed $attribute, mixed $subject = null, ?AccessDecision $accessDecision = null): bool
     {
         // lot G-1, relecture neuve (passe 2) : le directeur d'un groupe ne voit ni ne règle le terminal de paiement Stripe ni la devise de la fiche
         if ($attribute === Permission::EA_VIEW_FIELD && $subject instanceof FieldDto && $this->security->getUser() instanceof GroupOperator
@@ -70,7 +71,7 @@ final class AdminFieldGuard implements AuthorizationCheckerInterface
             }
         }
 
-        return $this->inner->isGranted($attribute, $subject);
+        return $this->inner->isGranted($attribute, $subject, $accessDecision);
     }
 
     private function screen(): ?string

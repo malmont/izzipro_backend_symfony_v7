@@ -120,7 +120,7 @@ class InventoryMovementsCrudController extends BaseTenantCrudController
         return $fields;
     }
 
-    public function edit(AdminContext $context)
+    public function edit(AdminContext $context): \EasyCorp\Bundle\EasyAdminBundle\Config\KeyValueStore|\Symfony\Component\HttpFoundation\Response
     {
         $entity = $context->getEntity()->getInstance();
         if ($entity instanceof InventoryMovements) {
@@ -130,7 +130,7 @@ class InventoryMovementsCrudController extends BaseTenantCrudController
         return parent::edit($context);
     }
 
-    public function delete(AdminContext $context)
+    public function delete(AdminContext $context): \EasyCorp\Bundle\EasyAdminBundle\Config\KeyValueStore|\Symfony\Component\HttpFoundation\Response
     {
         $entity = $context->getEntity()->getInstance();
         if ($entity instanceof InventoryMovements) {

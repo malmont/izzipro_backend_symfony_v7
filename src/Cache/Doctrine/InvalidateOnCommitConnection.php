@@ -14,7 +14,7 @@ final class InvalidateOnCommitConnection extends AbstractConnectionMiddleware
         parent::__construct($wrappedConnection);
     }
 
-    /** {@inheritDoc} */
+    /** @return bool */
     public function commit()
     {
         $result = parent::commit();
@@ -23,7 +23,7 @@ final class InvalidateOnCommitConnection extends AbstractConnectionMiddleware
         return $result;
     }
 
-    /** {@inheritDoc} */
+    /** @return bool */
     public function rollBack()
     {
         $result = parent::rollBack();
