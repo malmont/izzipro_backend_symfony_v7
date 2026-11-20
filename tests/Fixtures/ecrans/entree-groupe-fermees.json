@@ -251,6 +251,7 @@
     "payment PATCH /api/gestion/prets/1",
     "payment PATCH /api/site/abonnements/formules/1",
     "payment PATCH /api/site/abonnements/prestations/1",
+    "payment PATCH /api/site/abonnements/produits/1",
     "payment POST /admin/orders/1/etiquette",
     "payment POST /admin/pos/stripe",
     "payment POST /admin/stripe/connect",
