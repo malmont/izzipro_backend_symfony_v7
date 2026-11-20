@@ -1,6 +1,6 @@
 # app_v2 — carte du backend pour les agents
 
-Backend Symfony 6.4 multi-tenant (une base par client), API du frontend Next.js `Izzipro_next` (autre dépôt).
+Backend Symfony 7.4 multi-tenant (une base par client), API du frontend Next.js `Izzipro_next` (autre dépôt).
 Lire la fiche utile ci-dessous, puis aller droit aux fichiers qu'elle cite : ne pas parcourir tout le code.
 
 ## Où chercher

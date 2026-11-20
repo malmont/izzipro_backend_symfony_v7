@@ -2,7 +2,7 @@
 
 ## 📖 Overview
 
-This is a robust, multi-tenant E-commerce and Point of Sale (POS) application built with **Symfony 6.4**. It leverages **API Platform** for exposing a rich set of REST/GraphQL APIs and uses a Clean Architecture-inspired pattern with distinct **Use Cases** and **Services**.
+This is a robust, multi-tenant E-commerce and Point of Sale (POS) application built with **Symfony 7.4**. It leverages **API Platform** for exposing a rich set of REST/GraphQL APIs and uses a Clean Architecture-inspired pattern with distinct **Use Cases** and **Services**.
 
 The application is designed to handle complex business logic including:
 -   **Multi-tenancy**: Dynamic database switching per tenant.
@@ -53,7 +53,7 @@ The application uses a dynamic client connection listener strategy:
 
 ## 🛠 Technology Stack
 
--   **Framework**: Symfony 6.4
+-   **Framework**: Symfony 7.4 (LTS)
 -   **API**: API Platform 3
 -   **ORM**: Doctrine ORM
 -   **Database**: PostgreSQL (Driver `pdo_pgsql`)
