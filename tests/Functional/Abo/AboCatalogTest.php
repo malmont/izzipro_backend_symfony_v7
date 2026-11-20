@@ -101,7 +101,9 @@ class AboCatalogTest extends WebTestCase
         $this->assertCount(2, $this->json('PATCH', "$base/$id", ['names' => ['fr' => 'Panier abo-conf renommé']], 'admin', 200)['priceHistory']);
         // EasyAdmin : le même effet (le défaut corrigé : un prix modifié gardait l'ancien prix Stripe même pour les nouveaux abonnés)
         $this->db->executeStatement("UPDATE subscription_plan SET stripe_price_id = 'price_abo_conf_mid' WHERE id = ?", [$id]);
-        $em = $this->provider->getEntityManager();
+        $provider = static::getContainer()->get(TenantEntityManagerProvider::class); // celui du conteneur courant, comme l'écran
+        $provider->switchTenant(MV_TEST_TENANT_DB, MV_TEST_TENANT_CODE);
+        $em = $provider->getEntityManager();
         $em->clear();
         $plan = $em->getRepository(SubscriptionPlan::class)->find($id);
         $plan->setPrice(6900);
@@ -212,7 +214,7 @@ class AboCatalogTest extends WebTestCase
         $master = static::getContainer()->get(TenantConnectionManager::class)->getPdoMaster();
         $master->exec("DELETE FROM platform_settings WHERE key = 'subscription_fee_bp'");
         $master->exec('DELETE FROM platform_fee_log');
-        $internal = $master->query("SELECT is_internal_store FROM tenants WHERE code = '" . MV_TEST_TENANT_CODE . "'")->fetchColumn();
+        $internal = in_array($master->query("SELECT is_internal_store FROM tenants WHERE code = '" . MV_TEST_TENANT_CODE . "'")->fetchColumn(), [true, 't', 1, '1'], true) ? 'true' : 'false';
         $configs = $this->db->fetchAllAssociative('SELECT id, is_active, account_id, subscription_fee_bp FROM stripe_config');
         \App\Tests\Fake\FakeSubscriptionStripeGateway::reset();
         try {
