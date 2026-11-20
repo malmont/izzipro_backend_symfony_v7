@@ -261,7 +261,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (751)
+## Boutique et commun (753)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -866,6 +866,8 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | PATCH | `/api/site/abonnements/prestations/{id}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Abo\Controller\AboCatalogController::updateBenefit` |
 | GET | `/api/site/abonnements/prestations` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Abo\Controller\AboCatalogController::benefits` |
 | POST | `/api/site/abonnements/prestations` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Abo\Controller\AboCatalogController::createBenefit` |
+| PATCH | `/api/site/abonnements/produits/{id}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Abo\Controller\AboCatalogController::updateProduct` |
+| GET | `/api/site/abonnements/produits` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Abo\Controller\AboCatalogController::products` |
 | POST | `/api/site/abonnements/{id}/droits` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Abo\Controller\AboFollowUpController::gift` |
 | POST | `/api/site/abonnements/{id}/pause` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Abo\Controller\AboFollowUpController::pause` |
 | DELETE | `/api/site/abonnements/{id}/rendez-vous/{occurrenceId}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Abo\Controller\AboAgendaController::teamCancel` |

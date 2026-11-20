@@ -1147,6 +1147,32 @@ ajustent et répondent, mais ne créent rien. Les formules de la plateforme et d
   en réel (`warnings: [{ code: "STRIPE_ACCOUNT_REQUIRED" }]`).
 - Essais : `tests/Functional/Abo/AboCatalogTest.php`.
 
+#### Produits porteurs (lot ABO-CONF-b, 20/11/2026, contrat validé par le chef)
+
+- **Service commun** `App\Abo\Services\AboCarrierService` (gestion web, case « Abonnement » d'EasyAdmin, assistant) : mêmes règles partout.
+- `GET /api/site/abonnements/produits?porteurs=oui|non|tous&q=&page=&pageSize=` (ROLE_ADMIN, module Boutique, écran
+  `abonnements.formules`) → `{ items: [{ id, name, slug, imageUrl, subscriptionEnabled, subscriptionOnly, plans: { active, archived,
+  withSubscribers }, canEnable, canDisable, reason }], total, page, pageSize }` (porteurs d'abord, puis par nom ; pageSize ≤ 100).
+- `PATCH /api/site/abonnements/produits/{id} { subscriptionEnabled: bool }` : idempotent, journalisé (`product_subscription`) ; activer :
+  422 `PRODUCT_NOT_ELIGIBLE` (véhicule, porteur d'une formule branchée) ; désactiver : 409 `PRODUCT_HAS_SUBSCRIBERS` dès qu'une formule de ce
+  produit a eu un abonné, sinon permis avec `warnings: [{ code: "PLANS_HIDDEN", count, plans: [noms] }]` (ses formules sortent de la vente) ;
+  422 `MUST_BE_BOOLEAN`, 404 `PRODUCT_NOT_FOUND`. Directeur entré : refusé (raison `payment`) ; agence entrée : permis, mêmes règles.
+- **Porteur créé avec sa formule** : `POST …/formules` (et l'aperçu) accepte `newProduct: { names: { fr, en? } }` À LA PLACE de `productId`
+  (ni l'un ni l'autre, ou les deux : 422 `PRODUCT_CHOICE_REQUIRED` ; à la modification : 422 `FIELD_UNKNOWN`). Créé dans la même transaction
+  (formule refusée = aucun produit) : prix 0, vente directe coupée, abonnement activé, catégorie « Abonnements » ; VISIBLE dans la boutique
+  (décision du propriétaire, `AboCarrierService::CARRIER_VISIBLE`) : sa fiche mène à la grille des formules. L'aperçu dit « Un produit
+  porteur sera créé : <nom>. » et rend `newProduct: { name }`.
+- **Jamais achetable seul à 0** (`Product::isSubscriptionOnly`, `isSellableAlone`) : un porteur à prix 0 ou à vente coupée est refusé par le
+  devis du panier, de la commande et de la caisse (422 `QUOTE_INVALID`, ligne `SUBSCRIPTION_ONLY`), écarté de la caisse hors ligne et des
+  favoris ; sa fiche donne `sale.enabled` faux et `subscription.only` vrai (le front montre la grille, et « sans stock » n'est pas une
+  rupture). Aucun flux ni export du catalogue n'existe aujourd'hui.
+- **Aperçu avec prestations** : `POST …/formules/apercu` accepte `benefits` (même forme que le PUT des prestations) et la phrase les cite ;
+  une prestation inconnue est un avertissement `BENEFIT_NOT_FOUND`.
+- **EasyAdmin** : la case « Abonnement » de la fiche produit suit les mêmes règles (un porteur à abonnés n'est plus décoché en silence).
+- **Assistant** : `list_subscription_products`, `propose_subscription_product` (l'aperçu NOMME les formules qui sortent de la vente),
+  `propose_plan` avec `newProduct` ; toujours confirmé.
+- Essais : `tests/Functional/Abo/AboCarrierTest.php`.
+
 ### Avant le passage en réel des abonnements (liste tenue avec le chef, 19/11/2026)
 
 - **Compte Stripe** : une vente de la boutique d'un site extérieur sans compte connecté actif est REFUSÉE (seul un site interne de la
