@@ -288,6 +288,28 @@ class GroupTransferTest extends WebTestCase
         $this->assertSame(5, $this->stock(MV_TEST_TENANT_DB, $headVariant), '7 − 2, jamais 7 − 4');
     }
 
+    /** Contrat web § 10 : le directeur cherche les variantes de la source (sans coût) ; la fiche porte la quantité reçue par ligne */
+    public function testTheDirectorSearchesTheSourceVariantsAndReadsTheReceivedQuantities(): void
+    {
+        [$groupId, $headVariant] = $this->setUpGroup('created');
+        $found = $this->call('GET', '/api/gestion/groupe/boutiques/' . MV_TEST_TENANT_CODE . '/variantes?q=' . rawurlencode('siège ' . $this->tag) . '&target=' . MV_TEST_TENANT2_CODE, null, 'siege', 200)['variants'];
+        $this->assertSame([$headVariant], array_column($found, 'variantId'));
+        $this->assertSame([7, true], [$found[0]['stock'], $found[0]['copiedToTarget']], 'stock disponible ; déjà copié dans la destination');
+        $this->assertArrayNotHasKey('cost', $found[0]);
+        $this->assertStringNotContainsString('1234', (string) json_encode($found), 'jamais le coût');
+        $this->assertSame([403, 'GROUP_TRANSFER_FORBIDDEN'], $this->refusal('GET', '/api/gestion/groupe/boutiques/' . MV_TEST_TENANT_CODE . '/variantes', null, 'boutique'), 'directeur seulement');
+        $this->assertSame([404, 'GROUP_SHOP_UNKNOWN'], $this->refusal('GET', '/api/gestion/groupe/boutiques/ailleurs-' . $this->tag . '/variantes', null, 'siege'));
+        $this->master->exec("UPDATE shop_group_sites SET origin = 'associated' WHERE tenant_code = '" . MV_TEST_TENANT2_CODE . "'");
+        $this->assertSame([422, 'TRANSFER_ASSOCIATED_SHOP'], $this->refusal('GET', '/api/gestion/groupe/boutiques/' . MV_TEST_TENANT2_CODE . '/variantes', null, 'siege'), 'boutique de la même entreprise seulement');
+        $this->master->exec("UPDATE shop_group_sites SET origin = 'created' WHERE tenant_code = '" . MV_TEST_TENANT2_CODE . "'");
+
+        $transfer = $this->call('POST', '/api/gestion/groupe/transferts', $this->body($headVariant, 3), 'siege', 201);
+        $this->assertNull($this->call('GET', '/api/gestion/groupe/transferts/' . $transfer['id'], null, 'siege', 200)['lines'][0]['receivedQuantity'], 'avant l\'envoi : rien à lire');
+        $sent = $this->call('POST', '/api/site/group-transfers/' . $transfer['id'] . '/send', null, 'siege', 200);
+        $this->pdo(MV_TEST_TENANT2_DB)->exec('UPDATE commande_line SET quantity_received = 1 WHERE commande_id = ' . (int) $sent['targetOrderId']);
+        $this->assertSame(1, $this->call('GET', '/api/gestion/groupe/transferts/' . $transfer['id'], null, 'siege', 200)['lines'][0]['receivedQuantity']);
+    }
+
     /** Volet IA : le directeur DEMANDE par l'assistant (confirmé par lui) ; la boutique lit ce qu'elle doit envoyer ; l'envoi n'est jamais un outil */
     public function testTheAssistantAsksATransferButNeverSendsIt(): void
     {

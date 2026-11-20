@@ -792,6 +792,7 @@
     "groupe": [
         "DELETE /api/group/shops/{code}/same-company",
         "DELETE /api/site/group-same-company",
+        "GET /api/gestion/groupe/boutiques/{shop}/variantes",
         "GET /api/gestion/groupe/copies",
         "GET /api/gestion/groupe/copies/{id}",
         "GET /api/gestion/groupe/resultat",

@@ -16,7 +16,6 @@ use Symfony\Component\Routing\Attribute\Route;
  * siège, avec son compte (jamais en entrée : 403 `GROUP_TRANSFER_FORBIDDEN`). `ROLE_ADMIN` (`access_control` `/api/gestion`). L'ENVOI est le
  * geste de la boutique source (`/api/site/group-transfers`), jamais celui du directeur ; la RÉCEPTION est celle des commandes fournisseurs.
  */
-#[Route('/api/gestion/groupe/transferts')]
 class GestionGroupTransferController extends AbstractController
 {
     public function __construct(private readonly GroupTransferService $transfers, private readonly EntryContext $entry)
@@ -24,7 +23,7 @@ class GestionGroupTransferController extends AbstractController
     }
 
     /** { source, target, lines: [{ variantId, quantity }] } → 201 le transfert, état `requested` */
-    #[Route('', name: 'gestion_groupe_transferts_create', methods: ['POST'])]
+    #[Route('/api/gestion/groupe/transferts', name: 'gestion_groupe_transferts_create', methods: ['POST'])]
     public function create(Request $request): JsonResponse
     {
         $body = json_decode((string) $request->getContent(), true);
@@ -32,19 +31,26 @@ class GestionGroupTransferController extends AbstractController
         return $this->act(fn (User $user) => $this->json($this->transfers->request($user, is_array($body) ? $body : []), 201));
     }
 
-    #[Route('', name: 'gestion_groupe_transferts', methods: ['GET'])]
+    #[Route('/api/gestion/groupe/transferts', name: 'gestion_groupe_transferts', methods: ['GET'])]
     public function list(): JsonResponse
     {
         return $this->act(fn (User $user) => $this->json(['transfers' => $this->transfers->list($user)]));
     }
 
-    #[Route('/{id}', name: 'gestion_groupe_transfert', methods: ['GET'], requirements: ['id' => '\d+'])]
+    /** La recherche des variantes d'une boutique du groupe (source d'un transfert) : `q`, `limit` (20, au plus 50), `target` facultatif */
+    #[Route('/api/gestion/groupe/boutiques/{shop}/variantes', name: 'gestion_groupe_boutique_variantes', methods: ['GET'], requirements: ['shop' => '[a-z0-9][a-z0-9_-]{0,49}'])]
+    public function variants(string $shop, Request $request): JsonResponse
+    {
+        return $this->act(fn (User $user) => $this->json(['variants' => $this->transfers->searchVariants($user, $shop, $request->query->get('q'), $request->query->get('limit'), $request->query->get('target'))]));
+    }
+
+    #[Route('/api/gestion/groupe/transferts/{id}', name: 'gestion_groupe_transfert', methods: ['GET'], requirements: ['id' => '\d+'])]
     public function show(int $id): JsonResponse
     {
         return $this->act(fn (User $user) => $this->json($this->transfers->show($user, $id)));
     }
 
-    #[Route('/{id}/cancel', name: 'gestion_groupe_transfert_cancel', methods: ['POST'], requirements: ['id' => '\d+'])]
+    #[Route('/api/gestion/groupe/transferts/{id}/cancel', name: 'gestion_groupe_transfert_cancel', methods: ['POST'], requirements: ['id' => '\d+'])]
     public function cancel(int $id): JsonResponse
     {
         return $this->act(fn (User $user) => $this->json($this->transfers->cancel($user, $id)));

@@ -112,18 +112,110 @@ class GroupTransferService
         return array_map(fn (array $t): array => $this->present($this->refreshReceived($t), false), $this->transfers->list((int) $group['id']));
     }
 
+    /** Plus longue recherche dans le catalogue d'une boutique (millisecondes), comme une boutique de « Toutes les boutiques » */
+    public const SEARCH_TIMEOUT_MS = 3000;
+
+    /**
+     * Le directeur cherche les VARIANTES d'une boutique du groupe (la source d'un transfert), au siège : nom, référence, code-barres, stock
+     * disponible, jamais le coût ; `copiedTo` dit si l'article est déjà dans la boutique `target` (sinon : copiez-le d'abord). Boutique de la
+     * même entreprise seulement. Lecture dans une transaction READ ONLY sous `statement_timeout`, retour au siège dans un `finally`.
+     *
+     * @return list<array{variantId: int, productId: int, name: string, reference: ?string, barcode: ?string, stock: int, copiedToTarget: ?bool}>
+     * @throws GroupException
+     */
+    public function searchVariants(User $by, string $shop, mixed $q, mixed $limit, mixed $target = null): array
+    {
+        $group = $this->directedGroup($by);
+        $shops = $this->shops((int) $group['id']);
+        if (!isset($shops[$shop])) {
+            throw new GroupException('GROUP_SHOP_UNKNOWN', 404, 'Cette boutique n\'est pas dans votre groupe.');
+        }
+        $this->sameCompany((int) $group['id'], $shop, $shop);
+        $term = is_string($q) ? mb_substr(trim($q), 0, 80) : '';
+        $max = max(1, min(50, is_numeric($limit) ? (int) $limit : 20));
+        $targetCode = is_string($target) && isset($shops[$target]) && $target !== $shop ? $target : null;
+        $home = $this->home();
+        try {
+            $this->emProvider->switchTenant((string) $shops[$shop]['dbname'], $shop);
+            $conn = $this->emProvider->getEntityManager()->getConnection();
+            $conn->beginTransaction();
+            try {
+                $conn->executeStatement('SET TRANSACTION READ ONLY');
+                $conn->executeStatement('SET LOCAL statement_timeout = ' . self::SEARCH_TIMEOUT_MS);
+                $like = '%' . addcslashes($term, '%_\\') . '%';
+                $rows = $conn->fetchAllAssociative("SELECT v.id AS variant_id, p.id AS product_id, p.name, p.code, COALESCE(v.barcode, p.barcode) AS barcode, v.stock_quantity
+                    FROM product_variant v JOIN product p ON p.id = v.product_id
+                    WHERE p.product_type IN ('product', 'standard')" . ($term !== '' ? ' AND (p.name ILIKE ? OR p.code ILIKE ? OR v.barcode ILIKE ? OR p.barcode ILIKE ?)' : '') . '
+                    ORDER BY p.name, v.id LIMIT ' . $max, $term !== '' ? [$like, $like, $like, $like] : []);
+            } finally {
+                $conn->isTransactionActive() && $conn->rollBack();
+            }
+        } finally {
+            $this->restore($home);
+        }
+
+        return array_map(fn (array $r): array => ['variantId' => (int) $r['variant_id'], 'productId' => (int) $r['product_id'], 'name' => (string) $r['name'], 'reference' => $r['code'] !== null ? (string) $r['code'] : null,
+            'barcode' => $r['barcode'] !== null ? (string) $r['barcode'] : null, 'stock' => max(0, (int) $r['stock_quantity']),
+            'copiedToTarget' => $targetCode === null ? null : $this->transfers->link((int) $group['id'], $shop, (int) $r['variant_id'], $targetCode) !== null], $rows);
+    }
+
     /** @param array<string, mixed> $group le groupe déjà relu (directeur vérifié par l'appelant, l'assistant) @return list<array<string, mixed>> */
     public function listForGroup(array $group): array
     {
         return array_map(fn (array $t): array => $this->present($this->refreshReceived($t), false), $this->transfers->list((int) $group['id'], null, 50));
     }
 
-    /** @return array<string, mixed> @throws GroupException */
+    /** @return array<string, mixed> la fiche ; chaque ligne porte `receivedQuantity` (lue dans la commande de destination, null avant l'envoi) @throws GroupException */
     public function show(User $by, int $id): array
     {
         $group = $this->directedGroup($by);
+        $transfer = $this->refreshReceived($this->own((int) $group['id'], $id));
+        $view = $this->present($transfer);
+        $received = $this->receivedByLine($transfer);
+        foreach ($view['lines'] as $i => $line) {
+            $view['lines'][$i]['receivedQuantity'] = $received[$line['line']] ?? null;
+        }
 
-        return $this->present($this->refreshReceived($this->own((int) $group['id'], $id)));
+        return $view;
+    }
+
+    /**
+     * La quantité reçue de chaque ligne, lue dans la commande de destination (une lecture, au moment de la fiche). Deux lignes du transfert sur
+     * la même variante n'ont qu'une ligne de commande (fusionnée) : leur quantité reçue est alors inconnue par ligne (null).
+     *
+     * @param array<string, mixed> $transfer
+     * @return array<int, ?int> line_no => quantité reçue
+     */
+    private function receivedByLine(array $transfer): array
+    {
+        if ($transfer['target_commande_id'] === null) {
+            return [];
+        }
+        $home = $this->home();
+        try {
+            $target = $this->tenantRow((string) $transfer['target_tenant_code']);
+            $this->emProvider->switchTenant((string) $target['dbname'], (string) $transfer['target_tenant_code']);
+            $rows = $this->emProvider->getEntityManager()->getConnection()->fetchAllAssociative('SELECT product_id, product_variant_id AS variant_id, quantity_received FROM commande_line WHERE commande_id = ?', [(int) $transfer['target_commande_id']]);
+        } catch (\Throwable $e) {
+            $this->logger->warning('Transfert : réception illisible pour la fiche (' . $e::class . ').');
+
+            return [];
+        } finally {
+            $this->restore($home);
+        }
+        $byKey = [];
+        foreach ($rows as $r) {
+            $byKey[$r['product_id'] . ':' . ($r['variant_id'] ?? '')] = (int) $r['quantity_received'];
+        }
+        $lines = $this->transfers->lines((int) $transfer['id']);
+        $count = array_count_values(array_map(static fn (array $l): string => $l['target_product_id'] . ':' . ($l['target_variant_id'] ?? ''), $lines));
+        $out = [];
+        foreach ($lines as $l) {
+            $key = $l['target_product_id'] . ':' . ($l['target_variant_id'] ?? '');
+            $out[(int) $l['line_no']] = $count[$key] === 1 && array_key_exists($key, $byKey) ? $byKey[$key] : null;
+        }
+
+        return $out;
     }
 
     /** @return list<array<string, mixed>> les transferts à ENVOYER par la boutique courante (son administrateur) */

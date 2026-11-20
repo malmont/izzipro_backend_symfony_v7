@@ -397,6 +397,7 @@
     "rights GET /api/agency/sites/1/modules",
     "rights GET /api/agency/sites/1/storefront",
     "rights GET /api/agency/sites/availability",
+    "rights GET /api/gestion/groupe/boutiques/1/variantes",
     "rights GET /api/gestion/groupe/copies",
     "rights GET /api/gestion/groupe/copies/1",
     "rights GET /api/gestion/groupe/resultat",

@@ -261,7 +261,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (721)
+## Boutique et commun (722)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -459,6 +459,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/api/gestion/ecrans/{code}/guide` | ROLE_ADMIN | `Gestion\Controller\GestionScreenGuideController::guide` |
 | GET | `/api/gestion/exports/achats.csv` | ROLE_ADMIN | `Gestion\Controller\GestionExportController::purchases` |
 | GET | `/api/gestion/frais-fixes` | ROLE_ADMIN | `Gestion\Controller\GestionFixedCostController::list` |
+| GET | `/api/gestion/groupe/boutiques/{shop}/variantes` | ROLE_ADMIN | `Gestion\Controller\GestionGroupTransferController::variants` |
 | POST | `/api/gestion/groupe/copies/{id}/cancel` | ROLE_ADMIN | `Gestion\Controller\GestionGroupCopyController::cancel` |
 | POST | `/api/gestion/groupe/copies/{id}/confirm` | ROLE_ADMIN | `Gestion\Controller\GestionGroupCopyController::confirm` |
 | GET | `/api/gestion/groupe/copies/{id}` | ROLE_ADMIN | `Gestion\Controller\GestionGroupCopyController::show` |
