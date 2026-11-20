@@ -27,7 +27,8 @@ class StripeWebhookController extends AbstractController
         private readonly \App\UseCase\CheckoutUseCase\FinalizeCheckoutOrderUseCase $finalizeCheckout,
         private readonly \App\MemoiresVivantes\Services\PrintPaymentService $printPayments,
         #[Autowire('%kernel.environment%')]
-        private readonly string $environment = 'prod'
+        private readonly string $environment = 'prod',
+        private readonly ?\App\Incident\Services\PlatformIncidentService $incidents = null, // lot WEBHOOK-SIG : refus comptés
     ) {}
 
     /**
@@ -65,12 +66,24 @@ class StripeWebhookController extends AbstractController
                 }
             }
             if (!$event && $lastException) {
-                $this->logger->error('[StripeWebhook] Signature invalide : ' . $lastException->getMessage());
-                return $this->json(['error' => 'Signature invalide'], Response::HTTP_BAD_REQUEST);
+                $this->logger->error('[StripeWebhook] Signature invalide : ' . $lastException->getMessage(), ['ip' => $request->getClientIp(), 'at' => gmdate('c')]);
+                $this->incidents?->recordPlatformIssue(null, 'stripe_webhook.invalid_signature', 'warning', 'Webhook Stripe refusé : signature invalide'); // lot WEBHOOK-SIG
+
+                return $this->json(['error' => 'Signature invalide', 'code' => 'SIGNATURE_INVALID'], Response::HTTP_BAD_REQUEST);
             }
-        } else {
-            // Mode fallback sans vérification de signature si aucun header ou secret
+        } elseif ($this->environment === 'test') {
+            // Environnement des ESSAIS seulement : un événement non signé est accepté (les essais n'ont pas le secret de Stripe)
             $event = json_decode($payload, true);
+        } else {
+            // Lot WEBHOOK-SIG (20/11/2026, faille de sécurité) : hors essais, un événement sans signature vérifiée est REFUSÉ avant tout
+            // traitement, sur TOUS les chemins (un achat de livre non signé passait pour payé). Journal (type, adresse, heure) et un
+            // incident de la plateforme dont le compteur monte à chaque refus (aucun courriel par refus : le résumé du jour le cite).
+            $type = json_decode($payload, true)['type'] ?? null;
+            $type = is_string($type) ? mb_substr(preg_replace('/[^a-z0-9._]/i', '', $type), 0, 60) : null;
+            $this->logger->warning('[StripeWebhook] Événement refusé : signature absente', ['type' => $type, 'ip' => $request->getClientIp(), 'at' => gmdate('c'), 'secrets' => $secrets !== []]);
+            $this->incidents?->recordPlatformIssue(null, 'stripe_webhook.unsigned', 'warning', 'Webhook Stripe refusé : signature absente', ['type' => $type]);
+
+            return $this->json(['error' => 'Signature requise', 'code' => 'SIGNATURE_REQUIRED'], Response::HTTP_BAD_REQUEST);
         }
 
         if (!$event) {

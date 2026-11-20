@@ -32,6 +32,7 @@ class BookPaymentService
         private readonly LoggerInterface $logger,
         private readonly string $projectDir,
         private readonly ?\App\Services\Notification\NotificationGate $gate = null, // lot NOTIF-1 : niveau des courriels de suivi du destinataire
+        private readonly ?BookCheckoutSessionReader $sessions = null, // lot WEBHOOK-SIG : la session relue chez Stripe avant « payé »
     ) {}
 
     private function getEm(): EntityManagerInterface
@@ -211,10 +212,29 @@ class BookPaymentService
     /**
      * Traite la notification de paiement réussi reçue via le Webhook Stripe.
      */
-    public function handleCheckoutCompleted(string $sessionId, array $sessionData = []): ?Book
+    public function handleCheckoutCompleted(string $sessionId, array $sessionData = [], bool $verified = false): ?Book
     {
         $bookRepo = $this->getEm()->getRepository(Book::class);
         $book = null;
+
+        // Lot WEBHOOK-SIG (20/11/2026, faille) : le contenu d'un événement n'est jamais cru tel quel. La session est RELUE chez Stripe
+        // (même compte et même clé que sa création) et doit y être payée ; le livre et l'alerte partent de ce que Stripe dit, pas de
+        // l'événement. `$verified` : l'appelant vient de la relire lui-même (syncPaymentStatus).
+        if (!$verified) {
+            try {
+                $stripeSession = $this->sessions?->retrieve($sessionId);
+            } catch (\Throwable $e) {
+                $this->logger->error('[BookPaymentService] Session Stripe illisible : livre NON marqué payé', ['session' => mb_substr($sessionId, 0, 12) . '…', 'exception' => $e::class]);
+
+                return null;
+            }
+            if ($stripeSession === null || ($stripeSession['payment_status'] ?? null) !== 'paid' || ($stripeSession['id'] ?? null) !== $sessionId) {
+                $this->logger->warning('[BookPaymentService] Session non payée chez Stripe (ou inconnue) : livre NON marqué payé', ['session' => mb_substr($sessionId, 0, 12) . '…']);
+
+                return null;
+            }
+            $sessionData = $stripeSession;
+        }
 
         // 1. Recherche par metadata book_id
         $bookId = $sessionData['metadata']['book_id'] ?? null;
@@ -234,6 +254,15 @@ class BookPaymentService
         if (!$book) {
             $this->logger->error('[BookPaymentService] Aucun livre correspondant trouvé pour la session: ' . $sessionId);
             return null;
+        }
+        // Lot WEBHOOK-SIG : la session payée doit être CELLE du livre (jamais le paiement d'un autre livre)
+        if ($book->getStripeSessionId() !== null && $book->getStripeSessionId() !== $sessionId) {
+            $this->logger->warning('[BookPaymentService] Session payée qui n\'est pas celle du livre : livre NON marqué payé', ['book' => (string) $book->getId()]);
+
+            return null;
+        }
+        if ($book->getPaymentStatus() === 'paid') {
+            return $book; // déjà payé : ni deuxième facture ni deuxième alerte
         }
 
         // 3. Mise à jour de l'état du livre
@@ -295,7 +324,7 @@ class BookPaymentService
                     '[BookPaymentService] Session Stripe %s payée confirmée via Stripe API directe, synchro...',
                     $sessionId
                 ));
-                $this->handleCheckoutCompleted($sessionId, $session->toArray());
+                $this->handleCheckoutCompleted($sessionId, $session->toArray(), true); // relue ci-dessus
             } elseif ($session && $session->status === 'expired') {
                 // Un lien Stripe Checkout expire au bout de 24 h : le livre ne reste pas « en attente » indéfiniment
                 $this->resetExpiredPayment($book, 'session expirée');
