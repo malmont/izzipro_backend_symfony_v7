@@ -48,6 +48,8 @@ class GroupWritesClassificationTest extends KernelTestCase
         'get_slots' => 'lecture', 'get_to_schedule' => 'lecture', 'propose_slot_rule' => 'catalogue', 'propose_assign_date' => 'commande', 'propose_move_occurrence' => 'commande',
         // lot CMD-WEB-1 : rendez-vous de la boutique
         'get_shop_bookings' => 'lecture', 'propose_booking_status' => 'commande',
+        // lot ABO-3a : « fait » et suivi (le directeur entré lit, il ne marque rien : ses routes sont fermées, famille « droits »)
+        'get_today' => 'lecture', 'get_contestations' => 'lecture', 'propose_mark_done' => 'droits', 'propose_mark_session_done' => 'droits',
     ];
 
     public function testEveryWriteEveryScreenAndEveryAssistantToolIsClassifiedForTheDirector(): void

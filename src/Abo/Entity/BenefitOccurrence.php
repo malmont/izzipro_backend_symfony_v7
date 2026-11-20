@@ -12,7 +12,7 @@ use Doctrine\ORM\Mapping as ORM;
  * une fois par facture : unicité abonnement, ligne de formule, facture, rang) ou offert par l'équipe (`gift`). `available` jusqu'à
  * `valid_until`, puis reporté une fois (`carried`) ou perdu (`expired`) ; `done` quand il est utilisé. Lot ABO-2 : `scheduled` (une date
  * planifiée : créneau ou date libre, jamais perdue par le passage) et `late_cancelled` (annulé après le délai : compte comme utilisé) ; ABO-3
- * ajoutera `missed`.
+ * ajoutera `missed` (fait : lot ABO-3a, `STATUS_MISSED`).
  */
 #[ORM\Entity(repositoryClass: BenefitOccurrenceRepository::class)]
 #[ORM\Table(name: 'benefit_occurrence')]
@@ -23,8 +23,15 @@ class BenefitOccurrence
     public const STATUS_EXPIRED = 'expired';
     public const STATUS_SCHEDULED = 'scheduled';
     public const STATUS_LATE_CANCELLED = 'late_cancelled';
+    /** Lot ABO-3a : l'abonné ne s'est pas présenté (« absent ») ; compte comme utilisé (décision 1 du propriétaire) */
+    public const STATUS_MISSED = 'missed';
     /** Ce qui compte dans « utilisé » */
-    public const USED = [self::STATUS_DONE, self::STATUS_LATE_CANCELLED];
+    public const USED = [self::STATUS_DONE, self::STATUS_LATE_CANCELLED, self::STATUS_MISSED];
+    /** Lot ABO-3a : l'avis de l'abonné sur un « fait » ou un « absent », et la décision de l'administrateur sur une contestation */
+    public const ACK_CONFIRMED = 'confirmed';
+    public const ACK_CONTESTED = 'contested';
+    public const RESOLUTION_KEPT = 'kept';
+    public const RESOLUTION_RETURNED = 'returned';
     public const SOURCE_CLIENT = 'client';
     public const SOURCE_TEAM = 'team';
     public const ORIGIN_PERIOD = 'period';
@@ -150,4 +157,55 @@ class BenefitOccurrence
     public function getScheduledEnd(): ?\DateTimeImmutable { return $this->scheduledEnd; }
     public function getScheduledBy(): ?string { return $this->scheduledBy; }
     public function getScheduledSource(): ?string { return $this->scheduledSource; }
+
+    // ---- lot ABO-3a : preuve, avis de l'abonné, contestation (écrits par AboDeliveryService, en SQL sous verrou) ----------------------
+
+    #[ORM\Column(name: 'proof_path', length: 80, nullable: true)]
+    private ?string $proofPath = null;
+
+    #[ORM\Column(name: 'proof_sha256', length: 64, nullable: true)]
+    private ?string $proofSha256 = null;
+
+    #[ORM\Column(name: 'proof_mime', length: 20, nullable: true)]
+    private ?string $proofMime = null;
+
+    #[ORM\Column(name: 'proof_at', type: Types::DATETIME_IMMUTABLE, nullable: true)]
+    private ?\DateTimeImmutable $proofAt = null;
+
+    #[ORM\Column(name: 'done_notified_at', type: Types::DATETIME_IMMUTABLE, nullable: true)]
+    private ?\DateTimeImmutable $doneNotifiedAt = null;
+
+    #[ORM\Column(name: 'customer_ack', length: 12, nullable: true)]
+    private ?string $customerAck = null;
+
+    #[ORM\Column(name: 'customer_ack_comment', length: 1000, nullable: true)]
+    private ?string $customerAckComment = null;
+
+    #[ORM\Column(name: 'customer_ack_at', type: Types::DATETIME_IMMUTABLE, nullable: true)]
+    private ?\DateTimeImmutable $customerAckAt = null;
+
+    #[ORM\Column(name: 'ack_ticket_ref', length: 20, nullable: true)]
+    private ?string $ackTicketRef = null;
+
+    #[ORM\Column(name: 'ack_resolution', length: 12, nullable: true)]
+    private ?string $ackResolution = null;
+
+    #[ORM\Column(name: 'ack_resolved_at', type: Types::DATETIME_IMMUTABLE, nullable: true)]
+    private ?\DateTimeImmutable $ackResolvedAt = null;
+
+    #[ORM\Column(name: 'ack_resolved_by', length: 180, nullable: true)]
+    private ?string $ackResolvedBy = null;
+
+    public function getProofPath(): ?string { return $this->proofPath; }
+    public function getProofSha256(): ?string { return $this->proofSha256; }
+    public function getProofMime(): ?string { return $this->proofMime; }
+    public function getProofAt(): ?\DateTimeImmutable { return $this->proofAt; }
+    public function getDoneNotifiedAt(): ?\DateTimeImmutable { return $this->doneNotifiedAt; }
+    public function getCustomerAck(): ?string { return $this->customerAck; }
+    public function getCustomerAckComment(): ?string { return $this->customerAckComment; }
+    public function getCustomerAckAt(): ?\DateTimeImmutable { return $this->customerAckAt; }
+    public function getAckTicketRef(): ?string { return $this->ackTicketRef; }
+    public function getAckResolution(): ?string { return $this->ackResolution; }
+    public function getAckResolvedAt(): ?\DateTimeImmutable { return $this->ackResolvedAt; }
+    public function getAckResolvedBy(): ?string { return $this->ackResolvedBy; }
 }

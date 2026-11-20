@@ -73,7 +73,7 @@ class ConfirmSiteAssistantActionUseCase
         }
         if (in_array($action['tool'], SiteAssistantTools::IAA_ACTIONS, true)) {
             // lot IA-A : tout est relu à la confirmation (module, état, compte) ; un refus ne consume pas l'action, la trace dit qui a confirmé
-            $result = $this->added($action['tool'], $action['input'], $tenant, $user, $actor);
+            $result = $this->added($action['tool'], $action['input'], $tenant, $user, $actor, $host);
             $this->audit?->record('site_assistant', $id, 'confirm', null, ['tool' => $action['tool'], 'by' => 'assistant', 'confirmedBy' => trim((string) $actor?->getFirstname()) ?: 'administrateur',
                 'summary' => $action['summary'], 'result' => array_intersect_key($result, array_flip(['created', 'written', 'remaining', 'scenario', 'countId', 'feature', 'on', 'kind', 'assistance', 'planId', 'benefitId', 'benefits']))], ['assistant']);
             $this->assistant->forgetAction($tenant, $id);
@@ -188,7 +188,7 @@ class ConfirmSiteAssistantActionUseCase
      * @param array<string, mixed> $input
      * @return array<string, mixed>
      */
-    private function added(string $tool, array $input, string $tenant, ?string $user, ?\App\Entity\User $actor): array
+    private function added(string $tool, array $input, string $tenant, ?string $user, ?\App\Entity\User $actor, string $host = ''): array
     {
         $needs = SiteAssistantTools::MODULE_OF[$tool] ?? [];
         if ($needs !== [] && ($this->modules === null || array_filter($needs, fn (string $m): bool => $this->modules->isEnabled($m)) === [])) {
@@ -284,8 +284,10 @@ class ConfirmSiteAssistantActionUseCase
                 case 'propose_slot_rule': // lot ABO-2
                 case 'propose_assign_date':
                 case 'propose_move_occurrence':
+                case 'propose_mark_done': // lot ABO-3a (jamais le directeur entré : l'assistant lui est fermé)
+                case 'propose_mark_session_done':
                     // lot ABO-0 : par le service de l'écran, tout relu (formule, produit porteur, prestations actives) ; un refus garde son message
-                    return ($this->abo ?? throw new \OutOfBoundsException('Outil indisponible'))->apply($tool, $input);
+                    return ($this->abo ?? throw new \OutOfBoundsException('Outil indisponible'))->apply($tool, $input, $host);
             }
         } catch (\App\Abo\Services\AboException|\App\Gestion\Services\GestionConflictException|\App\Gestion\Services\GestionValidationException|\App\Services\Agency\Assistance\AssistanceException|\App\UseCase\LandingContentUseCase\LandingContentException $e) {
             throw new \InvalidArgumentException($e->getMessage() !== '' ? $e->getMessage() : 'Action refusée.', 0, $e);

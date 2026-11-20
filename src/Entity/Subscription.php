@@ -118,6 +118,13 @@ class Subscription
     #[ORM\Column(name: 'cancel_at', type: Types::DATETIME_IMMUTABLE, nullable: true)]
     private ?\DateTimeImmutable $cancelAt = null;
 
+    /** Lot ABO-3a : l'abonné reçoit-il le courriel « prestation faite » (oui par défaut ; il le coupe depuis son compte) */
+    #[ORM\Column(name: 'done_emails', options: ['default' => true])]
+    private bool $doneEmails = true;
+
+    public function wantsDoneEmails(): bool { return $this->doneEmails; }
+    public function setDoneEmails(bool $on): static { $this->doneEmails = $on; return $this; }
+
     public function getCancelAt(): ?\DateTimeImmutable { return $this->cancelAt; }
     public function setCancelAt(?\DateTimeImmutable $cancelAt): static { $this->cancelAt = $cancelAt; return $this; }
 

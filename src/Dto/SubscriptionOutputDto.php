@@ -39,6 +39,10 @@ final class SubscriptionOutputDto
         public readonly ?array $billedPrice = null,
         /** @var list<array<string, mixed>> lot ABO-2 : les 10 prochaines dates (prestation, début, fin, lieu, annulable jusqu'à), jamais l'intervenant */
         public readonly array $upcoming = [],
+        /** @var list<array<string, mixed>> lot ABO-3a : les prestations faites ou manquées (90 jours) : note, photo, avis et jusqu'à quand le donner */
+        public readonly array $delivered = [],
+        /** Lot ABO-3a : l'abonné reçoit le courriel « prestation faite » (il le coupe par PATCH …/courriels) */
+        public readonly bool $doneEmails = true,
     ) {
     }
 
@@ -74,6 +78,16 @@ final class SubscriptionOutputDto
     {
         $args = get_object_vars($this);
         $args['upcoming'] = array_map(fn (array $u) => array_intersect_key($u, array_flip(['occurrenceId', 'benefitId', 'name', 'startsAt', 'endsAt', 'location', 'slotId', 'cancellableUntil'])), $upcoming);
+
+        return new self(...$args);
+    }
+
+    /** @param list<array<string, mixed>> $delivered lot ABO-3a : la vue du client (jamais « par qui » ni la décision interne) */
+    public function withDelivered(array $delivered, bool $doneEmails): self
+    {
+        $args = get_object_vars($this);
+        $args['delivered'] = array_map(fn (array $d) => array_intersect_key($d, array_flip(['occurrenceId', 'benefitId', 'name', 'status', 'startsAt', 'doneAt', 'note', 'hasProof', 'customerAck', 'ackUntil'])), $delivered);
+        $args['doneEmails'] = $doneEmails;
 
         return new self(...$args);
     }

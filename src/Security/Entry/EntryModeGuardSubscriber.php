@@ -126,6 +126,9 @@ class EntryModeGuardSubscriber implements EventSubscriberInterface
         // lot G-4 : les outils du groupe (copie du catalogue…) ne se lancent que du siège, jamais par le directeur entré dans une boutique
         ['#^/api/gestion/groupe(/|$)#', [], 'rights'],
         ['#^/api/site/reservations-boutique/[^/]+/(confirmer|annuler)(/|$)#', [], 'rights'], // lot CMD-WEB-1 : le directeur lit les rendez-vous, il ne les confirme ni ne les annule
+        // lot ABO-3a (décision du chef, 20/11/2026) : le directeur lit « À faire aujourd'hui », les contestations et les preuves ; il ne marque
+        // rien (fait, absent, séance entière), ne corrige ni ne tranche (une contestation, un courriel à l'abonné, un droit rendu)
+        ['#^/api/site/abonnements/([^/]+/occurrences|creneaux/[^/]+/fait)(/|$)#', ['POST', 'PUT', 'PATCH', 'DELETE'], 'rights'],
         ['#^/admin/taxes/verifier(/|$)#', ['POST'], 'rights'],
         ['#^/api/(apps/join|app/activate)(/|$)#', [], 'keys'],
         // le boîtier réel de la prévention des pertes (jumelage, clé, révocation, appareils) ; l'exercice simulé reste ouvert

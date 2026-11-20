@@ -17,7 +17,8 @@ class ManageSubscriptionUseCase
     public function __construct(private readonly SubscriptionService $service, private readonly SubscriptionMailer $mailer,
         private readonly ?\App\Abo\Services\AboRightsService $rights = null,
         private readonly ?\App\Abo\Services\AboCatalogService $catalog = null, // lot ABO-CONF : le prix que paie l'abonné // lot ABO-1 : solde, pause datée, engagement minimal
-        private readonly ?\App\Abo\Services\AboAgendaService $agenda = null) // lot ABO-2 : prochaines dates, places retenues à la souscription
+        private readonly ?\App\Abo\Services\AboAgendaService $agenda = null, // lot ABO-2 : prochaines dates, places retenues à la souscription
+        private readonly ?\App\Abo\Services\AboDeliveryService $delivery = null) // lot ABO-3a : prestations faites, avis de l'abonné
     {
     }
 
@@ -39,6 +40,9 @@ class ManageSubscriptionUseCase
 
         if ($this->agenda !== null) {
             $dto = $dto->withUpcoming($this->agenda->upcoming($subscription, false, $locale));
+        }
+        if ($this->delivery !== null) {
+            $dto = $dto->withDelivered($this->delivery->delivered($subscription, false, $locale), $subscription->wantsDoneEmails());
         }
 
         return $dto->withBalance($this->rights->balance($subscription, $locale))->withCancellation([
