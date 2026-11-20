@@ -93,6 +93,8 @@ class StripeWebhookSignatureTest extends KernelTestCase
         $this->assertSame('paid', $status());
 
         // Déjà payé : rien ne change (ni deuxième facture ni nouvelle date de paiement), même événement livré deux fois
+        // date de paiement reculée d'une heure : une seconde écriture se verrait (la colonne est à la seconde près)
+        $this->provider->getEntityManager()->getConnection()->executeStatement("UPDATE mv_book SET paid_at = paid_at - INTERVAL '1 hour' WHERE id = ?", [(string) $this->book->getId()]);
         $paidAt = $this->reload()->getPaidAt();
         $this->assertNotNull($this->bookService($paid)->handleCheckoutCompleted(self::SESSION, []));
         $this->assertEquals($paidAt, $this->reload()->getPaidAt(), 'la seconde livraison n\'écrit rien');
