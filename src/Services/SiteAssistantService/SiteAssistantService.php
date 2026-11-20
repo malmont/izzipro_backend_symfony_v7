@@ -72,6 +72,7 @@ class SiteAssistantService
         private readonly ?\App\Services\Group\AllShops\GroupViews $groupViews = null,
         private readonly ?\App\Services\Group\GroupService $groupService = null,
         private readonly ?\App\Services\Group\Transfer\GroupTransferService $groupTransfers = null, // lot G-5
+        private readonly ?\App\Services\TenantConnectionProvider $tenantConnection = null, // lot G-5 : le site courant (outil des transferts à envoyer)
     ) {
     }
 
@@ -229,6 +230,9 @@ class SiteAssistantService
         }
         if (in_array($name, SiteAssistantTools::ORDER_TOOLS, true) || in_array($name, ['get_orders_todo', 'get_order'], true)) {
             return $this->runOrderTool($name, $input, $tenantCode);
+        }
+        if ($name === 'get_transfers_to_send' && !$this->available($name)) {
+            return [['error' => 'outil indisponible : ce site n\'appartient à aucun groupe de boutiques'], null, null];
         }
         if ($name === 'get_transfers_to_send') {
             // lot G-5 : ce que la boutique doit envoyer ; quantités et articles, sans coût ; l'envoi reste le geste de l'administrateur
@@ -769,6 +773,12 @@ TXT;
     /** Lot IA-A : l'outil est-il donné sur ce site ? Un outil sans module requis : toujours ; sinon l'un des modules doit être actif */
     private function available(string $tool): bool
     {
+        // lot G-5 : les transferts à envoyer, pour une boutique MEMBRE d'un groupe seulement (aucun outil inutile ailleurs)
+        if ($tool === 'get_transfers_to_send') {
+            $code = (string) ($this->tenantConnection?->getTenantCode() ?? '');
+
+            return $code !== '' && $this->groupTransfers !== null && ($this->groupService?->mine($code)['group'] ?? null) !== null;
+        }
         // lot IA-G : les outils du groupe ne sont donnés qu'au DIRECTEUR (relu à chaque fois : rôle, siège, module, jamais en entrée)
         if (in_array($tool, [...SiteAssistantTools::GROUP_READS, ...SiteAssistantTools::GROUP_ACTIONS], true)) {
             return $this->groupDirector?->group() !== null && $this->groupViews !== null && $this->groupService !== null;
