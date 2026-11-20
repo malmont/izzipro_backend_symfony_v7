@@ -22,12 +22,31 @@ class LossPreventionExitAlertTest extends LossPreventionTestCase
     private string $s;
     private string $ip;
     private int $n = 0;
+    /** Le fuseau réglé du site avant l'essai (rendu au démontage) */
+    private string|false|null $previousTz = null;
     private string $token = '';
     private int $boxId = 0;
 
     protected function setUp(): void
     {
         parent::setUp();
+        // l'heure du magasin posée loin de minuit : les faits de l'essai (jusqu'à 10 minutes avant maintenant) et la journée du magasin lue
+        // « maintenant » sont le même jour, à toute heure de la suite (un passage entre 05:00 et 05:10 UTC tombait à minuit de Toronto)
+        $this->previousTz = $this->db->fetchOne('SELECT pos_timezone FROM entreprise ORDER BY id LIMIT 1');
+        // ESSAI_FUSEAU_MAGASIN=minuit reproduit la panne : un fuseau réel où il est, au départ de l'essai, entre 00:01 et 00:08 (sauté s'il
+        // n'y en a aucun à cet instant) ; tout autre valeur impose ce fuseau
+        $forced = (string) getenv('ESSAI_FUSEAU_MAGASIN');
+        $zone = match ($forced) {
+            '' => self::storeZoneAwayFromMidnight(time()),
+            'minuit' => self::zoneJustAfterMidnight(time()),
+            default => $forced,
+        };
+        $this->db->executeStatement('UPDATE entreprise SET pos_timezone = ?', [$zone ?? self::storeZoneAwayFromMidnight(time())]);
+        $this->reloadEntreprise();
+        if ($zone === null) {
+            $this->markTestSkipped('aucun fuseau entre 00:01 et 00:08 en ce moment');
+        }
+        fwrite(\STDERR, $forced !== '' ? sprintf("[EXIT-HEURE] %s : %s heure du magasin\n", $zone, (new \DateTimeImmutable('now', new \DateTimeZone($zone)))->format('H:i:s')) : '');
         $this->s = strtoupper(bin2hex(random_bytes(3)));
         $this->ip = '10.' . random_int(1, 250) . '.' . random_int(1, 250) . '.' . random_int(1, 250);
         $this->flags(true, true);
@@ -38,6 +57,8 @@ class LossPreventionExitAlertTest extends LossPreventionTestCase
     protected function tearDown(): void
     {
         try {
+            $this->db->executeStatement('UPDATE entreprise SET pos_timezone = ?', [$this->previousTz === false ? null : $this->previousTz]);
+            $this->reloadEntreprise();
             $this->db->executeStatement('UPDATE loss_setting SET opening_hours = NULL, exit_cursor = (SELECT COALESCE(MAX(id), 0) FROM loss_piece_event)');
             $this->db->executeStatement("UPDATE loss_box SET status = 'revoked', revoked_at = NOW() WHERE NOT exercise AND status <> 'revoked'");
             $this->db->executeStatement("UPDATE loss_device SET status = 'retired', cash_register_id = NULL WHERE NOT exercise AND status <> 'retired'");
@@ -47,6 +68,25 @@ class LossPreventionExitAlertTest extends LossPreventionTestCase
             $this->db->commit();
         } finally {
             parent::tearDown();
+        }
+    }
+
+    /** Le fuseau choisi met le magasin entre 3 h et 21 h à toute heure du jour (pas de demi-heure qui y échappe) */
+    public function testTheStoreZoneOfTheseTestsIsAlwaysFarFromMidnight(): void
+    {
+        // la panne du 20/11/2026 : entre 05:00 et 05:10 UTC il est minuit à Toronto ; l'essai pose alors Paris (6 h)
+        foreach (['05:00', '05:05', '05:10'] as $hm) {
+            $at = (new \DateTimeImmutable("2026-11-20 $hm:00", new \DateTimeZone('UTC')))->getTimestamp();
+            $this->assertSame('0', (new \DateTimeImmutable('@' . $at))->setTimezone(new \DateTimeZone('America/Toronto'))->format('G'));
+            $this->assertSame('Europe/Paris', self::storeZoneAwayFromMidnight($at), "$hm UTC");
+        }
+        $start = (new \DateTimeImmutable('2026-11-20 00:00:00', new \DateTimeZone('UTC')))->getTimestamp();
+        foreach ([0, 182] as $day) { // heure d'hiver et heure d'été
+            for ($m = 0; $m < 1440; $m += 10) {
+                $at = $start + $day * 86400 + $m * 60;
+                $hour = (int) (new \DateTimeImmutable('@' . $at))->setTimezone(new \DateTimeZone(self::storeZoneAwayFromMidnight($at)))->format('G');
+                $this->assertTrue($hour >= 3 && $hour < 21, gmdate('Y-m-d H:i', $at) . " UTC : $hour h");
+            }
         }
     }
 
@@ -338,6 +378,42 @@ class LossPreventionExitAlertTest extends LossPreventionTestCase
         $ids = array_column($settings['devices'], 'id', 'serial');
         $this->json($this->admin('PUT', self::BOXES . "/$this->boxId/appareils/" . $ids["LECTEUR-$this->s"], ['zone' => 'exit']));
         $this->json($this->admin('PUT', self::BOXES . "/$this->boxId/appareils/" . $ids["RAYON-$this->s"], ['zone' => 'floor']));
+    }
+
+    /** Toronto ou Paris : 6 heures d'écart, leurs heures exclues (21 h à 3 h) ne se recouvrent jamais */
+    private static function storeZoneAwayFromMidnight(int $at): string
+    {
+        foreach (['America/Toronto', 'Europe/Paris'] as $zone) {
+            $hour = (int) (new \DateTimeImmutable('@' . $at))->setTimezone(new \DateTimeZone($zone))->format('G');
+            if ($hour >= 3 && $hour < 21) {
+                return $zone;
+            }
+        }
+
+        throw new \LogicException('aucun fuseau loin de minuit');
+    }
+
+    /** Un fuseau réel où il est entre 00:01 et 00:08 (la panne : faits de la veille du magasin, journée lue « aujourd'hui ») */
+    private static function zoneJustAfterMidnight(int $at): ?string
+    {
+        foreach (\DateTimeZone::listIdentifiers() as $zone) {
+            $local = (new \DateTimeImmutable('@' . $at))->setTimezone(new \DateTimeZone($zone));
+            if ($local->format('G') === '0' && (int) $local->format('i') >= 1 && (int) $local->format('i') <= 8) {
+                return $zone;
+            }
+        }
+
+        return null;
+    }
+
+    /** La fiche du site relue dans le gestionnaire courant (le fuseau vient d'être changé en SQL) */
+    private function reloadEntreprise(): void
+    {
+        $em = $this->provider->getEntityManager();
+        $entreprise = $em->getRepository(\App\Entity\Entreprise::class)->findOneBy([]);
+        if ($entreprise !== null) {
+            $em->refresh($entreprise);
+        }
     }
 
     /** @return array{0: string, 1: ?string} une arrivée de la puce devant l'antenne de la sortie (ou du rayon), décalée de `$shift` secondes */
