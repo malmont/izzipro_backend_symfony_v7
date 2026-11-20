@@ -1188,7 +1188,11 @@ ajustent et répondent, mais ne créent rien. Les formules de la plateforme et d
 - **Service commun** `App\Abo\Services\AboCarrierService` (gestion web, case « Abonnement » d'EasyAdmin, assistant) : mêmes règles partout.
 - `GET /api/site/abonnements/produits?porteurs=oui|non|tous&q=&page=&pageSize=` (ROLE_ADMIN, module Boutique, écran
   `abonnements.formules`) → `{ items: [{ id, name, slug, imageUrl, subscriptionEnabled, subscriptionOnly, plans: { active, archived,
-  withSubscribers }, canEnable, canDisable, reason }], total, page, pageSize }` (porteurs d'abord, puis par nom ; pageSize ≤ 100).
+  withSubscribers, activeNames }, canEnable, canDisable, reason }], total, page, pageSize }` (porteurs d'abord, puis par nom ; pageSize ≤ 100 ;
+  `activeNames` : les noms des formules actives, par ordre de création, 10 au plus, pour les NOMMER avant de désactiver ; lot ABO-WEB-2) ;
+  `reason` : `PRODUCT_NOT_ELIGIBLE`, `PRODUCT_HAS_SUBSCRIBERS` ou null.
+- `GET /api/site/abonnements/formules/{id}` : `plan.product: { id, name }` (nom dans la langue demandée), à côté de `plan.productId`
+  (lot ABO-WEB-2).
 - `PATCH /api/site/abonnements/produits/{id} { subscriptionEnabled: bool }` : idempotent, journalisé (`product_subscription`) ; activer :
   422 `PRODUCT_NOT_ELIGIBLE` (véhicule, porteur d'une formule branchée) ; désactiver : 409 `PRODUCT_HAS_SUBSCRIBERS` dès qu'une formule de ce
   produit a eu un abonné, sinon permis avec `warnings: [{ code: "PLANS_HIDDEN", count, plans: [noms] }]` (ses formules sortent de la vente) ;
@@ -1200,6 +1204,11 @@ ajustent et répondent, mais ne créent rien. Les formules de la plateforme et d
   jamais à l'aperçu) ; VISIBLE dans la boutique
   (décision du propriétaire, `AboCarrierService::CARRIER_VISIBLE`) : sa fiche mène à la grille des formules. L'aperçu dit « Un produit
   porteur sera créé : <nom>. » et rend `newProduct: { name }`.
+- **Dernière formule d'un porteur créé par newProduct supprimée** (lot ABO-WEB-2, décision du chef) : un produit à vente coupée, à prix 0
+  et sans variante payante, qui ne porte plus AUCUNE formule (active ou archivée), perd l'abonnement et sort de la boutique (`isWeb` faux),
+  avec le drapeau `product.web_hidden_by_abo` ; le geste est au journal (`product_subscription`). Réactiver l'abonnement (gestion web,
+  assistant ou EasyAdmin, par `AboCarrierService`) rend la fiche visible SEULEMENT si ce drapeau est posé (une fiche masquée par le
+  commerçant le reste). Tout autre produit : rien ne change à la suppression d'une formule.
 - **Jamais achetable seul à 0** (`Product::isSubscriptionOnly`, `isSellableAlone`) : un porteur à vente coupée, ou sans AUCUN prix positif
   (ni le produit, promotion en cours comprise, ni une de ses variantes), est refusé par le devis du panier, de la commande et de la caisse
   (422 `QUOTE_INVALID`, ligne `SUBSCRIPTION_ONLY`), écarté de la caisse hors ligne et des favoris ; sa fiche donne `sale.enabled` faux et

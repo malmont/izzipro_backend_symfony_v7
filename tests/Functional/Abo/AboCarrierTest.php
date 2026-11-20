@@ -170,6 +170,58 @@ class AboCarrierTest extends WebTestCase
         $this->assertSame($before, $categories(), 'ni catégorie');
     }
 
+    public function testTheFormulaNamesItsProductAndTheListNamesTheActiveFormulas(): void
+    {
+        // lot ABO-WEB-2 : la fiche d'une formule nomme son porteur ; la liste nomme les formules actives AVANT le geste (10 au plus)
+        $id = $this->product('abo-conf-b Nommé', 10.0, true);
+        $catalog = static::getContainer()->get(AboCatalogService::class);
+        $first = $catalog->savePlan(null, ['productId' => $id, 'names' => ['fr' => 'Matin abo-conf-b'], 'price' => 1000, 'interval' => 'month'], 'test');
+        $archived = $catalog->savePlan(null, ['productId' => $id, 'names' => ['fr' => 'Ancienne abo-conf-b'], 'price' => 900, 'interval' => 'month'], 'test');
+        $catalog->archive($archived, true);
+        for ($i = 1; $i <= 11; $i++) {
+            $catalog->savePlan(null, ['productId' => $id, 'names' => ['fr' => sprintf('Soir %02d abo-conf-b', $i)], 'price' => 1000 + $i, 'interval' => 'month'], 'test');
+        }
+        $this->assertSame(['id' => $id, 'name' => 'abo-conf-b Nommé'], $this->json('GET', '/api/site/abonnements/formules/' . $first->getId(), null, 'admin', 200)['plan']['product']);
+        $row = $this->rowOf($this->json('GET', '/api/site/abonnements/produits?porteurs=oui&q=Nomm', null, 'admin', 200), $id);
+        $this->assertSame(12, $row['plans']['active']);
+        $this->assertSame(['Matin abo-conf-b', 'Soir 01 abo-conf-b', 'Soir 02 abo-conf-b', 'Soir 03 abo-conf-b', 'Soir 04 abo-conf-b', 'Soir 05 abo-conf-b',
+            'Soir 06 abo-conf-b', 'Soir 07 abo-conf-b', 'Soir 08 abo-conf-b', 'Soir 09 abo-conf-b'], $row['plans']['activeNames'], 'les actives seulement, par création, 10 au plus');
+        $this->assertSame([], $this->rowOf($this->json('GET', '/api/site/abonnements/produits?q=abo-conf-b', null, 'admin', 200), $this->product('abo-conf-b Sans formule', 10.0, true))['plans']['activeNames']);
+    }
+
+    public function testDeletingTheLastFormulaOfANewCarrierHidesItAndReenablingShowsItAgain(): void
+    {
+        // lot ABO-WEB-2 (décision du chef) : le porteur créé par newProduct, sans plus aucune formule, sort de la boutique ; la réactivation le
+        // rend visible, seulement s'il a été masqué par ce nettoyage ; tout autre produit : rien ne change
+        $state = fn (int $id): array => array_map('boolval', $this->db->fetchAssociative('SELECT subscription_enabled, is_web, web_hidden_by_abo FROM product WHERE id = ?', [$id]));
+        $created = $this->json('POST', '/api/site/abonnements/formules', ['names' => ['fr' => 'Club seul abo-conf-b'], 'price' => 3000, 'interval' => 'month',
+            'newProduct' => ['names' => ['fr' => 'abo-conf-b Club seul']]], 'admin', 201);
+        $carrier = (int) $created['plan']['productId'];
+        $second = $this->json('POST', '/api/site/abonnements/formules', ['productId' => $carrier, 'names' => ['fr' => 'Club bis abo-conf-b'], 'price' => 3100, 'interval' => 'month'], 'admin', 201);
+        $this->assertSame(['subscription_enabled' => true, 'is_web' => true, 'web_hidden_by_abo' => false], $state($carrier));
+        $this->api('DELETE', '/api/site/abonnements/formules/' . $created['plan']['id'], null, 'admin');
+        $this->assertSame(['subscription_enabled' => true, 'is_web' => true, 'web_hidden_by_abo' => false], $state($carrier), 'il porte encore une formule : rien ne change');
+        $this->assertSame(204, $this->api('DELETE', '/api/site/abonnements/formules/' . $second['plan']['id'], null, 'admin')->getStatusCode());
+        $this->assertSame(['subscription_enabled' => false, 'is_web' => false, 'web_hidden_by_abo' => true], $state($carrier), 'plus aucune formule : abonnement coupé, fiche masquée, drapeau posé');
+        $this->assertSame(1, (int) $this->db->fetchOne("SELECT COUNT(*) FROM content_audit_log WHERE resource = 'product_subscription' AND resource_id = ?", [(string) $carrier]), 'le nettoyage est au journal');
+        // réactivation : la fiche revient, le drapeau tombe
+        $this->json('PATCH', "/api/site/abonnements/produits/$carrier", ['subscriptionEnabled' => true], 'admin', 200);
+        $this->assertSame(['subscription_enabled' => true, 'is_web' => true, 'web_hidden_by_abo' => false], $state($carrier));
+
+        // une fiche masquée par le commerçant (sans le drapeau) reste masquée à la réactivation
+        $this->json('PATCH', "/api/site/abonnements/produits/$carrier", ['subscriptionEnabled' => false], 'admin', 200);
+        $this->db->executeStatement('UPDATE product SET is_web = FALSE WHERE id = ?', [$carrier]);
+        $this->provider->getEntityManager()->clear();
+        $this->json('PATCH', "/api/site/abonnements/produits/$carrier", ['subscriptionEnabled' => true], 'admin', 200);
+        $this->assertSame(['subscription_enabled' => true, 'is_web' => false, 'web_hidden_by_abo' => false], $state($carrier), 'masquée par le commerçant : elle le reste');
+
+        // un produit ordinaire (vendu seul, avec un prix) qui perd sa dernière formule : rien ne change
+        $plain = $this->product('abo-conf-b Ordinaire', 20.0, true);
+        $plan = $this->json('POST', '/api/site/abonnements/formules', ['productId' => $plain, 'names' => ['fr' => 'Ordinaire abo-conf-b'], 'price' => 1500, 'interval' => 'month'], 'admin', 201);
+        $this->assertSame(204, $this->api('DELETE', '/api/site/abonnements/formules/' . $plan['plan']['id'], null, 'admin')->getStatusCode());
+        $this->assertSame(['subscription_enabled' => true, 'is_web' => true, 'web_hidden_by_abo' => false], $state($plain), 'produit ordinaire : rien ne change');
+    }
+
     public function testThePreviewQuotesTheBenefitsOfANewFormula(): void
     {
         $product = $this->product('abo-conf-b Yoga', 10.0, true);

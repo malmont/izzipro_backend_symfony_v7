@@ -77,6 +77,9 @@ trait SubscriptionToggleGuardTrait
             return null;
         }
         $product->setSubscriptionEnabled($wanted);
+        if ($wanted) {
+            $this->subscriptionCarriers->restoreWebIfHidden($product); // lot ABO-WEB-2 : la fiche masquée par le nettoyage revient
+        }
 
         return $wanted;
     }

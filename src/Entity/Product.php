@@ -233,6 +233,13 @@ class Product implements TranslatableInterface, DemoContentInterface
     #[Groups(['product:list'])]
     private bool $subscriptionEnabled = false;
 
+    /**
+     * Lot ABO-WEB-2 (20/11/2026, décision du chef) : la fiche a été masquée (isWeb faux) par le nettoyage qui suit la suppression de la
+     * dernière formule d'un porteur créé par newProduct ; la réactivation de l'abonnement la rend visible SEULEMENT si ce drapeau est posé
+     */
+    #[ORM\Column(name: 'web_hidden_by_abo', options: ['default' => false])]
+    private bool $webHiddenByAbo = false;
+
     /** Moyenne des avis publiés (1 à 5, deux décimales), null sans avis ; tenue par ReviewAggregateService */
     #[ORM\Column(name: 'rating_average', nullable: true)]
     private ?float $ratingAverage = null;
@@ -1098,6 +1105,9 @@ class Product implements TranslatableInterface, DemoContentInterface
 
         return $this;
     }
+
+    public function isWebHiddenByAbo(): bool { return $this->webHiddenByAbo; }
+    public function setWebHiddenByAbo(bool $hidden): self { $this->webHiddenByAbo = $hidden; return $this; }
 
     /**
      * Case « Personnalisable » enregistrée (contrat du 08/10/2026). Le site ne la lit plus : voir hasCustomizationConfig,

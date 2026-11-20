@@ -81,11 +81,43 @@ class AboCarrierService
         $warnings = $this->assertCanSet($product, $enabled);
         if ($product->isSubscriptionEnabled() !== $enabled) {
             $product->setSubscriptionEnabled($enabled);
+            if ($enabled) {
+                $this->restoreWebIfHidden($product);
+            }
             $this->emProvider->getEntityManager()->flush();
             $this->recordToggle($product, $enabled);
         }
 
         return ['product' => $this->view($product), 'warnings' => $warnings];
+    }
+
+    /**
+     * Lot ABO-WEB-2 (décision du chef, 20/11/2026) : après la suppression d'une formule. Un porteur au profil newProduct (vente coupée, prix 0
+     * sans aucune variante payante) qui ne porte plus AUCUNE formule (active ou archivée) perd l'abonnement et sort de la boutique (isWeb
+     * faux), avec le drapeau qui dit que c'est ce nettoyage qui l'a masqué. Tout autre produit : rien ne change. À appeler dans la
+     * transaction de la suppression, après son écriture.
+     */
+    public function afterPlanDeleted(Product $product): void
+    {
+        $em = $this->emProvider->getEntityManager();
+        if (!$product->isSubscriptionEnabled() || $product->isSaleEnabled() || !$product->isSubscriptionOnly() || (float) $product->getPrice() > 0.0
+            || $em->getRepository(SubscriptionPlan::class)->count(['product' => $product]) > 0) {
+            return;
+        }
+        $product->setSubscriptionEnabled(false);
+        if ($product->isWeb() === true) {
+            $product->setIsWeb(false)->setWebHiddenByAbo(true);
+        }
+        $em->flush();
+        $this->recordToggle($product, false);
+    }
+
+    /** La réactivation de l'abonnement rend la fiche visible, seulement si c'est le nettoyage d'après suppression qui l'avait masquée */
+    public function restoreWebIfHidden(Product $product): void
+    {
+        if ($product->isWebHiddenByAbo()) {
+            $product->setIsWeb(true)->setWebHiddenByAbo(false);
+        }
     }
 
     /** Le geste au journal (`product_subscription`) : API, assistant et EasyAdmin */
@@ -174,7 +206,8 @@ class AboCarrierService
         return [
             'id' => $product->getId(), 'name' => $product->getName(), 'slug' => $product->getSlug(), 'imageUrl' => $product->getImage(),
             'subscriptionEnabled' => $product->isSubscriptionEnabled(), 'subscriptionOnly' => $product->isSubscriptionOnly(),
-            'plans' => ['active' => $stats['active'] ?? 0, 'archived' => $stats['archived'] ?? 0, 'withSubscribers' => $stats['withSubscribers'] ?? 0],
+            'plans' => ['active' => $stats['active'] ?? 0, 'archived' => $stats['archived'] ?? 0, 'withSubscribers' => $stats['withSubscribers'] ?? 0,
+                'activeNames' => $stats['activeNames'] ?? []], // lot ABO-WEB-2 : les formules qui sortiraient de la vente, nommées AVANT le geste (10 au plus)
             'canEnable' => !$product->isSubscriptionEnabled() && $reasonOn === null,
             'canDisable' => $canDisable,
             'reason' => match (true) {
@@ -199,7 +232,7 @@ class AboCarrierService
      * Formules par produit : actives, archivées, ayant eu un abonné, branchées.
      *
      * @param list<int> $ids
-     * @return array<int, array{active: int, archived: int, withSubscribers: int, branched: bool}>
+     * @return array<int, array{active: int, archived: int, withSubscribers: int, branched: bool, activeNames: list<string>}>
      */
     private function stats(array $ids): array
     {
@@ -210,13 +243,15 @@ class AboCarrierService
         $rows = $this->emProvider->getEntityManager()->getConnection()->fetchAllAssociative(
             "SELECT p.product_id, COUNT(*) FILTER (WHERE p.active) AS active, COUNT(*) FILTER (WHERE NOT p.active) AS archived,
                 COUNT(*) FILTER (WHERE EXISTS (SELECT 1 FROM subscription s WHERE s.plan_id = p.id)) AS with_subscribers,
-                BOOL_OR(COALESCE(p.fulfillment_type, 'none') <> 'none') AS branched
+                BOOL_OR(COALESCE(p.fulfillment_type, 'none') <> 'none') AS branched,
+                TO_JSON((ARRAY_AGG(COALESCE(NULLIF(p.names::json->>'fr', ''), (SELECT j.value FROM json_each_text(p.names::json) j LIMIT 1), '') ORDER BY p.id) FILTER (WHERE p.active))[1:10]) AS active_names
              FROM subscription_plan p WHERE p.product_id IN (?) GROUP BY p.product_id",
             [$ids], [\Doctrine\DBAL\ArrayParameterType::INTEGER]
         );
         $out = [];
         foreach ($rows as $r) {
-            $out[(int) $r['product_id']] = ['active' => (int) $r['active'], 'archived' => (int) $r['archived'], 'withSubscribers' => (int) $r['with_subscribers'], 'branched' => (bool) $r['branched']];
+            $out[(int) $r['product_id']] = ['active' => (int) $r['active'], 'archived' => (int) $r['archived'], 'withSubscribers' => (int) $r['with_subscribers'], 'branched' => (bool) $r['branched'],
+                'activeNames' => array_values(array_map('strval', (array) (json_decode((string) ($r['active_names'] ?? 'null'), true) ?? [])))];
         }
 
         return $out;

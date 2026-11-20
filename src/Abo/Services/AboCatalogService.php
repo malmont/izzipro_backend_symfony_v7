@@ -254,8 +254,14 @@ class AboCatalogService
         $em = $this->emProvider->getEntityManager();
         $id = (int) $plan->getId();
         $old = $this->auditState($plan);
-        $em->remove($plan);
-        $em->flush();
+        $product = $plan->getProduct();
+        $em->wrapInTransaction(function () use ($em, $plan, $product) {
+            $em->remove($plan);
+            $em->flush();
+            if ($product !== null) {
+                $this->carriers?->afterPlanDeleted($product); // lot ABO-WEB-2 : le porteur créé par newProduct, sans formule, sort de la boutique
+            }
+        });
         $this->audit?->record('subscription_plan', $id, 'delete', $old, null);
     }
 
@@ -386,7 +392,11 @@ class AboCatalogService
     /** @return array<string, mixed> */
     private function head(SubscriptionPlan $plan, string $locale): array
     {
-        return ['id' => $plan->getId(), 'productId' => $plan->getProduct()?->getId(), 'names' => $plan->getNames(), 'name' => $plan->getName($locale), 'descriptions' => $plan->getDescriptions(),
+        $product = $plan->getProduct();
+
+        return ['id' => $plan->getId(), 'productId' => $product?->getId(),
+            'product' => $product !== null ? ['id' => $product->getId(), 'name' => $product->getTranslation($locale)?->getName() ?? $product->getName()] : null, // lot ABO-WEB-2
+            'names' => $plan->getNames(), 'name' => $plan->getName($locale), 'descriptions' => $plan->getDescriptions(),
             'features' => $plan->getFeatures(), 'badges' => $plan->getBadges(), 'price' => $plan->getPrice(), 'currency' => $plan->getCurrency(), 'interval' => $plan->getInterval(),
             'intervalCount' => $plan->getIntervalCount(), 'trialDays' => $plan->getTrialDays(), 'minimumTerms' => $plan->getMinimumTerms(), 'maxPauseDays' => $plan->getMaxPauseDays(),
             'pausesPerYear' => $plan->getPausesPerYear(), 'singlePeriod' => $plan->isSinglePeriod(), 'highlighted' => $plan->isHighlighted(), 'active' => $plan->isActive()];
