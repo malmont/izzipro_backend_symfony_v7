@@ -17,6 +17,8 @@ class AboProofStorage
 {
     public const MAX_BYTES = 10 * 1024 * 1024;
     public const MAX_SIDE_IN = 12000;
+    /** relecture neuve : 50 millions de pixels au plus (un PNG de quelques Ko en 12 000 × 12 000 ferait plus d'1 Go en mémoire) */
+    public const MAX_PIXELS_IN = 50_000_000;
     public const MAX_SIDE_OUT = 2000;
     public const MIMES = ['image/jpeg', 'image/png', 'image/webp'];
 
@@ -32,7 +34,7 @@ class AboProofStorage
         }
         $mime = (string) ((new \finfo(FILEINFO_MIME_TYPE))->file($file->getPathname()) ?: '');
         $size = @getimagesize($file->getPathname());
-        if (!in_array($mime, self::MIMES, true) || $size === false || $size[0] < 1 || $size[1] < 1 || $size[0] > self::MAX_SIDE_IN || $size[1] > self::MAX_SIDE_IN) {
+        if (!in_array($mime, self::MIMES, true) || $size === false || $size[0] < 1 || $size[1] < 1 || $size[0] > self::MAX_SIDE_IN || $size[1] > self::MAX_SIDE_IN || $size[0] * $size[1] > self::MAX_PIXELS_IN) {
             return 'PROOF_FORMAT';
         }
 
@@ -70,6 +72,8 @@ class AboProofStorage
         $ok = imagejpeg($out, $path, 85);
         imagedestroy($out);
         if (!$ok || !is_file($path)) {
+            @unlink($path); // jamais de fichier partiel
+
             return null;
         }
 

@@ -44,6 +44,8 @@ class AboDeliveryService
     public const CONTESTATIONS_MAX = 100;
     public const SESSION_MAX = 500;
     private const MARKED = [BenefitOccurrence::STATUS_DONE, BenefitOccurrence::STATUS_MISSED];
+    /** L'avis de l'abonné et la décision remis à zéro : un nouveau constat, ou une correction */
+    private const ACK_RESET = 'customer_ack = NULL, customer_ack_comment = NULL, customer_ack_at = NULL, ack_ticket_ref = NULL, ack_resolution = NULL, ack_resolved_at = NULL, ack_resolved_by = NULL';
 
     public function __construct(
         private readonly TenantEntityManagerProvider $emProvider,
@@ -82,12 +84,14 @@ class AboDeliveryService
             $changed = $this->locked($subscription, function () use ($subscription, $occurrenceId, $note, $proof, $by, &$used) {
                 return $this->conn()->transactional(function (Connection $conn) use ($subscription, $occurrenceId, $note, $proof, $by, &$used) {
                     $o = $this->row($conn, $subscription, $occurrenceId);
-                    if ($o['status'] === BenefitOccurrence::STATUS_DONE) {
+                    if ($o['status'] === BenefitOccurrence::STATUS_DONE && $o['scheduled_at'] !== null) {
                         return false; // déjà fait : rien de changé, aucun second courriel (la photo envoyée de nouveau n'est pas gardée)
                     }
                     $this->assertMarkable($o);
                     $now = self::utc(new \DateTimeImmutable());
-                    $conn->executeStatement("UPDATE benefit_occurrence SET status = 'done', done_at = ?, done_by = ?, note = ?, proof_path = ?, proof_sha256 = ?, proof_mime = ?, proof_at = ? WHERE id = ?",
+                    // relecture neuve : un nouveau constat repart d'un avis vierge (un droit rendu puis replanifié se confirme ou se conteste de nouveau)
+                    $conn->executeStatement("UPDATE benefit_occurrence SET status = 'done', done_at = ?, done_by = ?, note = ?, proof_path = ?, proof_sha256 = ?, proof_mime = ?, proof_at = ?,
+                        " . self::ACK_RESET . ' WHERE id = ?',
                         [$now, $by, $note, $proof['path'] ?? null, $proof['sha256'] ?? null, $proof['mime'] ?? null, $proof !== null ? $now : null, $occurrenceId]);
                     $used = $proof !== null;
 
@@ -124,7 +128,7 @@ class AboDeliveryService
                 return false;
             }
             $this->assertMarkable($o);
-            $conn->executeStatement("UPDATE benefit_occurrence SET status = 'missed', done_at = ?, done_by = ?, note = ? WHERE id = ?", [self::utc(new \DateTimeImmutable()), $by, $note, $occurrenceId]);
+            $conn->executeStatement("UPDATE benefit_occurrence SET status = 'missed', done_at = ?, done_by = ?, note = ?, " . self::ACK_RESET . ' WHERE id = ?', [self::utc(new \DateTimeImmutable()), $by, $note, $occurrenceId]);
 
             return true;
         }));
@@ -215,7 +219,12 @@ class AboDeliveryService
                 throw new AboException(409, 'UNDO_PERIOD_CLOSED', sprintf('La période de ce droit est close : un constat se corrige tant que la période court, ou dans les %d jours.', self::UNDO_GRACE_DAYS));
             }
             $conn->executeStatement("UPDATE benefit_occurrence SET status = 'scheduled', done_at = NULL, done_by = NULL, note = NULL, proof_path = NULL, proof_sha256 = NULL, proof_mime = NULL, proof_at = NULL,
-                customer_ack = NULL, customer_ack_comment = NULL, customer_ack_at = NULL, ack_ticket_ref = NULL, ack_resolution = NULL, ack_resolved_at = NULL, ack_resolved_by = NULL WHERE id = ?", [$occurrenceId]);
+                " . self::ACK_RESET . ' WHERE id = ?', [$occurrenceId]);
+            // relecture neuve : le créneau annulé entre-temps ne reprend pas la date ; le droit redevient à planifier, sans perte
+            if ($o['slot_id'] !== null && $conn->fetchOne('SELECT status FROM benefit_slot WHERE id = ? FOR UPDATE', [$o['slot_id']]) !== BenefitSlot::STATUS_OPEN) {
+                $conn->executeStatement("UPDATE benefit_occurrence SET status = 'available', slot_id = NULL, scheduled_at = NULL, scheduled_end = NULL, scheduled_by = NULL, scheduled_source = NULL,
+                    valid_until = CASE WHEN valid_until <= ? THEN ? ELSE valid_until END WHERE id = ?", [self::utc(new \DateTimeImmutable()), AboAgendaService::floor($conn, (int) $subscription->getId()), $occurrenceId]);
+            }
 
             return $o;
         }));
@@ -250,7 +259,7 @@ class AboDeliveryService
             } else {
                 // le droit redevient à planifier (comme une séance annulée par la boutique), valable au moins jusqu'à la fin de la période en cours
                 $conn->executeStatement("UPDATE benefit_occurrence SET status = 'available', slot_id = NULL, scheduled_at = NULL, scheduled_end = NULL, scheduled_by = NULL, scheduled_source = NULL,
-                    done_at = NULL, done_by = NULL, proof_path = NULL, proof_sha256 = NULL, proof_mime = NULL, proof_at = NULL,
+                    done_at = NULL, done_by = NULL, note = NULL, proof_path = NULL, proof_sha256 = NULL, proof_mime = NULL, proof_at = NULL, done_notified_at = NULL,
                     valid_until = CASE WHEN valid_until <= ? THEN ? ELSE valid_until END, ack_resolution = ?, ack_resolved_at = ?, ack_resolved_by = ? WHERE id = ?",
                     [$now, AboAgendaService::floor($conn, (int) $subscription->getId()), $decision, $now, $by, $occurrenceId]);
             }

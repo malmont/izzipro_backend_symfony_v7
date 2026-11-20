@@ -1062,7 +1062,8 @@ Les prestations à quantité deviennent des **droits** que l'abonné consomme ; 
   rend 409 `SUBSCRIPTION_BUSY`, à refaire) :
   - `POST /api/site/abonnements/{id}/utilisations { benefitId, note? }` (201) : marque utilisé le droit qui expire le premier ; deux gestes
     simultanés ne prennent jamais le même droit. 409 `BALANCE_EMPTY`, 422 `BENEFIT_NOT_IN_PLAN`. Annulable 24 h :
-    `DELETE …/utilisations/{occurrenceId}` (404 `OCCURRENCE_NOT_FOUND`, 409 `USE_UNDO_EXPIRED`) ;
+    `DELETE …/utilisations/{occurrenceId}` (404 `OCCURRENCE_NOT_FOUND`, 409 `USE_UNDO_EXPIRED` ; 409 `OCCURRENCE_SCHEDULED` pour une date
+    marquée « fait » par ABO-3a, qui se corrige par `…/correction`) ;
   - `POST /api/site/abonnements/{id}/droits { benefitId, quantity (1 à 10), reason }` (201) : droits offerts jusqu'à la fin de la
     période en cours ; motif obligatoire (`GIFT_INVALID`, `REASON_REQUIRED`) ; écrit au journal du site ;
   - `POST /api/site/abonnements/{id}/pause { until }` (date du magasin) : 90 jours au plus et une pause par an glissant, réglables par
@@ -1268,9 +1269,10 @@ Nouvel état `missed` (absent).
   facultative (300 caractères), photo facultative ; « absent » : compté comme **utilisé** (décision 1, défaut accepté), sans courriel. Un
   droit déjà marqué de l'autre façon : 409 `OCCURRENCE_ALREADY_MARKED` (le corriger d'abord) ; un droit sans date : 409
   `OCCURRENCE_NOT_SCHEDULED` (une utilisation sans date passe par « Utiliser » d'ABO-1). **Deux fois le même geste : 200, `changed: false`**,
-  rien d'écrit, aucun second courriel.
+  rien d'écrit, aucun second courriel. Un nouveau constat repart d'un avis vierge. Un « fait » ou un « absent » **garde sa place** dans
+  le créneau (les places comptent les dates planifiées, faites et absentes : aucune surréservation si le constat est corrigé).
 - **Photo de preuve** : multipart, champ `photo`, JPEG, PNG ou WebP (un HEIC d'iPhone se convertit en JPEG avant l'envoi), 10 Mo au plus
-  (422 `PROOF_TOO_LARGE`, `PROOF_FORMAT`). Relue puis **réencodée** en JPEG par GD : aucune métadonnée gardée (position GPS, appareil,
+  (422 `PROOF_TOO_LARGE`, `PROOF_FORMAT` ; 12 000 pixels au plus de côté et 50 millions de pixels en tout, contrôlés avant le décodage). Relue puis **réencodée** en JPEG par GD : aucune métadonnée gardée (position GPS, appareil,
   date) ; l'orientation de l'appareil est appliquée aux pixels ; 2000 pixels au plus de côté ; empreinte SHA-256 gardée. Stockage privé
   `var/storage/private_media/abo-proofs/<site>/`, jamais d'adresse publique, servie par les deux routes `…/preuve` seulement
   (`Cache-Control: private, no-store`). Visible de l'abonné (décision 9). **Effacée après 12 mois** au passage `app:abo:periodes`
@@ -1286,18 +1288,21 @@ Nouvel état `missed` (absent).
 - **Corriger un constat** (« fait » ou « absent » posé par erreur ; administrateur, **motif obligatoire**, au journal `occurrence_undo` et à
   l'historique `done_undone` / `missed_undone`) : la date redevient planifiée, le droit revient au solde, la photo est effacée. Permis tant
   que la période du droit court, et toujours dans les **7 jours** qui suivent le constat (sinon 409 `UNDO_PERIOD_CLOSED`) ; **refusé
-  pendant une contestation** (409 `CONTESTATION_PENDING`).
+  pendant une contestation** (409 `CONTESTATION_PENDING`). Le créneau annulé entre-temps : le droit redevient à planifier, sans perte.
+  « Annuler l'utilisation » d'ABO-1 ne touche jamais une date marquée (409 `OCCURRENCE_SCHEDULED`).
 - **Avis de l'abonné** : `confirmed` ou `contested` (commentaire de 10 à 1000 caractères), dans les **30 jours** du constat (409
   `ACK_TOO_LATE`) ; le même avis une seconde fois : 200 sans rien changer ; un autre avis : 409 `ACK_ALREADY_GIVEN`. Une contestation
   ouvre une **demande d'Assistance** quand le module est ouvert (sujet « Contestation : <prestation> du <date> », catégorie `other` ; son
   numéro est rendu dans `ticket`) ; si le plafond de demandes est atteint, la contestation est gardée quand même. **Jamais de
   remboursement automatique** (décision 6).
 - **Trancher une contestation** (administrateur) : `kept` (constat maintenu) ou `returned` (le droit redevient **à planifier**, valable au
-  moins jusqu'à la fin de la période en cours ; photo effacée). Au journal et à l'historique (`contest_kept`, `contest_returned`).
+  moins jusqu'à la fin de la période en cours ; photo et note effacées ; replanifié puis refait, c'est une nouvelle prestation : nouveau
+  courriel, nouvel avis). Au journal et à l'historique (`contest_kept`, `contest_returned`).
 - **Fiches** : gestion `GET /api/site/abonnements/{id}` et abonné `GET /api/subscriptions/{id}` gagnent `delivered[]` (90 jours, 20 au plus,
   les plus récentes d'abord) et `doneEmails`. Abonné : `occurrenceId`, `benefitId`, `name`, `status` (`done` | `missed`), `startsAt`,
   `doneAt`, `note`, `hasProof`, `customerAck`, `ackUntil` (null une fois l'avis donné) ; l'équipe voit en plus `doneBy`, `ackComment`,
-  `ackAt`, `ticket`, `resolution`. Le modèle (assistant) ne voit ni « par qui », ni la note, ni le commentaire.
+  `ackAt`, `ticket`, `resolution`. Le modèle (assistant) ne voit dans la fiche ni « par qui », ni la note, ni le commentaire ; seul `get_contestations` lui donne le
+  commentaire, courriels et téléphones masqués, pour qu'il résume la contestation (l'administrateur tranche).
 - **Entrées** : le directeur d'un groupe entré lit « À faire aujourd'hui », les contestations et les photos ; il ne marque, ne corrige ni ne
   tranche rien (`EntryModeGuardSubscriber`, famille « droits »). L'agence n'entre pas dans les abonnements (famille vente), comme pour l'agenda.
 

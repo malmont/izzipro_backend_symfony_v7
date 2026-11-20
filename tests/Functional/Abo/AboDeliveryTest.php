@@ -276,6 +276,61 @@ class AboDeliveryTest extends WebTestCase
         $this->assertSame('NO_PENDING_CONTESTATION', $this->json('POST', $team . $a . '/contestation', ['decision' => 'kept'], 409)['code']);
     }
 
+    /**
+     * Suites de la relecture neuve d'ABO-3a :
+     * - « Annuler l'utilisation » (ABO-1) ne touche jamais une date marquée ;
+     * - « fait » sur une utilisation sans date est refusé ;
+     * - un droit rendu puis refait se confirme de nouveau et envoie son courriel ;
+     * - un constat garde sa place ;
+     * - la correction sur un créneau annulé rend le droit à planifier ;
+     * - une photo de trop de pixels est refusée avant d'être décodée.
+     */
+    public function testTheReviewFixesKeepEveryMarkedDateConsistent(): void
+    {
+        $yoga = $this->benefit('Yoga relecture');
+        [$s] = $this->subscriptions($yoga, 1, 6);
+        $team = '/api/site/abonnements/' . $s->getId() . '/occurrences/';
+        [$a, $b] = [$this->booked($s, $yoga, '+2 days'), $this->booked($s, $yoga, '+3 days')];
+        $this->past($a, $b);
+        $this->json('POST', $team . $a . '/fait', [], 200);
+        $this->assertSame('OCCURRENCE_SCHEDULED', $this->json('DELETE', '/api/site/abonnements/' . $s->getId() . '/utilisations/' . $a, null, 409)['code']);
+        $this->assertSame('done', $this->status($a));
+        $use = $this->json('POST', '/api/site/abonnements/' . $s->getId() . '/utilisations', ['benefitId' => $yoga->getId()], 201)['occurrenceId'];
+        $this->assertSame('OCCURRENCE_NOT_SCHEDULED', $this->json('POST', $team . $use . '/fait', [], 409)['code']);
+
+        // contesté, droit rendu, replanifié, refait : un nouvel avis possible et un nouveau courriel
+        $this->json('POST', '/api/subscriptions/' . $s->getId() . '/occurrences/' . $a . '/avis', ['decision' => 'contested', 'comment' => 'La séance n\'a pas eu lieu.'], 200, 'client');
+        $this->json('POST', $team . $a . '/contestation', ['decision' => 'returned'], 200);
+        $this->json('POST', '/api/site/abonnements/' . $s->getId() . '/rendez-vous', ['benefitId' => $yoga->getId(), 'occurrenceId' => $a, 'slotId' => $this->slot($yoga, '+5 days', 4)], 201);
+        $this->past($a);
+        $redone = $this->json('POST', $team . $a . '/fait', [], 200)['occurrence'];
+        $this->assertEmailCount(1, null, 'une nouvelle prestation : un nouveau courriel');
+        $this->assertSame([null, null, null], [$redone['customerAck'], $redone['ticket'], $redone['resolution']]);
+        $this->assertSame('confirmed', $this->json('POST', '/api/subscriptions/' . $s->getId() . '/occurrences/' . $a . '/avis', ['decision' => 'confirmed'], 200, 'client')['acknowledgement']['customerAck']);
+
+        // un absent garde sa place : le créneau d'une place reste complet
+        [$t] = $this->subscriptions($yoga, 1, 4);
+        $full = $this->slot($yoga, '+6 days', 1);
+        $first = $this->json('POST', '/api/site/abonnements/' . $s->getId() . '/rendez-vous', ['benefitId' => $yoga->getId(), 'slotId' => $full], 201)['appointment']['occurrenceId'];
+        $this->db->executeStatement("UPDATE benefit_occurrence SET status = 'missed', done_at = NOW() WHERE id = ?", [$first]);
+        $this->assertSame('SLOT_FULL', $this->json('POST', '/api/site/abonnements/' . $t->getId() . '/rendez-vous', ['benefitId' => $yoga->getId(), 'slotId' => $full], 409)['code']);
+
+        // le créneau annulé entre-temps : la correction rend le droit à planifier, valable
+        $this->db->executeStatement("UPDATE benefit_slot SET status = 'cancelled' WHERE id = (SELECT slot_id FROM benefit_occurrence WHERE id = ?)", [$b]);
+        $this->json('POST', $team . $b . '/absent', [], 200);
+        $fixed = $this->json('POST', $team . $b . '/correction', ['reason' => 'Mauvaise séance'], 200)['occurrence'];
+        $this->assertSame(['available', null], [$fixed['status'], $fixed['startsAt']]);
+        $this->assertTrue((bool) $this->db->fetchOne('SELECT valid_until > NOW() AND slot_id IS NULL FROM benefit_occurrence WHERE id = ?', [$b]));
+
+        // 8 000 × 7 000 pixels dans un PNG de quelques octets : refusé sans être décodé
+        $ihdr = pack('NNCCCCC', 8000, 7000, 8, 2, 0, 0, 0);
+        $png = "\x89PNG\r\n\x1a\n" . pack('N', 13) . 'IHDR' . $ihdr . pack('N', crc32('IHDR' . $ihdr)) . pack('N', 0) . 'IEND' . pack('N', crc32('IEND'));
+        [$c] = [$this->booked($s, $yoga, '+4 days')];
+        $this->past($c);
+        $this->assertSame('PROOF_FORMAT', $this->upload($team . $c . '/fait', $png, 'enorme.png', 422)['code']);
+        $this->assertSame('scheduled', $this->status($c));
+    }
+
     public function testAWholeSessionIsMarkedOneEmailPerSubscriberToHimAloneAndTodayListsIt(): void
     {
         $yoga = $this->benefit('Yoga séance');

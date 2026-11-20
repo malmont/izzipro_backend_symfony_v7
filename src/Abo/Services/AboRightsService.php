@@ -262,7 +262,7 @@ class AboRightsService
         });
     }
 
-    /** @throws AboException 404 OCCURRENCE_NOT_FOUND, 409 USE_UNDO_EXPIRED */
+    /** @throws AboException 404 OCCURRENCE_NOT_FOUND, 409 USE_UNDO_EXPIRED | OCCURRENCE_SCHEDULED */
     public function undoUse(Subscription $subscription, int $occurrenceId, ?string $by): void
     {
         $this->locked($subscription, function () use ($subscription, $occurrenceId, $by) {
@@ -270,6 +270,10 @@ class AboRightsService
             $o = $em->getRepository(BenefitOccurrence::class)->find($occurrenceId);
             if ($o === null || $o->getSubscription()?->getId() !== $subscription->getId() || $o->getStatus() !== BenefitOccurrence::STATUS_DONE) {
                 throw new AboException(404, 'OCCURRENCE_NOT_FOUND', 'Utilisation introuvable.');
+            }
+            // relecture neuve d'ABO-3a : une date planifiée marquée « fait » se corrige par « Corriger » (contestation, solde, photo, avis)
+            if ($o->getScheduledAt() !== null) {
+                throw new AboException(409, 'OCCURRENCE_SCHEDULED', 'Une date planifiée marquée faite se corrige par « Corriger le constat ».');
             }
             if ($o->getDoneAt() === null || $o->getDoneAt() < (new \DateTimeImmutable())->modify('-' . self::UNDO_HOURS . ' hours')) {
                 throw new AboException(409, 'USE_UNDO_EXPIRED', 'Une utilisation s\'annule dans les 24 heures.');
