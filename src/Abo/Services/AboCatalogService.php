@@ -77,10 +77,10 @@ class AboCatalogService
         $locked = $creating ? null : $this->lockedState($plan);
         $plan ??= (new SubscriptionPlan())->setCurrency($this->currency->code())->setActive(true);
         $this->apply($plan, $data, $creating);
-        $this->validatePlan($plan);
         if ($locked !== null) {
-            $this->assertLocked($plan, $locked);
+            $this->assertLocked($plan, $locked); // le gel d'abord : un réglage figé se dit 409, avant toute règle de validation
         }
+        $this->validatePlan($plan);
         $em->wrapInTransaction(function () use ($em, $plan, $before, $by, $creating) {
             if ($creating) {
                 $em->persist($plan);
@@ -300,10 +300,10 @@ class AboCatalogService
     {
         $probe = $plan !== null ? clone $plan : (new SubscriptionPlan())->setCurrency($this->currency->code())->setActive(true);
         $this->apply($probe, $data, $plan === null);
-        $this->validatePlan($probe);
         if ($plan !== null && ($locked = $this->lockedState($plan)) !== null) {
             $this->assertLocked($probe, $locked);
         }
+        $this->validatePlan($probe);
         $priceChange = $plan !== null && array_diff_key($this->priceState($plan), ['stripePriceId' => 1]) !== array_diff_key($this->priceState($probe), ['stripePriceId' => 1]);
 
         return ['plan' => $this->head($probe, $locale), 'summary' => $this->summary($probe, $locale),

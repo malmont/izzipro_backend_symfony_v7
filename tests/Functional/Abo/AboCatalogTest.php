@@ -125,6 +125,9 @@ class AboCatalogTest extends WebTestCase
             $this->assertSame(['PLAN_HAS_SUBSCRIBERS', array_key_first($change)], [$refusal['code'], $refusal['field']], json_encode($change));
         }
         $this->assertSame('PLAN_HAS_SUBSCRIBERS', $this->json('POST', "$base/apercu?planId=$id", ['minimumTerms' => 12], 'admin', 409)['code'], 'l\'aperçu le dit aussi');
+        // l'essai va plus vite que l'horloge à la seconde : les époques passées et l'abonné reculent d'une heure, l'abonné né sous le prix 6900
+        $this->db->executeStatement("UPDATE subscription_plan_price SET valid_from = valid_from - INTERVAL '1 hour', valid_until = valid_until - INTERVAL '1 hour' WHERE plan_id = ?", [$id]);
+        $this->db->executeStatement("UPDATE subscription SET created_at = (SELECT valid_from FROM subscription_plan_price WHERE plan_id = ? AND valid_until IS NULL) WHERE stripe_subscription_id = 'sub_abo_conf'", [$id]);
         $this->json('PATCH', "$base/$id", ['price' => 7900], 'admin', 200);
         $sub = $this->provider->getEntityManager()->getRepository(\App\Entity\Subscription::class)->findOneBy(['stripeSubscriptionId' => 'sub_abo_conf']);
         $this->assertSame(6900, static::getContainer()->get(AboCatalogService::class)->billedPrice($sub)['price'], 'l\'abonné garde le prix de son époque');
