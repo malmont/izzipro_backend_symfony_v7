@@ -86,7 +86,11 @@ class GroupEntryTest extends WebTestCase
             ['POST', '/api/site/imports', 'customers'], ['POST', '/api/site/imports/1/invitations', 'customers'],
             // décision du chef (FIS-1, 19/11/2026) : les prêts en LECTURE SEULE (écritures des comptes de la boutique)
             ['POST', '/api/gestion/prets', 'payment'], ['PATCH', '/api/gestion/prets/1', 'payment'], ['DELETE', '/api/gestion/prets/1', 'payment'],
-            ['POST', '/api/gestion/prets/1/remboursements', 'refund']] as [$method, $path, $reason]) {
+            ['POST', '/api/gestion/prets/1/remboursements', 'refund'],
+            // ABO-3a (20/11/2026) : le directeur lit « À faire aujourd'hui », il ne marque, ne corrige ni ne tranche rien
+            ['POST', '/api/site/abonnements/1/occurrences/1/fait', 'rights'], ['POST', '/api/site/abonnements/1/occurrences/1/absent', 'rights'],
+            ['POST', '/api/site/abonnements/1/occurrences/1/correction', 'rights'], ['POST', '/api/site/abonnements/1/occurrences/1/contestation', 'rights'],
+            ['POST', '/api/site/abonnements/creneaux/1/fait', 'rights']] as [$method, $path, $reason]) {
             $this->assertSame([403, $reason], $this->reason($method, $path, $token), "$method $path");
         }
         // ... et par le fil de la gestion : un prêt ne s'y ouvre pas (le chemin de confirmation ne dit pas l'action : le fil refuse lui-même)
