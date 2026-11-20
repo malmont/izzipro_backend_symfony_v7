@@ -1008,6 +1008,11 @@ Socle de l'abonnement universel : une formule livre des **prestations** ; aucun 
 - **Grille publique** : `GET /api/subscription-plans` rend `benefits[]` pour chaque formule (`[]` sans prestation) : `{ id, benefitId,
   kind, name, description, durationMinutes, location, quantity, scheduling, slotChoice, cancelDeadlineHours, carryOverMax, proof,
   summary }`, dans la langue demandée ; jamais l'intervenant ni un coût. Cache : `Benefit` et `PlanBenefit` étiquetés avec les formules.
+- **Dates des fiches d'abonnement** (lot ABO-DATES, 20/11/2026) : toutes à l'heure du magasin, avec le décalage
+  (`2026-12-20T13:00:00-05:00`), dans la fiche de gestion (`/api/site/abonnements/...`) comme dans celle de l'abonné
+  (`/api/subscriptions`, `…/{id}`) : `currentPeriodEnd`, `createdAt`, `canceledAt`, `pausedAt`, `orders[].date`, le prochain essai de
+  paiement (`paymentIssue` / `latestInvoice.nextPaymentAttempt`), les pauses (`from`, `until`, `resumedAt`) ; une seule règle,
+  `StoreClock::atom()`. Avant ce lot, la fiche de l'abonné les rendait en UTC (`+00:00`).
 - **Suivi** pour la gestion web ET l'application de gestion mobile, mêmes routes (`ROLE_ADMIN`, module Boutique, lecture seule,
   `?locale=en` possible, dates ATOM à l'heure du magasin) ; écran du registre `abonnements` (famille vente) :
   - `GET /api/site/abonnements/formules` → `{ plans: [{ id, name, price, currency, interval, intervalCount, active, fulfillmentType,

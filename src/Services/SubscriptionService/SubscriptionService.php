@@ -52,6 +52,7 @@ final class SubscriptionService
         private readonly ?\App\Services\StripeService\StripeService $accounts = null, // lot ABO-CONF A : compte connecté exigé en réel
         private readonly ?\App\Services\StripeService\StripeAccountResolver $modes = null,
         private readonly ?SubscriptionFeeService $fees = null, // lot ABO-CONF C : commission des abonnements
+        private readonly ?\App\Services\CaisseService\StoreClock $clock = null, // lot ABO-DATES : dates de la fiche à l'heure du magasin
     ) {
     }
 
@@ -459,7 +460,7 @@ final class SubscriptionService
     {
         $orders = $this->emProvider->getEntityManager()->getRepository(Order::class)->findBy(['subscription' => $subscription], ['id' => 'DESC']);
 
-        return SubscriptionOutputDto::fromEntity($subscription, $orders, $locale);
+        return SubscriptionOutputDto::fromEntity($subscription, $orders, $locale, $this->clock?->timezone());
     }
 
     /** @return list<SubscriptionOutputDto> */

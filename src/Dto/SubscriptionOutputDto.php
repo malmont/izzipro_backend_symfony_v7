@@ -4,6 +4,7 @@ namespace App\Dto;
 
 use App\Entity\Order;
 use App\Entity\Subscription;
+use App\Services\CaisseService\StoreClock;
 
 /**
  * Abonnement d'un client (GET /api/subscriptions, …/{id}) : statut, période, adresse, transporteur, livraison par échéance
@@ -92,28 +93,36 @@ final class SubscriptionOutputDto
         return new self(...$args);
     }
 
-    /** @param list<Order> $orders */
-    public static function fromEntity(Subscription $subscription, array $orders, string $locale): self
+    /**
+     * @param list<Order> $orders
+     * @param \DateTimeZone|null $timezone lot ABO-DATES (20/11/2026) : toutes les dates à l'heure du magasin, avec le décalage (UTC sans fuseau)
+     */
+    public static function fromEntity(Subscription $subscription, array $orders, string $locale, ?\DateTimeZone $timezone = null): self
     {
         $carrier = $subscription->getCarrier();
+        $tz = $timezone ?? new \DateTimeZone('UTC');
+        $issue = $subscription->getStatus() === Subscription::STATUS_PAST_DUE ? $subscription->getPaymentIssue() : null;
+        if (is_array($issue) && array_key_exists('nextPaymentAttempt', $issue)) {
+            $issue['nextPaymentAttempt'] = StoreClock::atomIn($tz, $issue['nextPaymentAttempt']);
+        }
 
         return new self(
             (int) $subscription->getId(),
             SubscriptionPlanOutputDto::fromEntity($subscription->getPlan(), $locale),
             $subscription->getQuantity(),
             $subscription->getStatus(),
-            $subscription->getCurrentPeriodEnd()?->format(\DateTimeInterface::ATOM),
+            StoreClock::atomIn($tz, $subscription->getCurrentPeriodEnd()),
             $subscription->isCancelAtPeriodEnd(),
             $subscription->getAddress() ? new AdressOutputDTO($subscription->getAddress()) : null,
             $carrier ? ['id' => (int) $carrier->getId(), 'name' => $carrier->getTranslation($locale)?->getName() ?? $carrier->getName(), 'kind' => $carrier->getKind(), 'isPickup' => $carrier->isPickup()] : null, // kind, isPickup : B20 (08/11/2026)
             $subscription->getShippingAmount(),
-            $subscription->getCreatedAt()->format(\DateTimeInterface::ATOM),
-            $subscription->getCanceledAt()?->format(\DateTimeInterface::ATOM),
+            (string) StoreClock::atomIn($tz, $subscription->getCreatedAt()),
+            StoreClock::atomIn($tz, $subscription->getCanceledAt()),
             array_map(fn (Order $o) => [
-                'id' => (int) $o->getId(), 'reference' => (string) $o->getReference(), 'date' => $o->getOrderDate()->format(\DateTimeInterface::ATOM),
+                'id' => (int) $o->getId(), 'reference' => (string) $o->getReference(), 'date' => (string) StoreClock::atomIn($tz, $o->getOrderDate()),
                 'total' => (int) round((float) $o->getTotalAmount()), 'status' => $o->getStatus()?->getTranslation($locale)?->getName() ?? $o->getStatus()?->getName(),
             ], $orders),
-            $subscription->getStatus() === Subscription::STATUS_PAST_DUE ? $subscription->getPaymentIssue() : null,
+            $issue,
             $subscription->hasPaymentMethod()
         );
     }

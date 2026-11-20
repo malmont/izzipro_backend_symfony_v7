@@ -451,6 +451,39 @@ class AboDeliveryTest extends WebTestCase
     }
 
     /** Le fournisseur du conteneur COURANT (une requête en fait naître un neuf) : ses entités sont celles des services */
+    /**
+     * Lot ABO-DATES (20/11/2026, demande du chef) : chaque date des deux fiches (gestion et abonné) à l'heure du magasin, avec le décalage,
+     * y compris les dates rangées en texte UTC (pauses, prochain essai de paiement). 03:00 UTC est encore la veille à Toronto.
+     */
+    public function testEveryDateOfBothSheetsIsInTheStoreTimeWithItsOffset(): void
+    {
+        [$s] = $this->subscriptions($this->benefit('Yoga dates'), 1);
+        $this->db->executeStatement("UPDATE subscription SET status = 'past_due', current_period_end = '2026-12-20 18:00:00', created_at = '2026-11-01 12:00:00',
+            canceled_at = '2026-11-15 03:00:00', paused_at = '2026-11-10 02:00:00', payment_issue = ?, pauses = ? WHERE id = ?", [
+            json_encode(['amountDue' => 4900, 'currency' => 'CAD', 'hostedInvoiceUrl' => null, 'nextPaymentAttempt' => '2026-11-22T04:30:00+00:00', 'attemptCount' => 1, 'maxAttempts' => 4]),
+            json_encode([['from' => '2026-11-10T02:00:00+00:00', 'until' => '2026-11-20T02:00:00+00:00', 'by' => 'Admin', 'extendedSeconds' => 864000, 'resumedAt' => '2026-11-18T03:15:00+00:00']]),
+            $s->getId()]);
+        $this->prov()->getEntityManager()->clear();
+        $expected = ['currentPeriodEnd' => '2026-12-20T13:00:00-05:00', 'createdAt' => '2026-11-01T07:00:00-05:00', 'canceledAt' => '2026-11-14T22:00:00-05:00'];
+
+        $team = $this->json('GET', '/api/site/abonnements/' . $s->getId(), null, 200);
+        $this->assertSame($expected + ['pausedAt' => '2026-11-09T21:00:00-05:00'], array_intersect_key($team, $expected + ['pausedAt' => 1]));
+        $this->assertSame('2026-11-21T23:30:00-05:00', $team['paymentIssue']['nextPaymentAttempt']);
+        $this->assertSame(['2026-11-09T21:00:00-05:00', '2026-11-19T21:00:00-05:00', '2026-11-17T22:15:00-05:00'], [$team['pauses'][0]['from'], $team['pauses'][0]['until'], $team['pauses'][0]['resumedAt']]);
+
+        $mine = $this->json('GET', '/api/subscriptions/' . $s->getId(), null, 200, 'client');
+        $this->assertSame($expected, array_intersect_key($mine, $expected));
+        $this->assertSame('2026-11-21T23:30:00-05:00', $mine['latestInvoice']['nextPaymentAttempt']);
+        // aucune date d'une fiche ne sort en UTC
+        foreach (['team' => $team, 'mine' => $mine] as $who => $sheet) {
+            array_walk_recursive($sheet, function ($v, $k) use ($who) {
+                if (is_string($v) && preg_match('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/', $v)) {
+                    $this->assertMatchesRegularExpression('/-0[45]:00$/', $v, "$who.$k");
+                }
+            });
+        }
+    }
+
     private function prov(): TenantEntityManagerProvider
     {
         return static::getContainer()->get(TenantEntityManagerProvider::class);
