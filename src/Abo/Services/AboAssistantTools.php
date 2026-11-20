@@ -120,7 +120,8 @@ class AboAssistantTools
                     $data = ['productId' => (int) $product->getId(), 'names' => $names, 'price' => $price, 'interval' => $interval, 'intervalCount' => max(1, (int) ($input['intervalCount'] ?? 1)), 'benefits' => $rows];
 
                     return [$data, sprintf('Créer la formule « %s » sur « %s » : %s %s par %s%s, avec %s', (string) ($names['fr'] ?? reset($names)), (string) $product->getName(),
-                        number_format($price / 100, 2, ',', ' '), $this->catalog?->siteCurrency() ?? $this->currencyFor($product), self::intervalLabel($interval), // la devise imposée : celle du site $data['intervalCount'] > 1 ? ' (tous les ' . $data['intervalCount'] . ')' : '',
+                        number_format($price / 100, 2, ',', ' '), $this->catalog?->siteCurrency() ?? $this->currencyFor($product), self::intervalLabel($interval), // la devise imposée : celle du site
+                        $data['intervalCount'] > 1 ? ' (tous les ' . $data['intervalCount'] . ')' : '',
                         $this->rowsSummary($rows)), null, 'subscription_plans'];
                 case 'propose_plan_update':
                     $plan = $this->planOrFail((int) ($input['planId'] ?? 0));
