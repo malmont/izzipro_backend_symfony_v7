@@ -37,7 +37,7 @@ class PlatformIncidentService
         private readonly PlatformIncidentRepository $incidents,
         private readonly IncidentLimits $limits,
         private readonly TenantConnectionManager $tenants,
-        #[Autowire(service: 'cache.app')] private readonly CacheItemPoolInterface $cache,
+        #[Autowire(service: 'cache.state')] private readonly CacheItemPoolInterface $cache, // lot CACHE-ETAT : fenêtre « une fois par minute »
         private readonly LoggerInterface $logger,
         #[Autowire('%kernel.secret%')] private readonly string $secret,
     ) {

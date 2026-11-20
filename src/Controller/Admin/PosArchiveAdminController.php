@@ -28,6 +28,10 @@ class PosArchiveAdminController extends AbstractController
         $years = array_map('intval', $this->emProvider->getEntityManager()->getConnection()->fetchFirstColumn('SELECT DISTINCT EXTRACT(YEAR FROM order_date)::int AS y FROM "order" WHERE order_source_id = 2 ORDER BY y DESC'));
         $error = null;
         if ($request->isMethod('POST')) {
+            // Lot CACHE-ETAT (20/11/2026) : une action en POST exige le jeton CSRF du formulaire (refus 403 sans lui)
+            if (!$this->isCsrfTokenValid('admin_pos_archive', (string) $request->request->get('_token'))) {
+                throw new \Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException('Jeton CSRF invalide.');
+            }
             try {
                 /** @var User $user */
                 $user = $this->getUser();

@@ -44,7 +44,7 @@ class SiteAssistantService
         private readonly SiteReadinessService $readiness,
         private readonly PlatformModeService $platform,
         private readonly CustomDomainService $domains,
-        private readonly CacheInterface $cache,
+        #[\Symfony\Component\DependencyInjection\Attribute\Autowire(service: 'cache.state')] private readonly CacheInterface $cache, // lot CACHE-ETAT : actions en attente
         private readonly LoggerInterface $logger,
         private readonly ?\App\Services\ShippingService\ProductDimensionsService $dimensions = null, // poids des produits (lot 1 bis, 07/11/2026)
         private readonly ?\App\Services\ShippingService\ShippingDimensionsEstimator $estimator = null,

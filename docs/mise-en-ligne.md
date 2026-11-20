@@ -78,6 +78,13 @@ au vendor en ligne.
   (bascule, retour, second échange en échec avec vendor remis), puis le contrôle des fichiers d'EasyAdmin. À lancer avant toute
   bascule qui change le `composer.lock`.
 - Après la bascule, les workers repartent sur le nouveau vendor : `switch` les arrête déjà (`messenger:stop-workers`).
+- **Contrôles de l'outil après `switch` et `retour` (lot CACHE-ETAT, 20/11/2026, leçons du train 123)** :
+  - FPM rechargé par l'outil (`kill -USR2 1` par le shell : l'image n'a pas d'exécutable `kill`), avec ses preuves : aucun processus
+    de pool repris d'avant, version du Kernel sur disque ;
+  - contrôle g : chaque conteneur de worker (hors planificateur) doit avoir DÉMARRÉ APRÈS l'heure de bascule ; sinon `docker restart`
+    des retardataires (cas d'un signal d'arrêt sous un ancien préfixe), puis battement de moins de 60 s pour les 7 files, lu sur la clé
+    la plus jeune ; un échec = retour arrière. Le planificateur (8e worker) est dit à part, « arrêté » tant que son conteneur
+    n'existe pas. `ops/bascule/bascule.sh workers` fait le même contrôle en lecture seule.
 
 **Repère `{{unique}}`** (16/11/2026) : dans le corps d'une lecture `POST`, il devient une valeur neuve à chaque photo. Une route limitée
 par adresse (« mot de passe oublié » : 3 par heure) ne bute ainsi pas sur les passages de la photo elle-même.

@@ -292,7 +292,6 @@
     "platform GET /admin/plateforme/signalements",
     "platform GET /admin/plateforme/signalements/1/capture",
     "platform GET /admin/plateforme/sites",
-    "platform GET /admin/redis/flush",
     "platform GET /admin/short-code",
     "platform GET /admin/super-admin",
     "platform GET /admin/technique",

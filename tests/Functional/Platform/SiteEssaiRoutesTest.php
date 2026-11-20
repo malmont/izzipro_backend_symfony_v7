@@ -97,8 +97,7 @@ class SiteEssaiRoutesTest extends WebTestCase
 
     private function forget(): void
     {
-        $cache = static::getContainer()->get('cache.app');
-        $cache->delete('essai_job_' . MV_TEST_TENANT2_CODE);
+        static::getContainer()->get(\App\Services\Platform\Essai\EssaiJobStore::class)->forget(MV_TEST_TENANT2_CODE); // lot CACHE-ETAT : en base
     }
 
     /** @return array{0: int, 1: ?string} */

@@ -30,6 +30,10 @@ class PosAccountingExportController extends AbstractController
         $preview = null;
         $error = null;
         if ($request->isMethod('POST')) {
+            // Lot CACHE-ETAT (20/11/2026) : une action en POST exige le jeton CSRF du formulaire (refus 403 sans lui)
+            if (!$this->isCsrfTokenValid('admin_pos_exports', (string) $request->request->get('_token'))) {
+                throw new \Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException('Jeton CSRF invalide.');
+            }
             try {
                 /** @var User $user */
                 $user = $this->getUser();

@@ -10,6 +10,7 @@
     {% if error %}<div class="alert alert-danger">{{ error }}</div>{% endif %}
     {% if done %}<div class="alert alert-success">Lot {{ done.batch }} : {{ done.count }} coupon(s), {{ (done.total / 100)|number_format(2, ',', ' ') }} marqués réclamés.</div>{% endif %}
     <form method="post" class="row g-2 align-items-end mb-4">
+        <input type="hidden" name="_token" value="{{ csrf_token('admin_pos_coupons') }}">
         <div class="col-md-2"><label class="form-label">Acceptés du</label><input type="date" name="from" class="form-control" value="{{ filters.from }}"></div>
         <div class="col-md-2"><label class="form-label">au</label><input type="date" name="to" class="form-control" value="{{ filters.to }}"></div>
         <div class="col-md-2"><label class="form-label">Fabricant</label><input type="text" name="manufacturer" class="form-control" value="{{ filters.manufacturer }}" placeholder="tous"></div>

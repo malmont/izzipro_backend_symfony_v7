@@ -35,7 +35,7 @@ class PlatformAlertRecipientTest extends WebTestCase
         $this->master = static::getContainer()->get(TenantConnectionManager::class)->getPdoMaster();
         $this->master->exec("DELETE FROM platform_settings WHERE key = 'platform_alert_email'");
         unset($_ENV['POS_ALERT_PLATFORM_EMAIL'], $_SERVER['POS_ALERT_PLATFORM_EMAIL']);
-        static::getContainer()->get('cache.app')->deleteItem('platform_alert_email_tests');
+        static::getContainer()->get('cache.state')->deleteItem('platform_alert_email_tests'); // lot CACHE-ETAT
     }
 
     protected function tearDown(): void

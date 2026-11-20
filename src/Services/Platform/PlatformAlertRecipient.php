@@ -26,7 +26,7 @@ class PlatformAlertRecipient
     public function __construct(
         private readonly TenantConnectionManager $tenants,
         private readonly LoggerInterface $logger,
-        #[Autowire(service: 'cache.app')] private readonly CacheItemPoolInterface $cache,
+        #[Autowire(service: 'cache.state')] private readonly CacheItemPoolInterface $cache, // lot CACHE-ETAT : compteur des courriels d'essai
         private readonly ?EmailSenderService $mailer = null,
     ) {
     }

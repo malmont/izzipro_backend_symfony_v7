@@ -28,6 +28,10 @@ class PosCouponAdminController extends AbstractController
         $done = null;
         try {
             if ($request->isMethod('POST')) {
+                // Lot CACHE-ETAT (20/11/2026) : une action en POST exige le jeton CSRF du formulaire (refus 403 sans lui)
+                if (!$this->isCsrfTokenValid('admin_pos_coupons', (string) $request->request->get('_token'))) {
+                    throw new \Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException('Jeton CSRF invalide.');
+                }
                 /** @var User $user */
                 $user = $this->getUser();
                 $action = (string) $request->request->get('action', 'report');

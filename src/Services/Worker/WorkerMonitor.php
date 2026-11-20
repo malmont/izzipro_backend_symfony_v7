@@ -49,7 +49,7 @@ class WorkerMonitor
     private bool $redisUnavailable = false;
 
     public function __construct(
-        private readonly CacheItemPoolInterface $cache,
+        #[Autowire(service: 'cache.state')] private readonly CacheItemPoolInterface $cache, // lot CACHE-ETAT : battement à préfixe fixe
         #[Autowire(service: 'cache.messenger.restart_workers_signal')]
         private readonly CacheItemPoolInterface $restartSignalPool,
         #[Autowire('%env(MESSENGER_TRANSPORT_DSN)%')]
