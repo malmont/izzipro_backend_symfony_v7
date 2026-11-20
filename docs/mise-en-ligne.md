@@ -169,6 +169,7 @@ erreur : ne pas revenir en arrière tant qu'elle n'a pas réussi partout. La mig
 |---|---|
 | Arbre en ligne propre ; le commit contient ce qui est en ligne et ce qui est poussé (`origin/dev`) ; avance rapide seulement | une autre session a pu pousser ou mettre en ligne entre-temps |
 | Livraison qui touche `config/jwt`, `jwt/`, `docker/`, `.env`, ou qui contient un lien symbolique : refusée | incident du 13/11/2026 : un lien `config/jwt` a remplacé le point de montage des clés, authentification coupée 2 minutes sur tous les sites |
+| `src/Schedule.php` dans la livraison ou dans l'arbre en ligne : construction refusée | 20/11/2026 : `symfony/scheduler` est entré sans son entrée dans `symfony.lock` ; toute commande composer applique alors la recette de Flex, qui crée ce fichier (`#[AsSchedule]`, second planning « default » à côté de `PlatformSchedule`) ; le fichier se supprime et ne se livre jamais (l'entrée de `symfony.lock` vient avec le lot 1a) |
 | Numéro de cache neuf, nom de photo neuf : l'outil ne supprime rien en chemin | on ne perd ni un retour arrière ni une photo « avant » |
 | Cache construit par un conteneur provisoire, code monté en lecture seule | le cache en ligne n'est pas touché avant l'échange |
 | Deux secondes d'attente, puis lien vers le conteneur de services sortant posé avant l'échange | une requête ou un worker démarrés sur l'ancien cache lisent encore ses fichiers quelques instants : sans le lien, erreur critique au journal |

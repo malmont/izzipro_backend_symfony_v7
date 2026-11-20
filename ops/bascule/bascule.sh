@@ -302,6 +302,11 @@ build)
   [ -z "$SENS" ] || { echo "ARRÊT : la livraison touche un point de montage ou un fichier d'environnement : $SENS"; exit 1; }
   LIENS=$(git ls-tree -r "$2" | awk '$1 == "120000" {print $4}' | tr '\n' ' ')
   [ -z "$LIENS" ] || { echo "ARRÊT : la livraison contient un lien symbolique : $LIENS"; exit 1; }
+  # Garde du planning (20/11/2026) : la recette Flex de symfony/scheduler, appliquée par une commande composer, crée src/Schedule.php
+  # (#[AsSchedule], second planning « default » à côté de PlatformSchedule) ; jamais livré, jamais laissé dans l'arbre en ligne
+  if git cat-file -e "$2:src/Schedule.php" 2>/dev/null || [ -e "$L/src/Schedule.php" ]; then
+    echo "ARRÊT : src/Schedule.php (recette Flex de symfony/scheduler) dans la livraison ou dans l'arbre en ligne : à supprimer, jamais à livrer"; exit 1
+  fi
   echo "garde des montages : aucun point de montage touché, aucun lien ; $(git diff --name-only HEAD "$2" | wc -l) fichier(s) changé(s) ; migrations : $(git diff --name-only HEAD "$2" -- migrations | wc -l)"
   [ -e "$L/var/swap_stage$3" ] && { echo "CACHE swap_stage$3 DÉJÀ LÀ : prendre un numéro neuf (aucune suppression ici)"; exit 1; }
   git -C "$BUILD_WORKTREE" checkout -q --detach "$2" || { echo "WORKTREE DE CONSTRUCTION INUTILISABLE : $BUILD_WORKTREE"; exit 1; }
