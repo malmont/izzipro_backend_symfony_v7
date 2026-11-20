@@ -26,6 +26,13 @@ class AboCatalogService
     public const MAX_TRIAL_DAYS = 365;
     public const MAX_TERMS = 120;
     public const MAX_INTERVAL_COUNT = 12;
+    /**
+     * Relecture neuve : réglages qui gouvernent les abonnements EN COURS (engagement, rythme, carte de séances, produit, devise) : figés dès
+     * qu'une formule a des abonnés (409 PLAN_HAS_SUBSCRIBERS sur le champ) ; un autre rythme ou un autre engagement se vend par une formule
+     * nouvelle. Le PRIX, lui, peut changer : il ne vaut que pour les nouveaux abonnés.
+     */
+    public const LOCKED_WITH_SUBSCRIBERS = ['minimumTerms', 'interval', 'intervalCount', 'singlePeriod', 'productId', 'currency'];
+    public const NAME_LENGTH = 120;
     /** Champs qu'une formule accepte hors EasyAdmin (jamais les champs « branchés ») */
     public const FIELDS = ['productId', 'names', 'descriptions', 'features', 'badges', 'price', 'interval', 'intervalCount', 'trialDays', 'minimumTerms',
         'maxPauseDays', 'pausesPerYear', 'singlePeriod', 'highlighted', 'active'];
@@ -37,6 +44,12 @@ class AboCatalogService
         private readonly ?\App\Services\ContentAuditService\ContentAuditRecorder $audit = null,
         private readonly ?\App\Services\StripeService\StripeService $stripe = null,
     ) {
+    }
+
+    /** La devise du site : celle de toute formule créée hors EasyAdmin */
+    public function siteCurrency(): string
+    {
+        return $this->currency->code();
     }
 
     /** @throws AboException 404 PLAN_NOT_FOUND */
@@ -61,9 +74,13 @@ class AboCatalogService
         $creating = $plan === null;
         $before = $creating ? null : $this->priceState($plan);
         $old = $creating ? null : $this->auditState($plan);
+        $locked = $creating ? null : $this->lockedState($plan);
         $plan ??= (new SubscriptionPlan())->setCurrency($this->currency->code())->setActive(true);
         $this->apply($plan, $data, $creating);
         $this->validatePlan($plan);
+        if ($locked !== null) {
+            $this->assertLocked($plan, $locked);
+        }
         $em->wrapInTransaction(function () use ($em, $plan, $before, $by, $creating) {
             if ($creating) {
                 $em->persist($plan);
@@ -139,6 +156,34 @@ class AboCatalogService
             [$plan->getId(), $plan->getPrice(), $plan->getCurrency(), $plan->getInterval(), $plan->getIntervalCount(), $now, $by !== null ? mb_substr($by, 0, 180) : null]);
     }
 
+    /**
+     * Les réglages figés d'une formule qui a des abonnés, tels qu'ils sont (null : aucun abonné, rien n'est figé). EasyAdmin passe l'état
+     * d'avant la modification.
+     *
+     * @return array<string, mixed>|null
+     */
+    public function lockedState(SubscriptionPlan $plan): ?array
+    {
+        if ($plan->getId() === null || $this->emProvider->getEntityManager()->getConnection()->fetchOne('SELECT 1 FROM subscription WHERE plan_id = ? LIMIT 1', [$plan->getId()]) === false) {
+            return null;
+        }
+
+        return ['minimumTerms' => $plan->getMinimumTerms(), 'interval' => $plan->getInterval(), 'intervalCount' => $plan->getIntervalCount(), 'singlePeriod' => $plan->isSinglePeriod(),
+            'productId' => $plan->getProduct()?->getId(), 'currency' => $plan->getCurrency()];
+    }
+
+    /** @param array<string, mixed> $locked @throws AboException 409 PLAN_HAS_SUBSCRIBERS */
+    public function assertLocked(SubscriptionPlan $plan, array $locked): void
+    {
+        $now = ['minimumTerms' => $plan->getMinimumTerms(), 'interval' => $plan->getInterval(), 'intervalCount' => $plan->getIntervalCount(), 'singlePeriod' => $plan->isSinglePeriod(),
+            'productId' => $plan->getProduct()?->getId(), 'currency' => $plan->getCurrency()];
+        foreach (self::LOCKED_WITH_SUBSCRIBERS as $key) {
+            if (($locked[$key] ?? null) !== $now[$key]) {
+                throw new AboException(409, 'PLAN_HAS_SUBSCRIBERS', 'Cette formule a des abonnés : son engagement, son rythme, sa carte de séances, son produit et sa devise sont figés pour eux. Créez une nouvelle formule pour un autre réglage (le prix, lui, peut changer : il ne vaut que pour les nouveaux abonnés).', $key);
+            }
+        }
+    }
+
     /** @return array{price: int, currency: string, interval: string, intervalCount: int, stripePriceId: ?string} ce qui fait le prix */
     public function priceState(SubscriptionPlan $plan): array
     {
@@ -152,6 +197,23 @@ class AboCatalogService
         return array_map(fn (array $r) => ['price' => (int) $r['price_cents'], 'currency' => (string) $r['currency'], 'interval' => (string) $r['interval'],
             'intervalCount' => (int) $r['interval_count'], 'from' => substr((string) $r['valid_from'], 0, 10), 'until' => $r['valid_until'] !== null ? substr((string) $r['valid_until'], 0, 10) : null],
             $this->emProvider->getEntityManager()->getConnection()->fetchAllAssociative('SELECT * FROM subscription_plan_price WHERE plan_id = ? ORDER BY valid_from DESC, id DESC', [$plan->getId()]));
+    }
+
+    /**
+     * Le prix que paie un abonnement (relecture neuve) : celui de l'époque de l'historique où il a souscrit, sinon le prix de la formule.
+     *
+     * @return array{price: int, currency: string, interval: string, intervalCount: int}
+     */
+    public function billedPrice(Subscription $subscription): array
+    {
+        $plan = $subscription->getPlan();
+        $row = $plan?->getId() === null ? false : $this->emProvider->getEntityManager()->getConnection()->fetchAssociative(
+            'SELECT price_cents, currency, interval, interval_count FROM subscription_plan_price WHERE plan_id = ? AND valid_from <= ? AND (valid_until IS NULL OR valid_until > ?) ORDER BY valid_from DESC, id DESC LIMIT 1',
+            [$plan->getId(), $subscription->getCreatedAt()->format('Y-m-d H:i:s'), $subscription->getCreatedAt()->format('Y-m-d H:i:s')]);
+
+        return $row !== false
+            ? ['price' => (int) $row['price_cents'], 'currency' => (string) $row['currency'], 'interval' => (string) $row['interval'], 'intervalCount' => (int) $row['interval_count']]
+            : ['price' => (int) $plan?->getPrice(), 'currency' => (string) $plan?->getCurrency(), 'interval' => (string) $plan?->getInterval(), 'intervalCount' => (int) $plan?->getIntervalCount()];
     }
 
     /** @throws AboException 403 PLAN_PLATFORM_ONLY */
@@ -201,6 +263,10 @@ class AboCatalogService
         if ($plan->hasFulfillment()) {
             throw new AboException(403, 'PLAN_PLATFORM_ONLY', 'Cette formule est branchée sur un service de la plateforme : elle se règle dans EasyAdmin.');
         }
+        $ids = array_map(fn ($row) => is_array($row) ? (int) ($row['benefitId'] ?? 0) : 0, $rows);
+        if (count($ids) !== count(array_unique($ids))) {
+            throw new AboException(422, 'PLAN_BENEFIT_DUPLICATE', 'Une prestation ne figure qu\'une fois dans une formule.', 'benefits');
+        }
         $em = $this->emProvider->getEntityManager();
         $keep = [];
         $em->wrapInTransaction(function () use ($em, $plan, $rows, &$keep) {
@@ -235,6 +301,9 @@ class AboCatalogService
         $probe = $plan !== null ? clone $plan : (new SubscriptionPlan())->setCurrency($this->currency->code())->setActive(true);
         $this->apply($probe, $data, $plan === null);
         $this->validatePlan($probe);
+        if ($plan !== null && ($locked = $this->lockedState($plan)) !== null) {
+            $this->assertLocked($probe, $locked);
+        }
         $priceChange = $plan !== null && array_diff_key($this->priceState($plan), ['stripePriceId' => 1]) !== array_diff_key($this->priceState($probe), ['stripePriceId' => 1]);
 
         return ['plan' => $this->head($probe, $locale), 'summary' => $this->summary($probe, $locale),
@@ -316,6 +385,7 @@ class AboCatalogService
         }
         $int = static fn (string $k, int $default): int => array_key_exists($k, $data) ? (is_int($data[$k]) ? $data[$k] : (is_string($data[$k]) && preg_match('/^-?\d+$/', $data[$k]) ? (int) $data[$k] : PHP_INT_MIN)) : $default;
         $texts = static fn (mixed $v): ?array => is_array($v) ? array_map('strval', array_filter($v, 'is_scalar')) : null;
+        $names = static fn (mixed $v): array => array_map(fn (string $n) => mb_substr(trim(strip_tags($n)), 0, self::NAME_LENGTH), $texts($v) ?? []);
         if (array_key_exists('productId', $data)) {
             $product = $this->emProvider->getEntityManager()->getRepository(Product::class)->find((int) $data['productId']);
             if ($product === null) {
@@ -324,7 +394,7 @@ class AboCatalogService
             $plan->setProduct($product);
         }
         if (array_key_exists('names', $data)) {
-            $plan->setNames($texts($data['names']) ?? []);
+            $plan->setNames($names($data['names'])); // en clair et borné (il part aussi dans le nom du produit Stripe)
         }
         if (array_key_exists('descriptions', $data)) {
             $plan->setDescriptions($texts($data['descriptions']));

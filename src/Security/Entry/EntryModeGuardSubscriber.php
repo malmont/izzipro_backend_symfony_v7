@@ -419,6 +419,8 @@ class EntryModeGuardSubscriber implements EventSubscriberInterface
         'PaymentsCrudController' => 'payment', 'PaymentMethodCrudController' => 'payment', 'PaymentTypeCrudController' => 'payment', 'StatusPaymentCrudController' => 'payment',
         'OrderCrudController' => 'payment', 'OrderAllCrudController' => 'payment', 'OrderItemsCrudController' => 'payment', 'OrderItemsListController' => 'payment', 'OrderTaxCrudController' => 'payment',
         'SubscriptionPlanCrudController' => 'payment', 'ShippingLabelCrudController' => 'payment', 'AiUsageCrudController' => 'payment',
+        // lot ABO-CONF (relecture neuve) : les prestations d'une formule donnent de la valeur sans paiement, comme la formule elle-même
+        'BenefitCrudController' => 'payment', 'PlanBenefitCrudController' => 'payment',
         'CaisseCrudController' => 'cash', 'CashDetailsCrudController' => 'cash', 'CashDetailsListController' => 'cash', 'CashRegisterCrudController' => 'cash',
         'CashRegisterReportCrudController' => 'cash', 'TransactionCaisseCrudController' => 'cash', 'TransactionCaisseListController' => 'cash',
         'TransactionTypeCrudController' => 'cash', 'TypeCashCrudController' => 'cash', 'PosAuditLogCrudController' => 'cash',
@@ -483,6 +485,10 @@ class EntryModeGuardSubscriber implements EventSubscriberInterface
             return ['/admin', null, 'batch'];
         }
         $request->attributes->set(self::EA_READ, ($crud === null || $crud === '' || in_array($action, self::EA_READS, true)) && in_array($request->getMethod(), ['GET', 'HEAD'], true));
+        // lot ABO-CONF (décision du chef) : une agence entrée configure les formules de son client, n'en supprime jamais une, ici comme par l'API
+        if ($action === 'delete' && is_string($crud) && str_ends_with($crud, '\\SubscriptionPlanCrudController')) {
+            return ['/admin', null, 'delete'];
+        }
 
         return ['/admin', ScreenRegistry::adminTarget(is_string($crud) ? $crud : null, null, $request->getMethod()) ?? '?', null];
     }

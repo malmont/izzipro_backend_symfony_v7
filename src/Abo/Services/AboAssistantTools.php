@@ -120,7 +120,7 @@ class AboAssistantTools
                     $data = ['productId' => (int) $product->getId(), 'names' => $names, 'price' => $price, 'interval' => $interval, 'intervalCount' => max(1, (int) ($input['intervalCount'] ?? 1)), 'benefits' => $rows];
 
                     return [$data, sprintf('Créer la formule « %s » sur « %s » : %s %s par %s%s, avec %s', (string) ($names['fr'] ?? reset($names)), (string) $product->getName(),
-                        number_format($price / 100, 2, ',', ' '), $this->currencyFor($product), self::intervalLabel($interval), $data['intervalCount'] > 1 ? ' (tous les ' . $data['intervalCount'] . ')' : '',
+                        number_format($price / 100, 2, ',', ' '), $this->catalog?->siteCurrency() ?? $this->currencyFor($product), self::intervalLabel($interval), // la devise imposée : celle du site $data['intervalCount'] > 1 ? ' (tous les ' . $data['intervalCount'] . ')' : '',
                         $this->rowsSummary($rows)), null, 'subscription_plans'];
                 case 'propose_plan_update':
                     $plan = $this->planOrFail((int) ($input['planId'] ?? 0));
@@ -133,9 +133,19 @@ class AboAssistantTools
                     }
                     $preview = ($this->catalog ?? throw new AboException(503, 'TOOL_UNAVAILABLE', 'Outil indisponible.'))->preview($plan, $data, 'fr');
 
-                    return [['planId' => (int) $plan->getId(), 'data' => $data], sprintf('Modifier la formule « %s » : %s%s', $plan->getName(), $preview['summary'], $preview['priceChange'] !== null ? ' ' . $preview['priceChange'] : ''), null, 'subscription_plans'];
+                    // relecture neuve : l'aperçu dit TOUT le changement (nouveau nom, archivage), pas seulement le prix
+                    $changes = array_filter([
+                        isset($data['names']) ? sprintf('nouveau nom « %s »', (string) ($data['names']['fr'] ?? reset($data['names']) ?: '')) : null,
+                        array_key_exists('active', $data) ? ($data['active'] === false ? 'ARCHIVER la formule (elle n\'est plus vendue ; les abonnés continuent)' : 'remettre la formule en vente') : null,
+                    ]);
+
+                    return [['planId' => (int) $plan->getId(), 'data' => $data], sprintf('Modifier la formule « %s »%s : %s%s', $plan->getName(), $changes !== [] ? ' (' . implode(' ; ', $changes) . ')' : '',
+                        $preview['summary'], $preview['priceChange'] !== null ? ' ' . $preview['priceChange'] : ''), null, 'subscription_plans'];
                 case 'set_plan_benefits':
                     $plan = $this->planOrFail((int) ($input['planId'] ?? 0));
+                    if ($plan->hasFulfillment()) {
+                        throw new AboException(403, 'PLAN_PLATFORM_ONLY', 'Cette formule est branchée sur un service de la plateforme : elle se règle dans EasyAdmin.');
+                    }
                     $rows = $this->benefitRows($input['benefits'] ?? []);
 
                     return [['planId' => (int) $plan->getId(), 'benefits' => $rows], sprintf('Régler les prestations de la formule « %s » : %s', $plan->getName(), $this->rowsSummary($rows)), null, 'abo_plan_benefits'];

@@ -119,6 +119,15 @@ class AboCatalogTest extends WebTestCase
         // une formule qui a eu un abonné ne se supprime pas ; sans abonné, si
         $this->db->executeStatement("INSERT INTO subscription (user_id, plan_id, quantity, status, created_at, updated_at, stripe_subscription_id) SELECT id, ?, 1, 'canceled', NOW(), NOW(), 'sub_abo_conf' FROM \"user\" WHERE email = 'admin@arkanoa-media.com'", [$id]);
         $this->assertSame('PLAN_HAS_SUBSCRIBERS', $this->json('DELETE', "$base/$id", null, 'admin', 409)['code']);
+        // relecture neuve : avec des abonnés, l'engagement, le rythme, la carte et le produit sont figés ; le prix change pour les nouveaux seulement
+        foreach ([['interval' => 'year'], ['intervalCount' => 2], ['minimumTerms' => 12], ['singlePeriod' => true]] as $change) {
+            $refusal = $this->json('PATCH', "$base/$id", $change, 'admin', 409);
+            $this->assertSame(['PLAN_HAS_SUBSCRIBERS', array_key_first($change)], [$refusal['code'], $refusal['field']], json_encode($change));
+        }
+        $this->assertSame('PLAN_HAS_SUBSCRIBERS', $this->json('POST', "$base/apercu?planId=$id", ['minimumTerms' => 12], 'admin', 409)['code'], 'l\'aperçu le dit aussi');
+        $this->json('PATCH', "$base/$id", ['price' => 7900], 'admin', 200);
+        $sub = $this->provider->getEntityManager()->getRepository(\App\Entity\Subscription::class)->findOneBy(['stripeSubscriptionId' => 'sub_abo_conf']);
+        $this->assertSame(6900, static::getContainer()->get(AboCatalogService::class)->billedPrice($sub)['price'], 'l\'abonné garde le prix de son époque');
         $other = (int) $this->json('POST', $base, ['names' => ['fr' => 'Autre abo-conf']] + $good, 'admin', 201)['plan']['id'];
         $this->assertSame(204, $this->api('DELETE', "$base/$other", null, 'admin')->getStatusCode());
         // jamais sans le rôle d'administration
@@ -146,6 +155,8 @@ class AboCatalogTest extends WebTestCase
         $this->db->executeStatement("INSERT INTO subscription (user_id, plan_id, quantity, status, created_at, updated_at, stripe_subscription_id) SELECT id, ?, 1, 'active', NOW(), NOW(), 'sub_abo_conf_b' FROM \"user\" WHERE email = 'admin@arkanoa-media.com'", [$plan]);
         $sub = (int) $this->db->fetchOne("SELECT id FROM subscription WHERE stripe_subscription_id = 'sub_abo_conf_b'");
         $this->db->executeStatement("INSERT INTO benefit_occurrence (subscription_id, benefit_id, rank, origin, status, valid_until, created_at) VALUES (?, ?, 1, 'gift', 'available', NOW() + INTERVAL '5 days', NOW())", [$sub, $yoga['id']]);
+        $this->assertSame('MUST_BE_BOOLEAN', $this->json('PATCH', "$base/{$yoga['id']}", ['active' => 0], 'admin', 422)['code'], 'relecture neuve : 0 ne désactive pas en douce');
+        $this->assertSame('PLAN_BENEFIT_DUPLICATE', $this->json('PUT', "$plans/$plan/prestations", ['benefits' => [['benefitId' => $yoga['id'], 'quantity' => 1], ['benefitId' => $yoga['id'], 'quantity' => 2]]], 'admin', 422)['code']);
         $refusal = $this->json('PATCH', "$base/{$yoga['id']}", ['active' => false], 'admin', 409);
         $this->assertSame(['BENEFIT_IN_USE', 1], [$refusal['code'], $refusal['pendingRights']]);
         $this->assertTrue($this->json('GET', $base, null, 'admin', 200)['benefits'][array_search($yoga['id'], array_column($this->json('GET', $base, null, 'admin', 200)['benefits'], 'id'), true)]['active']);
@@ -261,6 +272,12 @@ class AboCatalogTest extends WebTestCase
             $this->assertSame(['updated' => 1, 'failed' => 0], $fees->catchUp());
             $this->assertSame(0, $fees->pendingCount());
             $this->assertSame(2, count(array_filter(\App\Tests\Fake\FakeSubscriptionStripeGateway::$calls, fn ($c) => $c[0] === 'updateFee' && $c[2] === 2.5)), 'une mise à jour par abonnement, au bon pourcentage');
+            // relecture neuve : 2,5 % → 0 % → 2,5 % dans la journée : la clé porte la version du réglage, l'aller-retour est bien reposé chez Stripe
+            $fees->setSiteBp(0, 'super@example.invalid');
+            $this->assertSame(['updated' => 2, 'failed' => 0], $fees->catchUp());
+            $fees->setSiteBp(null, 'super@example.invalid');
+            $this->assertSame(['updated' => 2, 'failed' => 0], $fees->catchUp());
+            $this->assertSame(4, count(array_filter(\App\Tests\Fake\FakeSubscriptionStripeGateway::$calls, fn ($c) => $c[0] === 'updateFee' && $c[2] === 2.5)), 'jamais une ancienne réponse rejouée');
         } finally {
             $master->prepare('UPDATE tenants SET is_internal_store = ? WHERE code = ?')->execute([$internal, MV_TEST_TENANT_CODE]);
             $master->exec("DELETE FROM platform_settings WHERE key = 'subscription_fee_bp'");

@@ -132,16 +132,23 @@ class SubscriptionFeeService
             return $out;
         }
         $em = $this->emProvider->getEntityManager();
-        $ids = $em->getConnection()->fetchFirstColumn(
-            'SELECT id FROM subscription WHERE stripe_subscription_id IS NOT NULL AND status IN (?) AND fee_bp_applied IS DISTINCT FROM ? ORDER BY id LIMIT ' . max(1, $limit),
+        $conn = $em->getConnection();
+        // relecture neuve : les abonnements jamais essayés d'abord, puis ceux essayés le plus anciennement ; un échec permanent passe derrière
+        // les autres au lieu de bloquer le lot
+        $ids = $conn->fetchFirstColumn(
+            'SELECT id FROM subscription WHERE stripe_subscription_id IS NOT NULL AND status IN (?) AND fee_bp_applied IS DISTINCT FROM ? ORDER BY fee_attempted_at NULLS FIRST, id LIMIT ' . max(1, $limit),
             [self::BILLING, $bp], [\Doctrine\DBAL\ArrayParameterType::STRING, \PDO::PARAM_INT]);
+        // la clé d'idempotence porte la VERSION du réglage (le dernier changement du journal) : revenir à une commission déjà posée dans les
+        // 24 heures ne rejoue jamais une ancienne réponse de Stripe
+        $version = $this->version();
         foreach ($ids as $id) {
             $subscription = $em->getRepository(Subscription::class)->find((int) $id);
             if ($subscription === null) {
                 continue;
             }
+            $conn->executeStatement('UPDATE subscription SET fee_attempted_at = ? WHERE id = ?', [gmdate('Y-m-d H:i:s'), $id]);
             try {
-                $this->gateway->updateFee((string) $subscription->getStripeSubscriptionId(), self::percent($bp), sprintf('fee-%s-%d', $subscription->getStripeSubscriptionId(), $bp));
+                $this->gateway->updateFee((string) $subscription->getStripeSubscriptionId(), self::percent($bp), sprintf('fee-%s-%d-v%d', $subscription->getStripeSubscriptionId(), $bp, $version));
                 $subscription->setFeeBpApplied($bp);
                 $em->flush();
                 ++$out['updated'];
@@ -164,6 +171,16 @@ class SubscriptionFeeService
             return $stmt->fetchAll(\PDO::FETCH_ASSOC);
         } catch (\PDOException) {
             return [];
+        }
+    }
+
+    /** La version du réglage : le dernier changement du journal (0 sans changement) */
+    private function version(): int
+    {
+        try {
+            return (int) $this->tenants->getPdoMaster()->query('SELECT COALESCE(MAX(id), 0) FROM platform_fee_log')->fetchColumn();
+        } catch (\PDOException) {
+            return 0;
         }
     }
 

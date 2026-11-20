@@ -21,9 +21,11 @@ final class Version20270201800000 extends AbstractMigration
         // décision C du propriétaire : commission des abonnements par site (vide = celle de la plateforme) et commission appliquée à chaque abonnement
         'ALTER TABLE stripe_config ADD COLUMN IF NOT EXISTS subscription_fee_bp INT DEFAULT NULL',
         'ALTER TABLE subscription ADD COLUMN IF NOT EXISTS fee_bp_applied INT DEFAULT NULL',
+        'ALTER TABLE subscription ADD COLUMN IF NOT EXISTS fee_attempted_at TIMESTAMP(0) WITHOUT TIME ZONE DEFAULT NULL',
     ];
 
     public const DOWN_STATEMENTS = [
+        'ALTER TABLE subscription DROP COLUMN IF EXISTS fee_attempted_at',
         'ALTER TABLE subscription DROP COLUMN IF EXISTS fee_bp_applied',
         'ALTER TABLE stripe_config DROP COLUMN IF EXISTS subscription_fee_bp',
         'DROP TABLE IF EXISTS subscription_plan_price',

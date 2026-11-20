@@ -142,6 +142,9 @@ class BenefitService
             $benefit->setLocation($data['location'] !== null ? (string) $data['location'] : null);
         }
         if (array_key_exists('active', $data)) {
+            if (!is_bool($data['active'])) {
+                throw new AboException(422, 'MUST_BE_BOOLEAN', 'active : vrai ou faux.', 'active'); // relecture neuve : 0, "" ou null ne désactivent pas en douce
+            }
             if ($data['active'] === false && $benefit->isActive()) {
                 $this->assertDeactivatable($benefit);
             }

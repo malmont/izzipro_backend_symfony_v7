@@ -20,7 +20,8 @@ class AboFollowUpService
     public const PAGE_MAX = 100;
 
     public function __construct(private readonly TenantEntityManagerProvider $emProvider, private readonly BenefitService $benefits, private readonly StoreClock $clock,
-        private readonly ?AboRightsService $rights = null) // lot ABO-1 : solde, à faire, historique
+        private readonly ?AboRightsService $rights = null, // lot ABO-1 : solde, à faire, historique
+        private readonly ?AboCatalogService $catalog = null) // lot ABO-CONF : le prix que paie l'abonné (son époque), pas celui du jour
     {
     }
 
@@ -120,6 +121,7 @@ class AboFollowUpService
         $row = [
             'subscriptionId' => (int) $s->getId(), 'status' => $s->getStatus(), 'quantity' => $s->getQuantity(), 'currentPeriodEnd' => $this->at($s->getCurrentPeriodEnd()),
             'cancelAtPeriodEnd' => $s->isCancelAtPeriodEnd(), 'pausedAt' => $this->at($s->getPausedAt()), 'createdAt' => $this->at($s->getCreatedAt()),
+            'billedPrice' => $this->catalog?->billedPrice($s), // relecture neuve d'ABO-CONF : un abonné en cours garde le prix de son époque
             // l'impayé : montant et essai, jamais le lien de paiement (il ouvre la facture du client)
             'paymentIssue' => $issue !== null ? ['amountDue' => (int) ($issue['amountDue'] ?? 0), 'currency' => (string) ($issue['currency'] ?? ''), 'attemptCount' => (int) ($issue['attemptCount'] ?? 0),
                 'maxAttempts' => (int) ($issue['maxAttempts'] ?? 0), 'nextPaymentAttempt' => $issue['nextPaymentAttempt'] ?? null] : null,

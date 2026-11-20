@@ -15,7 +15,8 @@ use App\Services\SubscriptionService\SubscriptionService;
 class ManageSubscriptionUseCase
 {
     public function __construct(private readonly SubscriptionService $service, private readonly SubscriptionMailer $mailer,
-        private readonly ?\App\Abo\Services\AboRightsService $rights = null) // lot ABO-1 : solde, pause datée, engagement minimal
+        private readonly ?\App\Abo\Services\AboRightsService $rights = null,
+        private readonly ?\App\Abo\Services\AboCatalogService $catalog = null) // lot ABO-CONF : le prix que paie l'abonné // lot ABO-1 : solde, pause datée, engagement minimal
     {
     }
 
@@ -30,6 +31,10 @@ class ManageSubscriptionUseCase
         // engagement, la date à partir de laquelle il prend fin ; la fin déjà programmée, s'il y en a une
         [$engaged, $termEnd] = $this->rights->termEnd($subscription);
         $scheduled = $subscription->getCancelAt() ?? ($subscription->isCancelAtPeriodEnd() ? $subscription->getCurrentPeriodEnd() : null);
+
+        if ($this->catalog !== null) {
+            $dto = $dto->withBilledPrice($this->catalog->billedPrice($subscription)); // l'abonné en cours garde le prix de son époque
+        }
 
         return $dto->withBalance($this->rights->balance($subscription, $locale))->withCancellation([
             'allowed' => $subscription->getStatus() !== \App\Entity\Subscription::STATUS_CANCELED && $subscription->getStripeSubscriptionId() !== null,
