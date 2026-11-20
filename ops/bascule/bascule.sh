@@ -298,7 +298,13 @@ build)
   fi
   # Garde des montages (incident du 13/11/2026) : la livraison ne touche aucun point de montage du conteneur ni aucun fichier
   # d'environnement, et n'apporte aucun lien symbolique
-  SENS=$(git diff --name-only HEAD "$2" | grep -E '^(config/jwt|jwt/|docker/|\.env)' | tr '\n' ' ')
+  # Exception étroite (lot PHP84, 20/11/2026) : un fichier AJOUTÉ sous docker/ qui n'est la source d'aucun montage des conteneurs en
+  # service passe (il ne peut remplacer aucun point de montage ; ex. docker/php/php.ini, lu par l'image seulement) ; tout autre changement
+  # sous docker/ (modifié, supprimé, renommé, ou fichier monté) reste refusé
+  MOUNTED=$(for c in $(docker ps --format '{{.Names}}'); do docker inspect "$c" --format '{{range .Mounts}}{{.Source}}{{"\n"}}{{end}}'; done | sort -u)
+  ADDED_OK=$(git diff --name-status --no-renames HEAD "$2" -- docker/ | awk '$1 == "A" {print $2}' | while read -r f; do printf '%s\n' "$MOUNTED" | grep -qxF "$L/$f" || echo "$f"; done)
+  SENS=$(git diff --name-only --no-renames HEAD "$2" | grep -E '^(config/jwt|jwt/|docker/|\.env)' | grep -vxF -f <(printf '%s\n' "$ADDED_OK" | grep -v '^$') | tr '\n' ' ')
+  [ -z "$ADDED_OK" ] || echo "garde des montages : fichier(s) ajouté(s) sous docker/, source d'aucun montage : $(echo $ADDED_OK)"
   [ -z "$SENS" ] || { echo "ARRÊT : la livraison touche un point de montage ou un fichier d'environnement : $SENS"; exit 1; }
   LIENS=$(git ls-tree -r "$2" | awk '$1 == "120000" {print $4}' | tr '\n' ' ')
   [ -z "$LIENS" ] || { echo "ARRÊT : la livraison contient un lien symbolique : $LIENS"; exit 1; }
