@@ -295,7 +295,7 @@ class AboDeliveryTest extends WebTestCase
         $this->json('POST', $team . $a . '/fait', [], 200);
         $this->assertSame('OCCURRENCE_SCHEDULED', $this->json('DELETE', '/api/site/abonnements/' . $s->getId() . '/utilisations/' . $a, null, 409)['code']);
         $this->assertSame('done', $this->status($a));
-        $use = $this->json('POST', '/api/site/abonnements/' . $s->getId() . '/utilisations', ['benefitId' => $yoga->getId()], 201)['occurrenceId'];
+        $use = $this->json('POST', '/api/site/abonnements/' . $s->getId() . '/utilisations', ['benefitId' => $yoga->getId()], 201)['use']['occurrenceId'];
         $this->assertSame('OCCURRENCE_NOT_SCHEDULED', $this->json('POST', $team . $use . '/fait', [], 409)['code']);
 
         // contesté, droit rendu, replanifié, refait : un nouvel avis possible et un nouveau courriel
