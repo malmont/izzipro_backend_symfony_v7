@@ -103,7 +103,8 @@ ea_assets() {
     n=$((n + 1)); c=$(curl -s -o /dev/null -w '%{http_code}' -H "Host: $FRONT_HOST" "$BASE_URL/bundles/easyadmin/$f")
     [ "$c" = 200 ] || { bad=$((bad + 1)); echo "ATTENTION fichier d'EasyAdmin $f : $c"; }
   done
-  echo "fichiers d'EasyAdmin (manifeste du vendor en ligne) : $n, dont $bad hors 200$([ "$n" -gt 0 ] && [ "$bad" = 0 ] && echo ' : OK' || echo ' : RETOUR ARRIÈRE IMMÉDIAT')"
+  # « $1 » = avant : simple mesure (compte rendu), sans consigne de retour arrière
+  echo "fichiers d'EasyAdmin ${1:-après} (manifeste du vendor en ligne) : $((n - bad)) / $n en 200$([ "$n" -gt 0 ] && [ "$bad" = 0 ] && echo ' : OK' || { [ "${1:-}" = avant ] && echo ' : À VOIR AVANT DE BASCULER' || echo ' : RETOUR ARRIÈRE IMMÉDIAT'; })"
   [ "$n" -gt 0 ] && [ "$bad" = 0 ]
 }
 
@@ -290,6 +291,7 @@ switch)
   [ -d "$L/var/swap_stage$3/dev" ] || { echo "CACHE ABSENT : lancer d'abord « build »"; exit 1; }
   worker_email "avant"
   echo "avant : $(git log -1 --format=%h), page publique $(curl -s -o /dev/null -w '%{http_code}' "${H[@]}" "$BASE_URL/api/landingpage-settings")"
+  ea_assets avant
   # Laisser finir la requête de contrôle ci-dessus AVANT l'échange : sa fin de traitement charge encore des fichiers du cache sortant
   pause 2
   link_old_container "$3"
@@ -313,6 +315,7 @@ retour)
   [ -z "$(git status --short -uno)" ] || { echo "ARBRE EN LIGNE MODIFIÉ"; exit 1; }
   [ -d "$L/var/swap_stage$3/dev" ] || { echo "CACHE D'AVANT ABSENT : var/swap_stage$3/dev"; exit 1; }
   git merge-base --is-ancestor "$2" HEAD || { echo "CE COMMIT N'EST PAS UN ANCÊTRE DE L'ARBRE EN LIGNE : $2"; exit 1; }
+  ea_assets avant
   link_old_container "$3"
   date -u +%FT%T > "$L/var/bascule.heure"; T0=$(date +%s.%N)
   # lot TACHES-0 : le composer.lock revient en arrière ? l'ancien vendor attend dans var/vendor_stage<n> et l'ancien public/bundles dans
