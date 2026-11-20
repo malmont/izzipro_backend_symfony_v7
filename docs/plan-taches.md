@@ -62,8 +62,11 @@ Hors serveur : rien de planifié côté Next (vérifié par le chef) ; Stripe et
 - Chacun écrit son passage (une ligne : nom, début, fin, résultat) dans un fichier lu par l'application, ou par une commande qui l'enregistre
   dans `scheduled_task_run` ; la page les montre comme les autres, en lecture.
 - **Sauvegarde : alerte si elle n'a pas réussi depuis plus de 26 h** (la plus importante).
-- **Nettoyage Docker** passé en minuteur systemd (`docker image prune -af --filter until=24h` chaque jour, `docker builder prune` chaque
-  semaine), fichiers dans `ops/systemd/`, installation autorisée par le propriétaire.
+- **Nettoyage Docker** passé en minuteur systemd, fichiers dans `ops/systemd/`, installation autorisée par le propriétaire :
+  `docker image prune -af --filter until=168h` chaque jour (7 jours au lieu de 24 h), l'image d'avant un changement d'IMAGE étiquetée
+  « keep » et exclue ; `docker builder prune -f --keep-storage 5GB` chaque semaine. Le retour arrière d'une bascule n'a pas besoin
+  d'image (code par git, cache échangé ; « bascule.sh menage » garde les 3 derniers caches) ; seul un retour après un changement d'image
+  (PHP, Dockerfile) demanderait l'image d'avant, d'où l'étiquette.
 
 ### TACHES-4 : les alertes
 - Deux échecs de suite, ou une tâche en retard (prochain passage dépassé d'un seuil par tâche) → un incident de la plateforme (INC) et un
@@ -99,6 +102,11 @@ surveillance seulement, aucun lancement depuis l'écran).
 - Aucune donnée personnelle dans le journal des passages.
 
 ## 5. Risques
+0. **La sauvegarde n'est pas une vraie sauvegarde** (vérifié le 20/11/2026, lecture seule) : `backup.sh` ne fait que `pg_dump`, `tar` et
+   `find`, sans aucun envoi ailleurs ; les copies vont dans `/home/arkanoa/backups/data` (14 jours), sur le MÊME disque que le serveur.
+   Un disque ou un serveur perdu emporte les bases et leurs sauvegardes. À décider par le propriétaire : une copie hors du serveur,
+   chiffrée, et un essai de restauration régulier (surveillés par TACHES-3). Le même dossier garde d'anciennes copies de `.env` en clair
+   (de septembre et d'octobre) : à ranger ou à supprimer.
 1. Un seul worker du planificateur : s'il s'arrête, TOUTES les tâches s'arrêtent → bandeau, battement, alerte (TACHES-4) ; pendant la
    migration, l'ancien minuteur reste jusqu'au passage vérifié du nouveau.
 2. Deux exécutions pendant la bascule d'une tâche (ancien et nouveau) → le verrou de TACHES-1 en évite le chevauchement.
