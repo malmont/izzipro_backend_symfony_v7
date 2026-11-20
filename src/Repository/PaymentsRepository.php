@@ -162,4 +162,24 @@ class PaymentsRepository extends EntityRepository
 
         return (float) ($result ?? 0.0);
     }
+    /**
+     * Lot CMD-WEB-1 : une page des paiements d'une source de commande (`null` : toutes les sources), lue en base, du plus récent au plus
+     * ancien (date, puis numéro). Seuls les paiements rattachés à une commande, comme la liste entière.
+     *
+     * @return array{items: list<\App\Entity\Payments>, total: int}
+     */
+    public function pageBySource(?int $orderSourceId, ?\DateTimeInterface $since, int $offset, int $limit): array
+    {
+        $qb = $this->createQueryBuilder('p')->innerJoin('p.orderPayment', 'o');
+        if ($orderSourceId !== null) {
+            $qb->andWhere('o.orderSource = :orderSourceId')->setParameter('orderSourceId', $orderSourceId);
+        }
+        if ($since !== null) {
+            $qb->andWhere('p.paymentDate >= :date')->setParameter('date', $since);
+        }
+        $total = (int) (clone $qb)->select('COUNT(p.id)')->getQuery()->getSingleScalarResult();
+        $items = $qb->addSelect('o')->orderBy('p.paymentDate', 'DESC')->addOrderBy('p.id', 'DESC')->setFirstResult($offset)->setMaxResults($limit)->getQuery()->getResult();
+
+        return ['items' => $items, 'total' => $total];
+    }
 }

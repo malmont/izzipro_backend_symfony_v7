@@ -120,6 +120,7 @@ class EntryModeGuardSubscriber implements EventSubscriberInterface
         ['#^/api/(group|site/group-invitations|site/group-same-company|site/group-transfers|site/taxes)(/|$)#', ['POST', 'PUT', 'PATCH', 'DELETE'], 'rights'], // lot G-1d : jamais confirmé par le directeur entré ; lot G-5 : jamais envoyé par lui
         // lot G-4 : les outils du groupe (copie du catalogue…) ne se lancent que du siège, jamais par le directeur entré dans une boutique
         ['#^/api/gestion/groupe(/|$)#', [], 'rights'],
+        ['#^/api/site/reservations-boutique/[^/]+/(confirmer|annuler)(/|$)#', [], 'rights'], // lot CMD-WEB-1 : le directeur lit les rendez-vous, il ne les confirme ni ne les annule
         ['#^/admin/taxes/verifier(/|$)#', ['POST'], 'rights'],
         ['#^/api/(apps/join|app/activate)(/|$)#', [], 'keys'],
         // le boîtier réel de la prévention des pertes (jumelage, clé, révocation, appareils) ; l'exercice simulé reste ouvert

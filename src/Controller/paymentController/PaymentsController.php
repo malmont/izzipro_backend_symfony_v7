@@ -70,22 +70,42 @@ class PaymentsController extends AbstractController
         if (!$orderSourceId) {
             return $this->json(['error' => 'orderSource parameter is required', 'code' => 'ORDER_SOURCE_REQUIRED', 'message' => 'orderSource parameter is required'], JsonResponse::HTTP_BAD_REQUEST);
         }
-        if (!$this->isGranted('ROLE_ADMIN') && !(($this->isGranted('ROLE_USER_POS') || $this->isGranted('ROLE_POS_MANAGER')) && (int) $orderSourceId === self::ORDER_SOURCE_POS)) {
+        // lot CMD-WEB-1 (20/11/2026) : `orderSource=all` (toutes les sources) pour l'administrateur seulement, et seulement par page
+        $all = $orderSourceId === 'all';
+        if (!$this->isGranted('ROLE_ADMIN') && !(($this->isGranted('ROLE_USER_POS') || $this->isGranted('ROLE_POS_MANAGER')) && !$all && (int) $orderSourceId === self::ORDER_SOURCE_POS)) {
             return $this->json(['error' => 'FORBIDDEN', 'message' => 'Accès réservé aux administrateurs et, pour la caisse, aux caissiers'], JsonResponse::HTTP_FORBIDDEN);
+        }
+        $paging = \App\Services\Http\ListPage::fromRequest($request);
+        if ($all && $paging === null) {
+            return $this->json(['error' => 'PAGE_REQUIRED', 'code' => 'PAGE_REQUIRED', 'message' => 'orderSource=all se lit par page (?page=&limit=).', 'field' => 'page'], JsonResponse::HTTP_BAD_REQUEST);
         }
         $days = $request->query->get('days');
         $host = $request->getSchemeAndHttpHost();
-        $locale = $request->getLocale();
-        $cacheKey = 'payments_orderSource_' . $orderSourceId . '_locale_' . $locale . ($days ? '_days_' . (int)$days : '');
+        // lot CMD-WEB-1 : `?locale=fr|en` choisit la langue des moyens et des états de paiement ; sans lui, la langue de la requête, comme avant
+        $asked = $request->query->get('locale');
+        $locale = is_string($asked) && in_array($asked, ['fr', 'en'], true) ? $asked : $request->getLocale();
+        $cacheKey = 'payments_orderSource_' . ($all ? 'all' : (int) $orderSourceId) . '_locale_' . $locale . ($days ? '_days_' . (int)$days : '');
+        $tags = [...CacheTags::listTags(CacheTags::PAYMENTS), ...CacheTags::listTags(CacheTags::ORDERS)];
+        if ($paging !== null) {
+            // lot CMD-WEB-1 : une page lue en base, du plus récent au plus ancien ; en-têtes X-Total-Count, X-Page, X-Limit (comme PERF-PAGINATION)
+            $found = $this->cache->get(
+                $cacheKey . '_page_' . $paging->page . '_' . $paging->limit,
+                fn () => $this->getPaymentsByOrderSourceUseCase->executePage($all ? null : (int) $orderSourceId, $locale, $days ? (int) $days : null, $paging->offset(), $paging->limit),
+                300,
+                $tags
+            );
+
+            return $this->json(array_map(fn ($dto) => $dto->toArray(), $found['items']), JsonResponse::HTTP_OK, $paging->headers($found['total']));
+        }
         // 300 s ; un paiement porte sa commande : vidé par les écritures des deux (registre CacheTags)
         $paymentDTOs = $this->cache->get(
             $cacheKey,
             fn () => $this->getPaymentsByOrderSourceUseCase->execute((int)$orderSourceId, $host, $locale, $days ? (int)$days : null),
             300,
-            [...CacheTags::listTags(CacheTags::PAYMENTS), ...CacheTags::listTags(CacheTags::ORDERS)]
+            $tags
         );
         $paymentData = array_map(fn($dto) => $dto->toArray(), $paymentDTOs);
-        return $this->json($paymentData);
+        return $this->json($paymentData, JsonResponse::HTTP_OK, ['X-Total-Count' => (string) count($paymentData)]);
     }
 
     #[Route('/api/payment', name: 'process_payment', methods: ['POST'])]

@@ -73,6 +73,7 @@ class SiteAssistantService
         private readonly ?\App\Services\Group\GroupService $groupService = null,
         private readonly ?\App\Services\Group\Transfer\GroupTransferService $groupTransfers = null, // lot G-5
         private readonly ?\App\Services\TenantConnectionProvider $tenantConnection = null, // lot G-5 : le site courant (outil des transferts à envoyer)
+        private readonly ?\App\Services\ReservationService\ShopBookingAssistantTools $shopBookings = null, // lot CMD-WEB-1 : rendez-vous de la boutique
     ) {
     }
 
@@ -230,6 +231,23 @@ class SiteAssistantService
         }
         if (in_array($name, SiteAssistantTools::ORDER_TOOLS, true) || in_array($name, ['get_orders_todo', 'get_order'], true)) {
             return $this->runOrderTool($name, $input, $tenantCode);
+        }
+        if (in_array($name, [...\App\Services\ReservationService\ShopBookingAssistantTools::READS, ...\App\Services\ReservationService\ShopBookingAssistantTools::ACTIONS], true)) {
+            // lot CMD-WEB-1 : lecture immédiate ; la proposition est vérifiée sans rien écrire, appliquée à la confirmation (ConfirmSiteAssistantActionUseCase)
+            if ($this->shopBookings === null) {
+                return [['error' => 'rendez-vous indisponibles'], null, null];
+            }
+            $link = ['label' => SiteAssistantTools::SCREENS['shop_bookings'], 'screen' => 'shop_bookings'];
+            if ($name === 'get_shop_bookings') {
+                return [$this->shopBookings->read($input), null, $link];
+            }
+            [$bookingInput, $summary, $error, $preview] = $this->shopBookings->propose($input);
+            if ($error !== null) {
+                return [$error, null, null];
+            }
+            $action = $this->remember($tenantCode, $name, $bookingInput, $summary);
+
+            return [['proposed' => true, 'actionId' => $action['id'], 'summary' => $action['summary'], 'preview' => $preview, 'note' => 'Proposé à l\'administrateur ; appliqué seulement s\'il confirme.'], $action, $link];
         }
         if ($name === 'get_transfers_to_send' && !$this->available($name)) {
             return [['error' => 'outil indisponible : ce site n\'appartient à aucun groupe de boutiques'], null, null];

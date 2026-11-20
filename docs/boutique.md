@@ -1261,6 +1261,19 @@ enregistrement `Vehicle` lié au produit (stock nul sinon) et se fiaient à l'an
 produit vendu **et** loué était toujours traitée comme une location. Règle commune désormais :
 `RentalLineResolver::isRental` (location activée et dates sur la ligne, ou produit qui ne se vend pas).
 
+## Commandes et rendez-vous de la boutique dans la gestion web (lot CMD-WEB-1, 20/11/2026)
+
+- `GET /api/site/commandes/a-traiter` et `GET /api/site/commandes/{id}` : « À traiter » et la fiche d'une commande, en lecture seule, par
+  `OrderDeskService` (le même service que `/admin/commandes/…`). Chaque lecteur reçoit sa vue, construite en liste blanche par
+  `OrderDeskView`.
+- `/api/site/reservations-boutique` : les rendez-vous de la boutique, c'est-à-dire l'écran « Réservations de Prestations », jamais un
+  entretien de Mémoires Vivantes. On peut les lire, les confirmer et les annuler. EasyAdmin passe par le même service
+  (`ShopBookingService`).
+- `GET /api/payments` : pagination facultative, `orderSource=all` (administrateur, par page), `?locale=fr|en`.
+- `lienCv` des candidatures : une adresse http ou https de 255 caractères au plus.
+
+Le contrat, les formes et les droits sont dans `docs/contrat-web-commandes.md`.
+
 ## Livraison, transporteurs et commandes du client (fiche complétée le 03/11/2026)
 
 Les autres chantiers de la boutique ont leur section plus haut (réglages, produits, réservation et fuseau, panier et devis, paiement,

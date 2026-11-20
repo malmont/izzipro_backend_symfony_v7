@@ -38,6 +38,8 @@ class ConfirmSiteAssistantActionUseCase
         private readonly ?\Psr\Log\LoggerInterface $logger = null,
         private readonly ?\App\Services\Group\GroupCompanyService $groupCompany = null, // lot G-1d
         private readonly ?\App\Services\Group\Transfer\GroupTransferService $groupTransfers = null, // lot G-5
+        private readonly ?\App\Services\ReservationService\ShopBookingAssistantTools $shopBookings = null, // lot CMD-WEB-1
+        private readonly ?\App\Services\CaisseService\SiteLocaleResolver $siteLocale = null, // lot CMD-WEB-1 : la langue du courriel au client
     ) {
     }
 
@@ -51,6 +53,23 @@ class ConfirmSiteAssistantActionUseCase
         $action = $this->assistant->pendingAction($tenant, $id);
         if ($action === null) {
             throw new \OutOfBoundsException('Action inconnue ou expirée : demandez à nouveau à l\'assistant.');
+        }
+        if ($action['tool'] === 'propose_booking_status') {
+            // lot CMD-WEB-1 : jamais le directeur entré (il lit les rendez-vous, il ne les confirme ni ne les annule) ; tout relu sous le verrou ;
+            // un refus ne consume pas l'action
+            if ($this->shopBookings === null || ($this->entry?->entry()['mode'] ?? null) === \App\Services\Entry\EntryService::MODE_GROUP) {
+                throw new \InvalidArgumentException('Seul un administrateur de la boutique confirme ou annule un rendez-vous.');
+            }
+            try {
+                $result = $this->shopBookings->apply($action['input'], trim((string) $actor?->getFirstname()) ?: 'assistant', $this->siteLocale?->siteLocale() ?? 'fr', $host);
+            } catch (\App\Services\ReservationService\ShopBookingException $e) {
+                throw new \InvalidArgumentException($e->getMessage() . ' (' . $e->errorCode . ')', 0, $e);
+            }
+            $this->audit?->record('site_assistant', $id, 'confirm', null, ['tool' => $action['tool'], 'by' => 'assistant', 'confirmedBy' => trim((string) $actor?->getFirstname()) ?: 'administrateur',
+                'summary' => $action['summary'], 'result' => $result], ['assistant']);
+            $this->assistant->forgetAction($tenant, $id);
+
+            return ['tool' => $action['tool'], 'input' => $action['input'], 'result' => $result];
         }
         if (in_array($action['tool'], SiteAssistantTools::IAA_ACTIONS, true)) {
             // lot IA-A : tout est relu à la confirmation (module, état, compte) ; un refus ne consume pas l'action, la trace dit qui a confirmé
