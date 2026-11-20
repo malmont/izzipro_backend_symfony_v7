@@ -51,6 +51,7 @@ final class SubscriptionService
         private readonly ?\App\Services\Platform\PlatformModeService $platform = null, // lot PROVISION-1 : seule la boutique de la plateforme emploie un lien
         private readonly ?\App\Services\StripeService\StripeService $accounts = null, // lot ABO-CONF A : compte connecté exigé en réel
         private readonly ?\App\Services\StripeService\StripeAccountResolver $modes = null,
+        private readonly ?SubscriptionFeeService $fees = null, // lot ABO-CONF C : commission des abonnements
     ) {
     }
 
@@ -228,8 +229,8 @@ final class SubscriptionService
         // l'essai reste celui de la plateforme (« Demander », une fois par site)
         $state = $this->stripe->create($customerId, $priceId, $quantity, $plan->hasFulfillment() ? 0 : $plan->getTrialDays(), [
             'tenant_code' => (string) $this->tenantProvider->getTenantCode(), 'subscription_id' => (string) $subscription->getId(), 'user_id' => (string) $user->getId(),
-        ], $taxRateIds, $automaticTax, $shippingPriceId, $plan->isSinglePeriod()); // lot ABO-1 : carte de séances, fin posée à la création
-        $subscription->setStripeSubscriptionId($state['id']);
+        ], $taxRateIds, $automaticTax, $shippingPriceId, $plan->isSinglePeriod(), ($feeBp = $this->fees?->effectiveBp()) !== null ? SubscriptionFeeService::percent($feeBp) : null);
+        $subscription->setStripeSubscriptionId($state['id'])->setFeeBpApplied($feeBp ?? null); // lot ABO-CONF C : la commission posée à la souscription
         $this->applyFreshState($subscription, $state);
         $em->flush();
 

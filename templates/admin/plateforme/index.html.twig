@@ -249,6 +249,30 @@
     </form>
     {% endif %}
 
+    {# Lot ABO-CONF C (19/11/2026, décision du propriétaire) : commission de la plateforme sur les abonnements, à part de celle de la boutique #}
+    {% if subscriptionFee %}
+    <h2 class="h5 mt-4" id="commission-abonnements">Commission abonnements</h2>
+    <p class="small text-muted">Prélevée sur chaque facture d'abonnement d'un site au compte Stripe connecté (un site interne ou sans compte : aucune). Un site peut la remplacer dans son écran Stripe. Un changement vaut tout de suite pour les nouvelles souscriptions ; les abonnements en cours le prennent au passage horaire (50 par site et par heure). Distincte de la commission de la boutique.</p>
+    <form method="post" action="{{ path('admin_plateforme_subscription_fee') }}" class="row g-2 align-items-end mb-2">
+        <input type="hidden" name="_token" value="{{ csrf_token(csrf_id) }}">
+        <div class="col-md-3"><label class="form-label small" for="platform-subscription-fee">Commission abonnements (%)</label>
+            <input id="platform-subscription-fee" type="number" name="percent" min="0" max="20" step="0.01" class="form-control form-control-sm" value="{{ (subscriptionFee.bp / 100)|number_format(2, '.', '') }}"></div>
+        <div class="col-auto"><button class="btn btn-sm" style="background:#1e3a8a;color:#ffffff;border:1px solid #1e3a8a;font-weight:600">Enregistrer</button></div>
+    </form>
+    {% if subscriptionFee.journal is not empty %}
+    <table class="table table-sm datagrid mb-3">
+        <thead><tr><th>Quand (UTC)</th><th>Réglage</th><th>Site</th><th>Ancien</th><th>Nouveau</th><th>Par</th></tr></thead>
+        <tbody>
+        {% for j in subscriptionFee.journal %}
+            <tr><td>{{ j.changed_at|slice(0, 16) }}</td><td>{{ j.setting == 'platform' ? 'plateforme' : 'site' }}</td><td><code>{{ j.tenant_code ?? '—' }}</code></td>
+                <td>{{ j.old_bp is null ? 'celle de la plateforme' : (j.old_bp / 100)|number_format(2, ',', ' ') ~ ' %' }}</td>
+                <td>{{ j.new_bp is null ? 'celle de la plateforme' : (j.new_bp / 100)|number_format(2, ',', ' ') ~ ' %' }}</td><td>{{ j.changed_by ?? '—' }}</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+    {% endif %}
+
     {# Lot PROVISION-3 (18/11/2026) : journal des événements Stripe des abonnements et file de reprise des droits vendus (docs/console-pilotage.md) #}
     <h2 class="h5 mt-4" id="paiements-offres">Paiements des offres{% if offerRetries is not empty %} <span class="badge bg-danger">{{ offerRetries|length }}</span>{% endif %}</h2>
     <p class="text-muted small">File de reprise : abonnements dont les droits n'ont pas pu être posés ; ils sont rejoués toutes les 15 minutes (5 min, 15 min, 1 h, 3 h, puis 6 h), avec un incident de la plateforme au 5e échec. Chaque nuit, la réconciliation compare tous les abonnements branchés à Stripe et à leurs droits. Heures en UTC.</p>

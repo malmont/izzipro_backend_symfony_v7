@@ -44,6 +44,7 @@ class PlatformConsoleAdminController extends AbstractController
         private readonly ?\App\Services\Platform\OfferPayments\OfferPaymentsRepository $offerPayments = null, // lot PROVISION-3 : paiements des offres
         private readonly ?\App\Services\Platform\OfferPayments\OfferReconciler $offerReconciler = null,
         private readonly ?\App\Services\Platform\PlatformAlertRecipient $alertRecipient = null, // adresse des alertes de la plateforme (19/11/2026)
+        private readonly ?\App\Services\SubscriptionService\SubscriptionFeeService $subscriptionFees = null, // lot ABO-CONF C : commission des abonnements
     ) {
     }
 
@@ -121,6 +122,20 @@ class PlatformConsoleAdminController extends AbstractController
         });
     }
 
+    /** Lot ABO-CONF C : « Commission abonnements (%) » de la plateforme, de 0 à 20 % ; un site peut la remplacer (écran Stripe du site) */
+    #[Route('/admin/plateforme/commission-abonnements', name: 'admin_plateforme_subscription_fee', methods: ['POST'])]
+    public function subscriptionFee(Request $request): Response
+    {
+        return $this->action($request, function () use ($request) {
+            $raw = str_replace(',', '.', trim((string) $request->request->get('percent', '')));
+            if (!is_numeric($raw)) {
+                throw new \InvalidArgumentException('Commission des abonnements : un pourcentage de 0 à 20.');
+            }
+            ($this->subscriptionFees ?? throw new \DomainException('Réglage indisponible.'))->setPlatformBp((int) round((float) $raw * 100), $this->getUser()?->getUserIdentifier());
+            $this->addFlash('success', 'Commission des abonnements de la plateforme enregistrée : elle vaut pour les nouvelles souscriptions, et les abonnements en cours la prennent au passage horaire.');
+        });
+    }
+
     /** Un courriel d'essai à l'adresse en vigueur, 3 par heure au plus */
     #[Route('/admin/plateforme/alertes/essai', name: 'admin_plateforme_alert_email_test', methods: ['POST'])]
     public function alertEmailTest(Request $request): Response
@@ -159,6 +174,7 @@ class PlatformConsoleAdminController extends AbstractController
             'lossShipmentPreview' => $request->getSession()->getFlashBag()->get('loss_shipment_preview')[0] ?? null,
             'requests' => $this->requests->listPending(),
             'alertRecipient' => $this->alertRecipient?->state(),
+            'subscriptionFee' => $this->subscriptionFees !== null ? ['bp' => $this->subscriptionFees->platformBp(), 'journal' => $this->subscriptionFees->journalRows(20)] : null,
             'offerRetries' => $this->offerPayments?->allRetries() ?? [],
             'offerEvents' => $this->offerPayments?->recentEvents(50) ?? [],
             'events' => $this->repository->events($tenant !== '' ? $tenant : null, 50),

@@ -28,6 +28,14 @@ class StripeConfig
     #[ORM\Column(options: ['default' => 100])]
     private int $onlineFeeBp = 100;
 
+    // Commission de la plateforme sur les ABONNEMENTS (lot ABO-CONF C, 19/11/2026), centièmes de % ; vide = celle de la plateforme.
+    // Réglage du seul super administrateur, à part de la commission de la boutique (onlineFeeBp)
+    #[ORM\Column(name: 'subscription_fee_bp', nullable: true)]
+    private ?int $subscriptionFeeBp = null;
+
+    public function getSubscriptionFeeBp(): ?int { return $this->subscriptionFeeBp; }
+    public function setSubscriptionFeeBp(?int $bp): static { $this->subscriptionFeeBp = $bp; return $this; }
+
     // Compte Connect RÉEL distinct (M1) : créé et suivi avec la clé réelle de la caisse ; actif quand Stripe autorise encaissement et virements
     #[ORM\Column(length: 255, nullable: true)]
     private ?string $liveAccountId = null;

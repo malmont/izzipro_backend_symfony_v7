@@ -1145,7 +1145,23 @@ ajustent et répondent, mais ne créent rien. Les formules de la plateforme et d
   fois) ; la caisse a son propre réglage test / réel PAR SITE (`Entreprise.posStripeMode`, clés réelles à part, compte réel distinct,
   passage en réel par le super administrateur, journal `STRIPE_MODE_CHANGED`). Au passage en réel, la boutique et les abonnements doivent
   prendre ce modèle par site (`StripeAccountResolver`, canal `shop`), pour que `demo` et les sites d'essai restent en test.
-- **Commission de la plateforme sur les abonnements** : voir le réglage « Commission abonnements (%) ».
+- **Commission de la plateforme sur les abonnements** : voir ci-dessous.
+
+### Commission de la plateforme sur les abonnements (lot ABO-CONF C, 19/11/2026, décision du propriétaire)
+
+- Réglage de la plateforme « Commission abonnements (%) » (console Plateforme d'EasyAdmin ; `platform_settings.subscription_fee_bp` de la
+  base maître), **1 % sans réglage** ; réglage d'un site (écran Stripe du site, champ du SEUL super administrateur, jamais montré au
+  commerçant ; `stripe_config.subscription_fee_bp`) qui le remplace s'il est rempli ; 0 permis ; bornes 0 à 20 %. Réglage À PART de la
+  commission de la boutique (`online_fee_bp`).
+- Seulement avec un compte Stripe connecté : un site interne de la plateforme ou sans compte n'a pas de commission (et reste hors du
+  rattrapage).
+- Nouvelles souscriptions : la commission du moment (`application_fee_percent`, notée `subscription.fee_bp_applied`). Abonnements en
+  cours : rattrapés par le passage horaire `app:abo:periodes` (aucun nouveau minuteur), 50 par site et par passage, une clé d'idempotence
+  par abonnement et par commission voulue ; une erreur Stripe n'arrête pas le lot, l'abonnement est repris au passage suivant. L'écran
+  Stripe du site montre « X abonnement(s) en attente de la nouvelle commission ».
+- Chaque changement au journal `platform_fee_log` de la base maître (qui, ancien, nouveau, site ; SQL `ops/sql/subscription_fee_master.sql`,
+  script `scripts/migrate_master_v2_subscription_fee.sh`), lisible du seul super administrateur (console Plateforme).
+- Code : `App\Services\SubscriptionService\SubscriptionFeeService`.
 
 ### Codes des refus des abonnements (04/11/2026, application e-commerce mobile)
 

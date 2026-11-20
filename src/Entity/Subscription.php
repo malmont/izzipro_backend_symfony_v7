@@ -107,6 +107,13 @@ class Subscription
     #[ORM\Column(type: Types::JSON, nullable: true)]
     private ?array $pauses = null;
 
+    /** Lot ABO-CONF C : la commission de la plateforme appliquée chez Stripe (centièmes de %) ; diffère de la voulue = à rattraper */
+    #[ORM\Column(name: 'fee_bp_applied', nullable: true)]
+    private ?int $feeBpApplied = null;
+
+    public function getFeeBpApplied(): ?int { return $this->feeBpApplied; }
+    public function setFeeBpApplied(?int $bp): static { $this->feeBpApplied = $bp; return $this; }
+
     /** Lot ABO-1 : résiliation programmée à une date précise (fin d'engagement), en plus de `cancelAtPeriodEnd` */
     #[ORM\Column(name: 'cancel_at', type: Types::DATETIME_IMMUTABLE, nullable: true)]
     private ?\DateTimeImmutable $cancelAt = null;

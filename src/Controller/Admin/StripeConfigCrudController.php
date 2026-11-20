@@ -13,6 +13,12 @@ use App\Controller\Admin\BaseTenantCrudController;
 
 class StripeConfigCrudController extends BaseTenantCrudController
 {
+    public function __construct(\App\Services\TenantEntityManagerProvider $emProvider,
+        private readonly ?\App\Services\SubscriptionService\SubscriptionFeeService $subscriptionFees = null) // lot ABO-CONF C
+    {
+        parent::__construct($emProvider);
+    }
+
     public static function getEntityFqcn(): string
     {
         return StripeConfig::class;
@@ -66,6 +72,16 @@ class StripeConfigCrudController extends BaseTenantCrudController
                 ->setFormTypeOption('attr', ['disabled' => 'disabled', 'readonly' => 'readonly']);
         }
 
+        // lot ABO-CONF C : la commission des abonnements du site, réglage du SEUL super administrateur (jamais montré au commerçant)
+        $subscriptionFee = [];
+        if ($isSuperAdmin) {
+            $pending = $this->subscriptionFees?->pendingCount() ?? 0;
+            $subscriptionFee[] = \EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField::new('subscriptionFeeBp', 'Commission abonnements (centièmes de %)')
+                ->setRequired(false)->hideOnIndex()
+                ->setHelp(sprintf('Vide = celle de la plateforme (%s %%) ; 0 à 2000 (20 %%). Distincte de la commission de la boutique. %d abonnement(s) en attente de la nouvelle commission (posée au passage horaire, 50 par heure).',
+                    number_format(($this->subscriptionFees?->platformBp() ?? 100) / 100, 2, ',', ' '), $pending));
+        }
+
         return [
             IdField::new('id', 'ID')->hideOnForm(),
             $accountIdField,
@@ -73,6 +89,7 @@ class StripeConfigCrudController extends BaseTenantCrudController
                 ->renderAsSwitch(false)
                 ->setHelp('Indique si les paiements par carte bancaire sont autorisés et fonctionnels.'),
             $onlineFeeField,
+            ...$subscriptionFee,
         ];
     }
 
@@ -88,6 +105,20 @@ class StripeConfigCrudController extends BaseTenantCrudController
     {
         if ($entityInstance instanceof StripeConfig) {
             $this->enforceSuperAdminFields($entityInstance);
+            // lot ABO-CONF C : la commission des abonnements passe par son service (bornes, journal de la base maître : qui, ancien, nouveau)
+            $original = $entityManager->getUnitOfWork()->getOriginalEntityData($entityInstance);
+            $wanted = $entityInstance->getSubscriptionFeeBp();
+            $old = $original['subscriptionFeeBp'] ?? null;
+            if ($wanted !== $old) {
+                $entityInstance->setSubscriptionFeeBp($old);
+                if ($this->isGranted('ROLE_SUPER_ADMIN') && $this->subscriptionFees !== null) {
+                    try {
+                        $this->subscriptionFees->setSiteBp($wanted, $this->getUser()?->getUserIdentifier());
+                    } catch (\InvalidArgumentException $e) {
+                        $this->addFlash('danger', $e->getMessage());
+                    }
+                }
+            }
         }
         parent::updateEntity($entityManager, $entityInstance);
     }

@@ -42,12 +42,15 @@ interface SubscriptionStripeGatewayInterface
      * @param list<string> $taxRateIds
      * @param ?string $shippingPriceId seconde ligne récurrente (livraison), facturée à chaque échéance
      */
-    public function create(string $customerId, string $priceId, int $quantity, int $trialDays, array $metadata, array $taxRateIds, bool $automaticTax, ?string $shippingPriceId = null, bool $cancelAtPeriodEnd = false): array;
+    public function create(string $customerId, string $priceId, int $quantity, int $trialDays, array $metadata, array $taxRateIds, bool $automaticTax, ?string $shippingPriceId = null, bool $cancelAtPeriodEnd = false, ?float $applicationFeePercent = null): array;
 
     public function retrieve(string $subscriptionId): array;
 
     /** Annulation à la fin de la période (true) ou immédiate (false) */
     public function cancel(string $subscriptionId, bool $atPeriodEnd): array;
+
+    /** Lot ABO-CONF C : commission de la plateforme d'un abonnement en cours (pourcentage), avec une clé d'idempotence */
+    public function updateFee(string $subscriptionId, float $percent, string $idempotencyKey): array;
 
     /** Lot ABO-1 : résiliation programmée à une date (fin d'engagement), sans prorata */
     public function cancelAt(string $subscriptionId, int $timestamp): array;
