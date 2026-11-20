@@ -46,6 +46,8 @@ class GroupWritesClassificationTest extends KernelTestCase
         'propose_cancel_subscription' => 'argent',
         // lot ABO-2 : agenda (ce n'est pas de l'argent : ouvert au directeur)
         'get_slots' => 'lecture', 'get_to_schedule' => 'lecture', 'propose_slot_rule' => 'catalogue', 'propose_assign_date' => 'commande', 'propose_move_occurrence' => 'commande',
+        // lot CMD-WEB-1 : rendez-vous de la boutique
+        'get_shop_bookings' => 'lecture', 'propose_booking_status' => 'commande',
     ];
 
     public function testEveryWriteEveryScreenAndEveryAssistantToolIsClassifiedForTheDirector(): void

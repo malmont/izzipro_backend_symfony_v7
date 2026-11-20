@@ -89,6 +89,21 @@ class LandingPageSettingsApiTest extends WebTestCase
         $this->assertSame($before, $this->request('GET')->getContent(), 'rien n\'est enregistré');
     }
 
+    /** Montée Symfony 7.4 : un corps vide ou une configuration vide est refusé (422) et la landing en place reste intacte */
+    public function testAnEmptyBodyOrConfigurationIsRefusedAndNothingIsErased(): void
+    {
+        $this->loginAsAdmin();
+        $this->assertSame(200, $this->request('PUT', $this->configurationJson('{"id": "titre", "type": "title", "text": "Garde"}'))->getStatusCode());
+        $before = $this->request('GET')->getContent();
+        $this->assertStringContainsString('Garde', $before);
+
+        foreach (['{}', '{"configuration": {}}', '{"configuration": []}', '{"configuration": null}'] as $body) {
+            $put = $this->request('PUT', $body);
+            $this->assertSame(Response::HTTP_UNPROCESSABLE_ENTITY, $put->getStatusCode(), $body . ' : ' . $put->getContent());
+        }
+        $this->assertSame($before, $this->request('GET')->getContent(), 'rien n\'est effacé');
+    }
+
     public function testSectionNameIsStoredAndReturnedUnchanged(): void
     {
         $this->loginAsAdmin();

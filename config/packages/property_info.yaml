@@ -1,3 +1,5 @@
 framework:
     property_info:
         enabled: true
+        # Symfony 7.3 : valeur à poser explicitement (la valeur par défaut passe à true en 8.0) ; false = le comportement de la 6.4
+        with_constructor_extractor: false

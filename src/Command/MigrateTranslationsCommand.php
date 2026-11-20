@@ -19,8 +19,6 @@ use Symfony\Component\Console\Attribute\AsCommand;
 #[AsCommand(name: 'app:migrate-translations', description: 'Génère ou migre les traductions pour les entités traduisibles d\'un tenant.')]
 class MigrateTranslationsCommand extends Command
 {
-    protected static $defaultName = 'app:migrate-translations';
-
     private GoogleTranslateService $translator;
     private TenantEntityManagerProvider $tenantEmProvider;
     private TenantConnectionManager $connectionManager;

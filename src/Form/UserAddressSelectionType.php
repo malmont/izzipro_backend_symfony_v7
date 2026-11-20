@@ -14,7 +14,7 @@ use Symfony\Component\OptionsResolver\OptionsResolver;
 
 class UserAddressSelectionType extends AbstractType
 {
-    public function buildForm(FormBuilderInterface $builder, array $options)
+    public function buildForm(FormBuilderInterface $builder, array $options): void
     {
         // Champ pour sélectionner un utilisateur
         $builder->add('user', EntityType::class, [
@@ -72,7 +72,7 @@ class UserAddressSelectionType extends AbstractType
         ]);
     }
 
-    public function configureOptions(OptionsResolver $resolver)
+    public function configureOptions(OptionsResolver $resolver): void
     {
         // Vous pouvez passer une option "user" pour pré-filtrer les adresses
         $resolver->setDefaults([

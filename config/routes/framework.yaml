@@ -1,4 +1,6 @@
-when@dev:
-    _errors:
-        resource: '@FrameworkBundle/Resources/config/routing/errors.xml'
-        prefix: /_error
+# Route d'aperçu des pages d'erreur de Symfony (/_error/{code}) retirée le 20/11/2026, décision du chef : la production tourne en
+# APP_ENV=dev et la route répondait en anonyme (page neutre, sans trace, mais rien à faire en ligne). Pour la revoir en local :
+# when@dev:
+#     _errors:
+#         resource: '@FrameworkBundle/Resources/config/routing/errors.xml'
+#         prefix: /_error

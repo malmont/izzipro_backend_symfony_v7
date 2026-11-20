@@ -186,6 +186,7 @@ final class ScreenRegistry
         // (les commandes, les paiements, l'achat d'une étiquette, l'annulation : un administrateur y agit sur TOUT le site : ventes)
         ['#^/api/orders$#', 'ventes.commandes'],
         ['#^/api/order/cancel(/|$)#', 'ventes.commandes'],
+        ['#^/api/site/commandes(/|$)#', 'ventes.commandes'], // lot CMD-WEB-1 : à traiter et fiche, lecture seule
         ['#^/api/shipping/(buy|parcels)$#', 'ventes.commandes'],
         ['#^/api/(tenant|app|app-profile|apps|mobile)(/|$)#', '@apps'],
         ['#^/api/(health|webhooks|landingpage-config)(/|$)#', '@technique'],
@@ -326,6 +327,7 @@ final class ScreenRegistry
         ['#^/api/reservations/(booked-slots|services)$#', '@public'],
         ['#^/api/reservations$#', ['POST' => '@public', '*' => 'clients.reservations']],
         ['#^/api/reservations/#', 'clients.reservations'],
+        ['#^/api/site/reservations-boutique(/|$)#', 'clients.reservations'], // lot CMD-WEB-1 : rendez-vous de la boutique
         // (envois d'un visiteur : devis du panier, formulaires)
         ['#^/api/(cart|contact|financement)(/|$)#', '@public'],
         // (LECTURES du site public. Une écriture sur ces chemins est celle du contenu : la route générique `PATCH /api/{resource}/{id}`

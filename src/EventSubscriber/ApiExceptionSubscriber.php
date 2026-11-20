@@ -55,7 +55,8 @@ class ApiExceptionSubscriber implements EventSubscriberInterface
         }
 
         $message = match (true) {
-            $exception instanceof AccessDeniedHttpException && in_array($exception->getMessage(), ['', 'Access Denied.'], true) => 'Accès refusé.',
+            // Symfony 7.3 ajoute à « Access Denied. » les rôles exigés (« … The user doesn't have any of ROLE_… ») : jamais rendus au client
+            $exception instanceof AccessDeniedHttpException && ($exception->getMessage() === '' || str_starts_with($exception->getMessage(), 'Access Denied.')) => 'Accès refusé.',
             $exception instanceof NotFoundHttpException && ($exception->getMessage() === '' || str_starts_with($exception->getMessage(), 'No route found')) => 'Ressource introuvable.',
             $exception->getMessage() !== '' => $exception->getMessage(),
             default => 'Requête invalide.',

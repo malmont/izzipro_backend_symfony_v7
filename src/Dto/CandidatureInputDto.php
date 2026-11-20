@@ -25,6 +25,12 @@ class CandidatureInputDto
     public ?string $questionCommentaire = null;
     public ?string $niveauAnglais = null;
     public ?string $succursale = null;
+    /**
+     * Lot CMD-WEB-1 (20/11/2026) : texte libre du formulaire public (aucun téléversement) : une adresse http ou https seulement, 255 caractères
+     * au plus (la colonne) ; sinon 422 sur `lienCv`. Vide : permis. Les anciennes lignes ne sont pas relues.
+     */
+    #[Assert\Length(max: 255)]
+    #[Assert\Url(protocols: ['http', 'https'], message: 'Le lien vers le CV doit être une adresse http ou https.')]
     public ?string $lienCv = null;
 }
 

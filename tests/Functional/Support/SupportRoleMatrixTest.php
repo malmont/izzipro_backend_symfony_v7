@@ -56,9 +56,18 @@ class SupportRoleMatrixTest extends WebTestCase
         $this->assertGreaterThan(500, count($routes));
         $violations = [];
         $served = 0;
+        $opened = 0;
         $sameAsAnonymous = 0;
         foreach ($routes as [$method, $path, $name]) {
             $support = $this->status($method, $path, $token);
+            // Lot CMD-WEB-1 : hors du module, les SEULES routes ouvertes au compte Assistance (SupportScopeSubscriber::OPEN) : servies
+            if (self::openOutsideTheModule($method, $path)) {
+                if (in_array($support, [401, 403], true)) {
+                    $violations[] = "$method $path ($name) : ouverte à l'Assistance (CMD-WEB-1), refusée ($support)";
+                }
+                ++$opened;
+                continue;
+            }
             if (str_starts_with($path, '/api/support')) {
                 // Réservé à l'administrateur du site : les réglages en écriture, et les agents (inviter, relancer, retirer : lot SUPPORT-WEB)
                 $adminOnly = ($method === 'PUT' && $path === '/api/support/settings') || in_array($name, ['support_agent_invite', 'support_agent_invitation', 'support_agent_revoke'], true);
@@ -91,6 +100,7 @@ class SupportRoleMatrixTest extends WebTestCase
         }
         $this->assertSame([], $violations, 'ROLE_SUPPORT n\'obtient rien de plus qu\'un anonyme hors du module');
         $this->assertLessThanOrEqual(4, $sameAsAnonymous, 'les refus sans le code de la garde restent une poignée de routes publiques');
+        $this->assertSame(6, $opened, 'lot CMD-WEB-1 : commandes à traiter et fiche ; rendez-vous de la boutique (liste, fiche, confirmer, annuler) ; rien d\'autre');
         $this->assertSame(15, $served, 'les 15 routes du module (8 du lot 1 ; lot SUPPORT-WEB : moi, agents, commande par référence, inviter, relancer, retirer ; lot INC-3 : transmettre à l\'équipe technique)');
     }
 
@@ -112,5 +122,16 @@ class SupportRoleMatrixTest extends WebTestCase
         $this->lastCode = is_array($body) && is_string($body['code'] ?? null) ? $body['code'] : null;
 
         return $this->client->getResponse()->getStatusCode();
+    }
+
+    private static function openOutsideTheModule(string $method, string $path): bool
+    {
+        foreach (\App\Support\SupportScopeSubscriber::OPEN as [$m, $pattern]) {
+            if ($m === $method && preg_match($pattern, $path)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

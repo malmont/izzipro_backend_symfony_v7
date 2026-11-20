@@ -1,6 +1,6 @@
 # app_v2 — carte du backend pour les agents
 
-Backend Symfony 6.4 multi-tenant (une base par client), API du frontend Next.js `Izzipro_next` (autre dépôt).
+Backend Symfony 7.4 multi-tenant (une base par client), API du frontend Next.js `Izzipro_next` (autre dépôt).
 Lire la fiche utile ci-dessous, puis aller droit aux fichiers qu'elle cite : ne pas parcourir tout le code.
 
 ## Où chercher
@@ -15,7 +15,7 @@ Lire la fiche utile ci-dessous, puis aller droit aux fichiers qu'elle cite : ne 
 | Boussole ESG | `docs/boussole-esg.md` ; code `src/ESG/` |
 | Caisse (POS : postes de caisse, sessions, vente `create-multi-payment`, remboursements, droits du caissier) | `docs/caisse.md` |
 | Mise en production de la caisse (paiements réels, mode Stripe par site, réconciliation planifiée, surveillance, liste de contrôle d'ouverture) | `docs/mise-en-production-caisse.md` |
-| Boutique (réglages de la boutique réglable ; produits, commandes, paiement, livraison : aucune en production ; lot ABO-0 codé le 19/11/2026 : prestations des formules d'abonnement, `benefits[]` de la grille, suivi `/api/site/abonnements/...` pour la gestion web et mobile, outils de l'assistant du site, § « Prestations des formules et suivi des abonnements » ; lot ABO-1 codé le 19/11/2026 : droits par période nés de « période payée », report une fois, perte, solde `balance[]` (gestion et client), utiliser / offrir / pause datée / reprise / résiliation en fin de période, engagement minimal, carte de séances, passage quotidien `app:abo:periodes`, § « Droits par période, solde, report et pause » ; lot ABO-2 codé le 20/11/2026 : agenda des prestations, règles de créneaux à l'heure du magasin, créneaux 8 semaines devant, capacité sous verrou, délai d'annulation, places retenues 30 min à la souscription, rendez-vous de l'équipe et de l'abonné, créneau annulé avec courriel, § « Agenda des prestations » ; plan `docs/plan-abo-universel.md`) | `docs/boutique.md` ; routes dans `docs/endpoints.md` ; demandes du frontend `docs/boutique-reglable-backend-demandes.md` ; côté frontend `src/components/Boutique/README.md` |
+| Boutique (réglages de la boutique réglable ; produits, commandes, paiement, livraison : aucune en production ; lot ABO-0 codé le 19/11/2026 : prestations des formules d'abonnement, `benefits[]` de la grille, suivi `/api/site/abonnements/...` pour la gestion web et mobile, outils de l'assistant du site, § « Prestations des formules et suivi des abonnements » ; lot ABO-1 codé le 19/11/2026 : droits par période nés de « période payée », report une fois, perte, solde `balance[]` (gestion et client), utiliser / offrir / pause datée / reprise / résiliation en fin de période, engagement minimal, carte de séances, passage quotidien `app:abo:periodes`, § « Droits par période, solde, report et pause » ; lot ABO-2 codé le 20/11/2026 : agenda des prestations, règles de créneaux à l'heure du magasin, créneaux 8 semaines devant, capacité sous verrou, délai d'annulation, places retenues 30 min à la souscription, rendez-vous de l'équipe et de l'abonné, créneau annulé avec courriel, § « Agenda des prestations » ; plan `docs/plan-abo-universel.md`) | `docs/boutique.md` ; commandes et rendez-vous de la boutique pour la gestion web (lot CMD-WEB-1 : lecture des commandes en vue par lecteur, rendez-vous de la vitrine, pagination de `/api/payments`) : `docs/contrat-web-commandes.md` ; routes dans `docs/endpoints.md` ; demandes du frontend `docs/boutique-reglable-backend-demandes.md` ; côté frontend `src/components/Boutique/README.md` |
 | Aide intégrée pour les administrateurs (pages `docs/aide/<clé>.md`, API `/api/site/help`, page `/admin/aide`) | `docs/console-pilotage.md`, « aide intégrée » ; pages dans `docs/aide/` |
 | Module Assistance (tickets, plaintes, aide IA au répondeur, chat : cadrage, responsabilités backend / Next / MAUI / caisse ; lot 1 livré : boîte de demandes, ROLE_SUPPORT, délai ouvré, conservation ; lot AIDE-APP codé le 18/11/2026 : « Aide et support » de Living Memory et du commerce mobile, demandes du client `/api/account/support/...`, catégorie et application d'origine, `unread`) | `docs/assistance.md` ; code `src/Support/` |
 | Conformité par pays : audit de l'existant (profil pays, taxes, documents émis, NF525, exports comptables, gestion, échéances) et ordre des lots PAYS-1 à PAYS-8 | `docs/pays-audit.md` |
@@ -85,6 +85,9 @@ Lire la fiche utile ci-dessous, puis aller droit aux fichiers qu'elle cite : ne 
   appliqué aussitôt à toutes les bases, `gmasuite` et le modèle des tests compris.
 - Aucun secret dans le code, la doc ou les journaux (ni valeur de `.env`, ni jeton, ni URL avec identifiants).
 - Tests : `docker exec -w /var/www -e SYMFONY_DEPRECATIONS_HELPER=disabled symfony_app_v2 php vendor/bin/phpunit tests/Functional`.
+  Après tout changement de vendor (composer), vider `var/cache` avant une suite : un vendor copié garde ses anciennes
+  dates, et des gabarits Twig compilés avec l'ancienne version passent pour frais (20/11/2026, montée 7.4 : 6 essais
+  verts à tort).
 - Après un changement de handler Messenger : `messenger:stop-workers` (vérifier d'abord qu'aucune génération n'est en cours).
 - **Tenir la doc à jour** : à chaque changement structurel, mettre à jour la fiche concernée ; après tout ajout ou
   changement de route, régénérer `docs/endpoints.md` (commande en tête du fichier).

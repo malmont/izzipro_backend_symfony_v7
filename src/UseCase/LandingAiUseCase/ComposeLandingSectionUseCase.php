@@ -16,7 +16,7 @@ use App\Services\LandingAiService\LandingAiSiteOrchestrator;
 use App\Services\BoutiqueSettingsService\BoutiqueConfigurationValidator;
 use App\Services\TenantConnectionProvider;
 use Symfony\Component\Messenger\MessageBusInterface;
-use Symfony\Component\RateLimiter\RateLimiterFactory;
+use Symfony\Component\RateLimiter\RateLimiterFactoryInterface;
 
 /**
  * POST /api/landingpage-ai/compose : contrôles, limite par minute, réservation des crédits, puis
@@ -38,7 +38,7 @@ class ComposeLandingSectionUseCase
         private readonly LandingAiJobService $jobs,
         private readonly MessageBusInterface $bus,
         private readonly TenantConnectionProvider $tenantProvider,
-        private readonly RateLimiterFactory $landingAiTenantLimiter,
+        private readonly RateLimiterFactoryInterface $landingAiTenantLimiter,
         private readonly LandingAiSiteOrchestrator $sites,
         private readonly BoutiqueConfigurationValidator $boutiqueValidator,
         private readonly ?\App\Services\SiteCharter\SiteCharterService $siteCharter = null // charte du site (08/11/2026)

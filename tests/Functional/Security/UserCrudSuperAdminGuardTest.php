@@ -102,7 +102,7 @@ class UserCrudSuperAdminGuardTest extends WebTestCase
         $ordinary = $this->createUser(['ROLE_USER_INTERNET']);
 
         $crawler = $this->admin('index');
-        $deleteToken = (string) $crawler->filter('#delete-form input[name="token"]')->attr('value');
+        $deleteToken = (string) $crawler->filter('#action-confirmation-form input[name="token"]')->attr('value');
         $this->assertNotEmpty($deleteToken, 'jeton ea-delete présent sur la page');
 
         // Suppression forgée du super admin -> 403, compte toujours présent
@@ -140,7 +140,7 @@ class UserCrudSuperAdminGuardTest extends WebTestCase
         $crawler = $this->admin('index');
         $this->assertSame(200, $this->client->getResponse()->getStatusCode());
         $this->assertCount(0, $crawler->filter('[data-action-name="batchDelete"], .form-batch-checkbox-all'));
-        $deleteToken = (string) $crawler->filter('#delete-form input[name="token"]')->attr('value');
+        $deleteToken = (string) $crawler->filter('#action-confirmation-form input[name="token"]')->attr('value');
         $this->assertNotEmpty($deleteToken);
 
         // GET et POST d'édition d'un compte super admin -> 200 puis 302

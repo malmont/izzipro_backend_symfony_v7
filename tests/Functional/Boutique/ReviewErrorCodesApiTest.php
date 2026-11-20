@@ -121,7 +121,8 @@ class ReviewErrorCodesApiTest extends WebTestCase
         }
         $body = $this->assertRefusal(429, 'TOO_MANY_REVIEWS', $response, 'Trop d\'avis envoyés : réessayez plus tard.');
         $this->assertGreaterThan(0, $body['retryAfter']);
-        $this->assertLessThanOrEqual(3600, $body['retryAfter']);
+        // Symfony 7 arrondit l'attente de la fenêtre glissante à la seconde supérieure : 3601 au plus pour une heure
+        $this->assertLessThanOrEqual(3601, $body['retryAfter']);
     }
 
     /** @return array<string, mixed> corps décodé */
