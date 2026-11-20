@@ -29,7 +29,28 @@ class StripeWebhookController extends AbstractController
         #[Autowire('%kernel.environment%')]
         private readonly string $environment = 'prod',
         private readonly ?\App\Incident\Services\PlatformIncidentService $incidents = null, // lot WEBHOOK-SIG : refus comptés
+        #[Autowire(service: 'cache.state')] private readonly ?\Psr\Cache\CacheItemPoolInterface $state = null,
     ) {}
+
+    /**
+     * Lot WEBHOOK-SIG : un refus compté dans les incidents de la plateforme AU PLUS une fois par minute et par motif (la route est publique :
+     * un flot de requêtes non signées n'écrit pas dans la base maître à chaque fois, et le contexte n'est jamais celui de l'expéditeur).
+     */
+    private function countRefusal(string $place, string $message): void
+    {
+        try {
+            if ($this->state !== null) {
+                $item = $this->state->getItem('stripe_webhook_refusal_w_' . str_replace('.', '_', $place));
+                if ($item->isHit()) {
+                    return;
+                }
+                $this->state->save($item->set(1)->expiresAfter(60));
+            }
+            $this->incidents?->recordPlatformIssue(null, $place, 'warning', $message);
+        } catch (\Throwable) {
+            // un compteur indisponible ne change rien au refus
+        }
+    }
 
     /**
      * Endpoint Webhook Stripe pour recevoir les notifications en temps réel (ex: checkout.session.completed).
@@ -67,7 +88,7 @@ class StripeWebhookController extends AbstractController
             }
             if (!$event && $lastException) {
                 $this->logger->error('[StripeWebhook] Signature invalide : ' . $lastException->getMessage(), ['ip' => $request->getClientIp(), 'at' => gmdate('c')]);
-                $this->incidents?->recordPlatformIssue(null, 'stripe_webhook.invalid_signature', 'warning', 'Webhook Stripe refusé : signature invalide'); // lot WEBHOOK-SIG
+                $this->countRefusal('stripe_webhook.invalid_signature', 'Webhook Stripe refusé : signature invalide'); // lot WEBHOOK-SIG
 
                 return $this->json(['error' => 'Signature invalide', 'code' => 'SIGNATURE_INVALID'], Response::HTTP_BAD_REQUEST);
             }
@@ -81,7 +102,7 @@ class StripeWebhookController extends AbstractController
             $type = json_decode($payload, true)['type'] ?? null;
             $type = is_string($type) ? mb_substr(preg_replace('/[^a-z0-9._]/i', '', $type), 0, 60) : null;
             $this->logger->warning('[StripeWebhook] Événement refusé : signature absente', ['type' => $type, 'ip' => $request->getClientIp(), 'at' => gmdate('c'), 'secrets' => $secrets !== []]);
-            $this->incidents?->recordPlatformIssue(null, 'stripe_webhook.unsigned', 'warning', 'Webhook Stripe refusé : signature absente', ['type' => $type]);
+            $this->countRefusal('stripe_webhook.unsigned', 'Webhook Stripe refusé : signature absente');
 
             return $this->json(['error' => 'Signature requise', 'code' => 'SIGNATURE_REQUIRED'], Response::HTTP_BAD_REQUEST);
         }
@@ -191,7 +212,11 @@ class StripeWebhookController extends AbstractController
             }
 
             if ($sessionId) {
-                $book = $this->handleBookCheckoutCompletedUseCase->execute($sessionId, $eventData);
+                try {
+                    $book = $this->handleBookCheckoutCompletedUseCase->execute($sessionId, $eventData);
+                } catch (\App\MemoiresVivantes\Services\BookPaymentRetryLater) {
+                    return $this->json(['status' => 'retry', 'detail' => 'session Stripe illisible pour le moment'], Response::HTTP_SERVICE_UNAVAILABLE); // Stripe réessaiera
+                }
                 if ($book) {
                     return $this->json([
                         'status' => 'success',

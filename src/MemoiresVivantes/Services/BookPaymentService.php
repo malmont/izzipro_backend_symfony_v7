@@ -224,9 +224,10 @@ class BookPaymentService
             try {
                 $stripeSession = $this->sessions?->retrieve($sessionId);
             } catch (\Throwable $e) {
-                $this->logger->error('[BookPaymentService] Session Stripe illisible : livre NON marqué payé', ['session' => mb_substr($sessionId, 0, 12) . '…', 'exception' => $e::class]);
+                // panne passagère (réseau, limite de débit) : rien n'est écrit et l'erreur remonte, pour que Stripe renvoie l'événement
+                $this->logger->error('[BookPaymentService] Session Stripe illisible : livre NON marqué payé, Stripe réessaiera', ['session' => mb_substr($sessionId, 0, 12) . '…', 'exception' => $e::class]);
 
-                return null;
+                throw new BookPaymentRetryLater('Session Stripe illisible', 0, $e);
             }
             if ($stripeSession === null || ($stripeSession['payment_status'] ?? null) !== 'paid' || ($stripeSession['id'] ?? null) !== $sessionId) {
                 $this->logger->warning('[BookPaymentService] Session non payée chez Stripe (ou inconnue) : livre NON marqué payé', ['session' => mb_substr($sessionId, 0, 12) . '…']);
@@ -255,21 +256,24 @@ class BookPaymentService
             $this->logger->error('[BookPaymentService] Aucun livre correspondant trouvé pour la session: ' . $sessionId);
             return null;
         }
-        // Lot WEBHOOK-SIG : la session payée doit être CELLE du livre (jamais le paiement d'un autre livre)
-        if ($book->getStripeSessionId() !== null && $book->getStripeSessionId() !== $sessionId) {
+        // Lot WEBHOOK-SIG : la session payée doit être celle du livre. Sa session courante, ou un ANCIEN lien que Stripe (relu) rattache à ce
+        // livre par metadata.book_id (lien régénéré pendant que le précédent restait payable : l'argent est encaissé, le livre est payé).
+        $stripeBookId = (string) ($sessionData['metadata']['book_id'] ?? '');
+        if ($book->getStripeSessionId() !== null && $book->getStripeSessionId() !== $sessionId && $stripeBookId !== (string) $book->getId()) {
             $this->logger->warning('[BookPaymentService] Session payée qui n\'est pas celle du livre : livre NON marqué payé', ['book' => (string) $book->getId()]);
 
             return null;
         }
-        if ($book->getPaymentStatus() === 'paid') {
+
+        // 3. Mise à jour de l'état du livre, ATOMIQUE (lot WEBHOOK-SIG) : seule la requête qui fait passer le livre à « payé » envoie la
+        // facture et l'alerte (un webhook et la synchronisation presque ensemble, ou un événement livré deux fois : une seule facture)
+        $em = $this->getEm();
+        $changed = $em->createQuery("UPDATE " . Book::class . " b SET b.paymentStatus = 'paid', b.status = 'paid', b.paidAt = :now WHERE b.id = :id AND (b.paymentStatus IS NULL OR b.paymentStatus <> 'paid')")
+            ->setParameter('now', new \DateTimeImmutable())->setParameter('id', $book->getId(), 'uuid')->execute();
+        $em->refresh($book);
+        if ($changed === 0) {
             return $book; // déjà payé : ni deuxième facture ni deuxième alerte
         }
-
-        // 3. Mise à jour de l'état du livre
-        $book->setPaymentStatus('paid');
-        $book->setStatus('paid');
-        $book->setPaidAt(new \DateTimeImmutable());
-        $this->getEm()->flush();
 
         $this->logger->info(sprintf(
             '[BookPaymentService] 🎉 Livre %s (%s) marqué comme PAYÉ avec succès !',

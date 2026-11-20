@@ -51,6 +51,7 @@ class StripeWebhookSignatureTest extends KernelTestCase
     public function testUnsignedEventsAreRefusedOnEveryPathOutsideTheTestEnvironment(): void
     {
         $controller = $this->controller('dev');
+        static::getContainer()->get('cache.state')->deleteItem('stripe_webhook_refusal_w_stripe_webhook_unsigned');
         $before = $this->incidentCount('stripe_webhook.unsigned');
         $types = ['checkout.session.completed', 'payment_intent.succeeded', 'payment_intent.amount_capturable_updated', 'charge.refunded',
             'customer.subscription.updated', 'invoice.paid', 'account.updated', 'terminal.reader.action_succeeded', 'type.inconnu'];
@@ -64,10 +65,7 @@ class StripeWebhookSignatureTest extends KernelTestCase
         $this->provider->switchTenant(MV_TEST_TENANT_DB, MV_TEST_TENANT_CODE);
         $this->provider->getEntityManager()->clear();
         $this->assertSame('pending', $this->provider->getEntityManager()->find(Book::class, $this->book->getId())->getPaymentStatus(), 'rien d\'écrit : le livre n\'est pas payé');
-        $this->assertSame($before + count($types), $this->incidentCount('stripe_webhook.unsigned'), 'chaque refus est compté dans les incidents');
-        // Une signature présente mais fausse : refusée aussi
-        $forged = $controller->handleWebhook(Request::create('/api/stripe/webhook', 'POST', [], [], [], ['CONTENT_TYPE' => 'application/json', 'HTTP_STRIPE_SIGNATURE' => 't=1,v1=faux'], '{"type":"checkout.session.completed"}'));
-        $this->assertSame(400, $forged->getStatusCode());
+        $this->assertSame($before + 1, $this->incidentCount('stripe_webhook.unsigned'), 'refus compté dans les incidents, une fois par minute (pas d\'inondation de la base maître)');
     }
 
     public function testABookIsPaidOnlyWhenStripeSaysItsOwnSessionIsPaid(): void
@@ -80,24 +78,58 @@ class StripeWebhookSignatureTest extends KernelTestCase
             $this->assertNull($this->bookService($stripe)->handleCheckoutCompleted(self::SESSION, $forged));
             $this->assertSame('pending', $status(), 'le contenu de l\'événement n\'est jamais cru');
         }
-        // Stripe en panne : rien d'écrit
-        $this->assertNull($this->bookService(new \RuntimeException('Stripe injoignable'))->handleCheckoutCompleted(self::SESSION, $forged));
+        // Stripe en panne : rien d'écrit, et l'erreur remonte pour que Stripe renvoie l'événement
+        try {
+            $this->bookService(new \RuntimeException('Stripe injoignable'))->handleCheckoutCompleted(self::SESSION, $forged);
+            $this->fail('la panne doit remonter');
+        } catch (\App\MemoiresVivantes\Services\BookPaymentRetryLater) {
+        }
         $this->assertSame('pending', $status());
 
-        // La session payée d'un AUTRE livre ne paie pas celui-ci
-        $em = $this->provider->getEntityManager();
-        $other = (new Book())->setTitle('Livre webhook-sig autre')->setUser($this->reload()->getUser())->setStripeSessionId('cs_test_autre_livre')->setPaymentStatus('pending');
-        $em->persist($other);
-        $em->flush();
-        $this->assertNull($this->bookService(['id' => self::SESSION, 'payment_status' => 'paid', 'metadata' => ['book_id' => (string) $other->getId()]])
-            ->handleCheckoutCompleted(self::SESSION, ['metadata' => ['book_id' => (string) $other->getId()]]));
-        $em->clear();
-        $this->assertSame('pending', $em->find(Book::class, $other->getId())->getPaymentStatus(), 'la session d\'un autre livre ne le paie pas');
-
-        // Stripe dit SA session payée : payé
+        // Lien régénéré : le livre porte un NOUVEAU lien, le client a payé l'ANCIEN, que Stripe rattache à ce livre : payé (l'argent est encaissé)
+        $this->provider->getEntityManager()->getConnection()->executeStatement('UPDATE mv_book SET stripe_session_id = ? WHERE id = ?', ['cs_test_nouveau_lien', (string) $this->book->getId()]);
         $paid = ['id' => self::SESSION, 'payment_status' => 'paid', 'metadata' => ['book_id' => (string) $this->book->getId()], 'amount_total' => 14900, 'currency' => 'cad'];
         $this->assertNotNull($this->bookService($paid)->handleCheckoutCompleted(self::SESSION, []));
         $this->assertSame('paid', $status());
+
+        // Déjà payé : rien ne change (ni deuxième facture ni nouvelle date de paiement), même événement livré deux fois
+        $paidAt = $this->reload()->getPaidAt();
+        $this->assertNotNull($this->bookService($paid)->handleCheckoutCompleted(self::SESSION, []));
+        $this->assertEquals($paidAt, $this->reload()->getPaidAt(), 'la seconde livraison n\'écrit rien');
+    }
+
+    public function testTheSynchronisationThatJustReadTheSessionIsTrusted(): void
+    {
+        // syncPaymentStatus vient de relire la session chez Stripe : `verified` évite une seconde relecture
+        $paid = ['id' => self::SESSION, 'payment_status' => 'paid', 'metadata' => ['book_id' => (string) $this->book->getId()]];
+        $this->assertNotNull($this->bookService(null)->handleCheckoutCompleted(self::SESSION, $paid, true));
+        $this->assertSame('paid', $this->reload()->getPaymentStatus());
+    }
+
+    public function testASignedEventIsAcceptedWithEitherSecretAndAWrongSignatureIsRefused(): void
+    {
+        $saved = [$_ENV['STRIPE_WEBHOOK_SECRET'] ?? null, $_ENV['STRIPE_CONNECT_WEBHOOK_SECRET'] ?? null];
+        $_ENV['STRIPE_WEBHOOK_SECRET'] = 'whsec_essai_plateforme';
+        $_ENV['STRIPE_CONNECT_WEBHOOK_SECRET'] = 'whsec_essai_connect';
+        try {
+            $controller = $this->controller('dev');
+            $payload = (string) json_encode(['id' => 'evt_signe', 'object' => 'event', 'type' => 'type.inconnu', 'data' => ['object' => ['id' => 'obj_1', 'object' => 'thing']]]);
+            $sign = static fn (string $secret): string => 't=' . time() . ',v1=' . hash_hmac('sha256', time() . '.' . $payload, $secret);
+            foreach (['whsec_essai_plateforme', 'whsec_essai_connect'] as $secret) {
+                $ok = $controller->handleWebhook(Request::create('/api/stripe/webhook', 'POST', [], [], [], ['CONTENT_TYPE' => 'application/json', 'HTTP_STRIPE_SIGNATURE' => $sign($secret)], $payload));
+                $this->assertSame(200, $ok->getStatusCode(), "signé avec $secret : accepté");
+            }
+            $before = $this->incidentCount('stripe_webhook.invalid_signature');
+            static::getContainer()->get('cache.state')->deleteItem('stripe_webhook_refusal_w_stripe_webhook_invalid_signature');
+            $bad = $controller->handleWebhook(Request::create('/api/stripe/webhook', 'POST', [], [], [], ['CONTENT_TYPE' => 'application/json', 'HTTP_STRIPE_SIGNATURE' => $sign('whsec_autre')], $payload));
+            $this->assertSame([400, 'SIGNATURE_INVALID'], [$bad->getStatusCode(), json_decode((string) $bad->getContent(), true)['code'] ?? null]);
+            $this->assertSame($before + 1, $this->incidentCount('stripe_webhook.invalid_signature'), 'le refus est compté');
+            // un second refus dans la minute n'écrit plus dans la base maître
+            $controller->handleWebhook(Request::create('/api/stripe/webhook', 'POST', [], [], [], ['CONTENT_TYPE' => 'application/json', 'HTTP_STRIPE_SIGNATURE' => $sign('whsec_autre')], $payload));
+            $this->assertSame($before + 1, $this->incidentCount('stripe_webhook.invalid_signature'), 'au plus un incident par minute');
+        } finally {
+            [$_ENV['STRIPE_WEBHOOK_SECRET'], $_ENV['STRIPE_CONNECT_WEBHOOK_SECRET']] = $saved;
+        }
     }
 
     /** Le contrôleur réel, avec l'environnement voulu (la production : « dev ») */
