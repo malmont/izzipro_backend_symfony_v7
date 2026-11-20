@@ -38,7 +38,7 @@ class GroupWritesClassificationTest extends KernelTestCase
         'get_missing_barcodes' => 'lecture', 'get_modules' => 'lecture', 'get_order' => 'lecture', 'get_orders_todo' => 'lecture', 'get_storefront_checklist' => 'lecture',
         // lot ABO-0 : abonnements (formules, prestations, abonnés sans identité)
         'get_subscription_plans' => 'lecture', 'get_benefits' => 'lecture', 'get_plan_subscribers' => 'lecture', 'get_subscription' => 'lecture',
-        'propose_benefit' => 'catalogue', 'propose_plan' => 'catalogue', 'set_plan_benefits' => 'catalogue',
+        'propose_benefit' => 'catalogue', 'propose_plan' => 'catalogue', 'set_plan_benefits' => 'catalogue', 'propose_plan_update' => 'argent', // prix : ABO-CONF
         // lot IA-G : outils du directeur au SIÈGE, avec son compte (jamais dans une boutique où il est entré : l'assistant y est fermé)
         'propose_group_invitation' => 'groupe', 'propose_group_copy' => 'catalogue', 'propose_group_same_company' => 'groupe', 'propose_group_transfer' => 'stock', 'get_group_transfers' => 'lecture', 'get_transfers_to_send' => 'lecture', 'get_group' => 'lecture', 'get_group_view' => 'lecture',
         // lot ABO-1 : gestes du quotidien sur un abonnement

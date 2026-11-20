@@ -108,6 +108,8 @@ $master->exec("CREATE TABLE IF NOT EXISTS admin_presets (id SERIAL PRIMARY KEY, 
 $master->exec(file_get_contents(__DIR__ . '/../ops/sql/tech_metrics_master.sql'));
 // Console de pilotage (04/11/2026) : réglages de la plateforme (mode demo par défaut), droits d'usage, offres (ops/sql/platform_master.sql)
 $master->exec(file_get_contents(__DIR__ . '/../ops/sql/platform_master.sql'));
+// Lot ABO-CONF C (19/11/2026) : journal de la commission des abonnements (ops/sql/subscription_fee_master.sql, même SQL que la base maître réelle)
+$master->exec(file_get_contents(__DIR__ . '/../ops/sql/subscription_fee_master.sql'));
 // Agences (lot AG-1, 15/11/2026) : agences, sites gérés, forfaits, journal (ops/sql/agency_master.sql, même SQL que la base maître réelle)
 $master->exec(file_get_contents(__DIR__ . '/../ops/sql/agency_master.sql'));
 // Création d'un site avec son type par la plateforme (lot TYPE-1, 16/11/2026) : demandes à étapes (ops/sql/platform_sites_master.sql, même SQL que la base maître réelle)
@@ -176,6 +178,11 @@ foreach ([MV_TEST_TENANT_DB, MV_TEST_TENANT2_DB] as $db) {
     // PROVISOIRE, lot ABO-1 (19/11/2026) : la migration Version20270201500000, de la même façon (après celle d'ABO-0)
     require_once dirname(__DIR__) . '/migrations/Version20270201500000.php';
     foreach (\DoctrineMigrations\Version20270201500000::STATEMENTS as $sql) {
+        $tenantDb->exec($sql);
+    }
+    // PROVISOIRE, lot ABO-CONF (19/11/2026) : la migration Version20270201800000 (historique des prix des formules), de la même façon
+    require_once dirname(__DIR__) . '/migrations/Version20270201800000.php';
+    foreach (\DoctrineMigrations\Version20270201800000::STATEMENTS as $sql) {
         $tenantDb->exec($sql);
     }
     // PROVISOIRE, lot G-5 (19/11/2026) : la migration Version20270202000000 (type « Transfert », marques), de la même façon

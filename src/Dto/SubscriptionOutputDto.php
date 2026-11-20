@@ -35,7 +35,18 @@ final class SubscriptionOutputDto
         public readonly array $balance = [],
         /** @var array{allowed: bool, cancellableFrom: ?string, scheduledAt: ?string}|null lot ABO-1 : résiliation simple (fin d'engagement, date programmée) */
         public readonly ?array $cancellation = null,
+        /** @var array{price: int, currency: string, interval: string, intervalCount: int}|null lot ABO-CONF : le prix que paie l'abonné (son époque), `plan.price` étant celui du jour */
+        public readonly ?array $billedPrice = null,
     ) {
+    }
+
+    /** @param array{price: int, currency: string, interval: string, intervalCount: int} $billed */
+    public function withBilledPrice(array $billed): self
+    {
+        $args = get_object_vars($this);
+        $args['billedPrice'] = $billed;
+
+        return new self(...$args);
     }
 
     /** @param array{allowed: bool, cancellableFrom: ?string, scheduledAt: ?string} $cancellation */

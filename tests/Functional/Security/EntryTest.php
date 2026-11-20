@@ -301,7 +301,9 @@ class EntryTest extends WebTestCase
                     $this->assertSame(['@public', true], [$target, in_array($method, ['GET', 'HEAD'], true)], "$method $path");
                 } else {
                     $this->assertTrue($target === null || str_starts_with((string) $target, '@') || ScreenRegistry::familyOf((string) $target) !== ScreenRegistry::CONSTRUCTION
-                        || preg_match('#app-keys|exports?|stripe|/api/site/features#i', $path) === 1 || !str_starts_with($path, '/api/'), "$method $path : fermée sans raison");
+                        || preg_match('#app-keys|exports?|stripe|/api/site/features#i', $path) === 1 || !str_starts_with($path, '/api/')
+                        // lot ABO-CONF (décision du chef, 19/11/2026) : l'agence configure les formules de son client, n'en supprime jamais une
+                        || ($method === 'DELETE' && preg_match('#^/api/site/abonnements/formules/[^/]+$#', $path) === 1), "$method $path : fermée sans raison");
                 }
             }
         }

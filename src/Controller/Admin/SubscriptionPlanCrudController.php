@@ -19,7 +19,9 @@ use Doctrine\ORM\EntityManagerInterface;
 /** Formules d'abonnement de la boutique réglable : le prix Stripe est créé à la première souscription */
 class SubscriptionPlanCrudController extends BaseTenantCrudController
 {
-    public function __construct(TenantEntityManagerProvider $emProvider, private readonly ?\App\Abo\Services\BenefitService $benefits = null)
+    public function __construct(TenantEntityManagerProvider $emProvider, private readonly ?\App\Abo\Services\BenefitService $benefits = null,
+        private readonly ?\App\Abo\Services\AboCatalogService $catalog = null, // lot ABO-CONF : le service commun (contrôles, historique des prix)
+        private readonly ?\App\Services\BoutiqueSettingsService\TenantCurrencyProvider $siteCurrency = null)
     {
         parent::__construct($emProvider);
     }
@@ -48,7 +50,7 @@ class SubscriptionPlanCrudController extends BaseTenantCrudController
         yield ChoiceField::new('interval', 'Périodicité')->setChoices(['Semaine' => 'week', 'Mois' => 'month', 'Année' => 'year']);
         yield IntegerField::new('intervalCount', 'Toutes les N périodes')->setHelp('1 = chaque semaine / mois / année ; 2 = toutes les deux…');
         yield MoneyField::new('price', 'Prix par période')->setCurrency('CAD')->setStoredAsCents(true);
-        yield TextField::new('currency', 'Devise (ISO)')->hideOnIndex();
+        yield TextField::new('currency', 'Devise (ISO)')->onlyOnDetail(); // lot ABO-CONF : celle du site, imposée (jamais un champ de saisie)
         yield IntegerField::new('trialDays', 'Jours d\'essai gratuit')->hideOnIndex();
         yield IntegerField::new('minimumTerms', 'Engagement minimal (périodes)')->hideOnIndex();
         yield BooleanField::new('active', 'Active');
@@ -72,15 +74,74 @@ class SubscriptionPlanCrudController extends BaseTenantCrudController
     public function persistEntity(EntityManagerInterface $entityManager, $entityInstance): void
     {
         $this->normalize($entityInstance);
+        if ($this->siteCurrency !== null) {
+            $entityInstance->setCurrency($this->siteCurrency->code()); // lot ABO-CONF : la devise du site, imposée
+        }
+        if (!$this->valid($entityInstance)) {
+            return;
+        }
         parent::persistEntity($entityManager, $entityInstance);
+        $this->catalog?->afterSave($entityInstance, null, $this->getUser()?->getUserIdentifier());
+        $entityManager->flush();
         $this->emProvider->getEntityManager()->getRepository(SubscriptionPlan::class)->keepOnlyHighlighted($entityInstance);
+        foreach ($this->catalog?->warnings() ?? [] as $warning) {
+            $this->addFlash('warning', $warning['text']); // décision du propriétaire : prévenir qu'un compte Stripe est nécessaire pour vendre en réel
+        }
     }
 
     public function updateEntity(EntityManagerInterface $entityManager, $entityInstance): void
     {
         $this->normalize($entityInstance);
+        if (!$this->valid($entityInstance)) {
+            return;
+        }
+        // lot ABO-CONF : prix ou rythme modifiés = un nouveau prix Stripe pour les NOUVEAUX abonnés (l'ancien restait, même pour eux)
+        $original = $entityManager->getUnitOfWork()->getOriginalEntityData($entityInstance);
+        // relecture neuve : une formule qui a des abonnés garde son engagement, son rythme, sa carte de séances, son produit et sa devise
+        if ($this->catalog !== null && $this->catalog->lockedState($entityInstance) !== null) {
+            try {
+                $this->catalog->assertLocked($entityInstance, ['minimumTerms' => (int) ($original['minimumTerms'] ?? 0), 'interval' => (string) ($original['interval'] ?? ''),
+                    'intervalCount' => (int) ($original['intervalCount'] ?? 1), 'singlePeriod' => (bool) ($original['singlePeriod'] ?? false),
+                    'productId' => ($original['product'] ?? null)?->getId(), 'currency' => (string) ($original['currency'] ?? '')]);
+            } catch (\App\Abo\Services\AboException $e) {
+                $this->addFlash('danger', $e->getMessage());
+                $entityManager->refresh($entityInstance);
+
+                return;
+            }
+        }
+        $before = ['price' => (int) ($original['price'] ?? $entityInstance->getPrice()), 'currency' => (string) ($original['currency'] ?? $entityInstance->getCurrency()),
+            'interval' => (string) ($original['interval'] ?? $entityInstance->getInterval()), 'intervalCount' => (int) ($original['intervalCount'] ?? $entityInstance->getIntervalCount()),
+            'stripePriceId' => $original['stripePriceId'] ?? $entityInstance->getStripePriceId()];
+        $this->catalog?->afterSave($entityInstance, $before, $this->getUser()?->getUserIdentifier());
         parent::updateEntity($entityManager, $entityInstance);
         $this->emProvider->getEntityManager()->getRepository(SubscriptionPlan::class)->keepOnlyHighlighted($entityInstance);
+    }
+
+    public function deleteEntity(EntityManagerInterface $entityManager, $entityInstance): void
+    {
+        try {
+            $this->catalog?->assertDeletable($entityInstance); // lot ABO-CONF : une formule qui a eu des abonnés s'archive
+        } catch (\App\Abo\Services\AboException $e) {
+            $this->addFlash('danger', $e->getMessage());
+
+            return;
+        }
+        parent::deleteEntity($entityManager, $entityInstance);
+    }
+
+    /** Les contrôles du service commun (lot ABO-CONF) ; un refus devient un message de l'écran */
+    private function valid(SubscriptionPlan $plan): bool
+    {
+        try {
+            $this->catalog?->validatePlan($plan);
+
+            return true;
+        } catch (\App\Abo\Services\AboException $e) {
+            $this->addFlash('danger', $e->getMessage());
+
+            return false;
+        }
     }
 
     /** Textes saisis dans le formulaire nettoyés comme par l'API (en clair, longueurs bornées) */

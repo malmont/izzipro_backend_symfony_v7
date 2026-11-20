@@ -49,7 +49,27 @@ final class SubscriptionService
         private readonly ?\App\Services\TenantConnectionManager $tenants = null, // site cible d'une formule branchée (lot 3 bis, 04/11/2026)
         private readonly ?\App\Services\Platform\PlanLink\PlatformPlanLinkService $planLinks = null, // lot PROVISION-1 : lien prouvé du site servi
         private readonly ?\App\Services\Platform\PlatformModeService $platform = null, // lot PROVISION-1 : seule la boutique de la plateforme emploie un lien
+        private readonly ?\App\Services\StripeService\StripeService $accounts = null, // lot ABO-CONF A : compte connecté exigé en réel
+        private readonly ?\App\Services\StripeService\StripeAccountResolver $modes = null,
+        private readonly ?SubscriptionFeeService $fees = null, // lot ABO-CONF C : commission des abonnements
     ) {
+    }
+
+    /**
+     * Lot ABO-CONF, décision A du propriétaire (19/11/2026), alignée sur la boutique : en RÉEL, un site EXTÉRIEUR sans compte Stripe connecté
+     * actif ne vend pas d'abonnement (l'argent irait au compte de la plateforme) ; un site interne de la plateforme encaisse comme avant ;
+     * en test, rien ne change.
+     *
+     * @throws SubscriptionException 409 STRIPE_ACCOUNT_REQUIRED
+     */
+    public function assertCanSellLive(): void
+    {
+        if ($this->accounts === null || $this->modes === null || $this->modes->mode(\App\Services\StripeService\StripeAccountResolver::CHANNEL_SHOP) !== \App\Services\StripeService\StripeAccountResolver::LIVE) {
+            return;
+        }
+        if ($this->accounts->accountOptions() === null) {
+            throw new SubscriptionException(409, 'Les abonnements ne sont pas encore ouverts à la vente sur ce site : la boutique doit d\'abord connecter son compte de paiement.', [], [], 'STRIPE_ACCOUNT_REQUIRED');
+        }
     }
 
     /** @return list<SubscriptionPlanOutputDto> */
@@ -151,6 +171,7 @@ final class SubscriptionService
     /** @return array{subscription: Subscription, clientSecret: ?string, intentType: ?string, reused: bool} */
     private function subscribeLocked(User $user, SubscriptionPlan $plan, int $quantity, ?Adress $address, ?Carrier $carrier, int $shippingAmount, ?string $fulfillmentTarget = null): array
     {
+        $this->assertCanSellLive(); // décision A : avant tout appel à Stripe
         $em = $this->emProvider->getEntityManager();
         // Double souscription (double clic, nouvel essai après une erreur, 09/10/2026) : un essai sans carte (même formule et
         // quantité) est repris avec son SetupIntent (25/10/2026) ; un abonnement encore incomplet à
@@ -208,8 +229,8 @@ final class SubscriptionService
         // l'essai reste celui de la plateforme (« Demander », une fois par site)
         $state = $this->stripe->create($customerId, $priceId, $quantity, $plan->hasFulfillment() ? 0 : $plan->getTrialDays(), [
             'tenant_code' => (string) $this->tenantProvider->getTenantCode(), 'subscription_id' => (string) $subscription->getId(), 'user_id' => (string) $user->getId(),
-        ], $taxRateIds, $automaticTax, $shippingPriceId, $plan->isSinglePeriod()); // lot ABO-1 : carte de séances, fin posée à la création
-        $subscription->setStripeSubscriptionId($state['id']);
+        ], $taxRateIds, $automaticTax, $shippingPriceId, $plan->isSinglePeriod(), ($feeBp = $this->fees?->effectiveBp()) !== null ? SubscriptionFeeService::percent($feeBp) : null);
+        $subscription->setStripeSubscriptionId($state['id'])->setFeeBpApplied($feeBp ?? null); // lot ABO-CONF C : la commission posée à la souscription
         $this->applyFreshState($subscription, $state);
         $em->flush();
 

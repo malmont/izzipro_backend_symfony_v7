@@ -274,6 +274,7 @@ class ConfirmSiteAssistantActionUseCase
                     return ['assistance' => $this->assistance->request($tenant, $input['section'] ?? null, $input['mode'] ?? null, $actor)];
                 case 'propose_benefit':
                 case 'propose_plan':
+                case 'propose_plan_update':
                 case 'set_plan_benefits':
                 case 'propose_use':
                 case 'propose_gift':

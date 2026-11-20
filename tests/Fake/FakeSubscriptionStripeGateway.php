@@ -6,6 +6,7 @@ use App\Entity\Adress;
 use App\Entity\Carrier;
 use App\Entity\SubscriptionPlan;
 use App\Entity\User;
+use App\Services\SubscriptionService\SubscriptionException;
 use App\Services\SubscriptionService\SubscriptionStripeGatewayInterface;
 use App\Services\TenantEntityManagerProvider;
 
@@ -25,6 +26,8 @@ final class FakeSubscriptionStripeGateway implements SubscriptionStripeGatewayIn
     {
         self::$subscriptions = [];
         self::$calls = [];
+        self::$idempotency = [];
+        self::$feeFailure = null;
     }
 
     public function ensureCustomer(User $user, ?Adress $address): string
@@ -66,7 +69,7 @@ final class FakeSubscriptionStripeGateway implements SubscriptionStripeGatewayIn
         return sprintf('price_test_shipping_%d_%d', $carrier->getId(), $amount);
     }
 
-    public function create(string $customerId, string $priceId, int $quantity, int $trialDays, array $metadata, array $taxRateIds, bool $automaticTax, ?string $shippingPriceId = null, bool $cancelAtPeriodEnd = false): array
+    public function create(string $customerId, string $priceId, int $quantity, int $trialDays, array $metadata, array $taxRateIds, bool $automaticTax, ?string $shippingPriceId = null, bool $cancelAtPeriodEnd = false, ?float $applicationFeePercent = null): array
     {
         $id = 'sub_test_' . bin2hex(random_bytes(4)); // unique d'un test à l'autre (la base de test persiste)
         self::$subscriptions[$id] = [
@@ -74,6 +77,7 @@ final class FakeSubscriptionStripeGateway implements SubscriptionStripeGatewayIn
             'cancelAtPeriodEnd' => $cancelAtPeriodEnd, 'cancelAt' => null, 'paused' => false, 'clientSecret' => ($trialDays > 0 ? 'seti_test_secret_' : 'pi_test_secret_') . $id,
             'intentType' => $trialDays > 0 ? 'setup' : 'payment', 'hasPaymentMethod' => false, 'itemId' => "si_test_{$id}", 'canceledAt' => null,
             'priceId' => $priceId, 'quantity' => $quantity, 'customerId' => $customerId, 'metadata' => $metadata, 'taxRateIds' => $taxRateIds, 'automaticTax' => $automaticTax, 'shippingPriceId' => $shippingPriceId,
+            'applicationFeePercent' => $applicationFeePercent,
         ];
         self::$calls[] = ['create', $id, $priceId, $quantity, $trialDays, $metadata, $taxRateIds, $automaticTax, $shippingPriceId];
 
@@ -83,6 +87,25 @@ final class FakeSubscriptionStripeGateway implements SubscriptionStripeGatewayIn
     public function retrieve(string $subscriptionId): array
     {
         return self::$subscriptions[$subscriptionId];
+    }
+
+    /** @var array<string, true> clés d'idempotence déjà vues : une reprise ne fait rien deux fois */
+    public static array $idempotency = [];
+    /** Abonnement dont la mise à jour de la commission échoue (essai de la reprise) */
+    public static ?string $feeFailure = null;
+
+    public function updateFee(string $subscriptionId, float $percent, string $idempotencyKey): array
+    {
+        if (self::$feeFailure === $subscriptionId) {
+            throw new SubscriptionException(502, 'Stripe : indisponible (essai).', [], [], 'STRIPE_ERROR');
+        }
+        if (!isset(self::$idempotency[$idempotencyKey])) {
+            self::$idempotency[$idempotencyKey] = true;
+            self::$calls[] = ['updateFee', $subscriptionId, $percent];
+            self::$subscriptions[$subscriptionId]['applicationFeePercent'] = $percent;
+        }
+
+        return self::$subscriptions[$subscriptionId] ?? ['id' => $subscriptionId];
     }
 
     public function cancelAt(string $subscriptionId, int $timestamp): array

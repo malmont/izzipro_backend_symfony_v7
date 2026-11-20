@@ -929,6 +929,7 @@ TXT;
                 return [$result, null, $screen !== null ? $linkTo($screen) : null];
             case 'propose_benefit':
             case 'propose_plan':
+            case 'propose_plan_update':
             case 'set_plan_benefits':
             case 'propose_use':
             case 'propose_gift':

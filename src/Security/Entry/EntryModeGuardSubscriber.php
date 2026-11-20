@@ -52,6 +52,8 @@ class EntryModeGuardSubscriber implements EventSubscriberInterface
     private const WRITE = ['POST', 'PUT', 'PATCH', 'DELETE'];
     /** Fermés même dans la construction : expression du chemin => [méthodes (vide : toutes), raison] */
     private const CLOSED_PATHS = [
+        // lot ABO-CONF (décision du chef, 19/11/2026) : l'agence crée et configure les formules de son client, mais n'en supprime jamais une
+        ['#^/api/site/abonnements/formules/[^/]+$#', ['DELETE'], 'delete'],
         ['#^/api/app-keys(/|$)#', [], 'keys'],
         ['#(^|/)exports?(/|\.|$)#i', [], 'export'],
         ['#stripe#i', [], 'payment'],
@@ -85,6 +87,9 @@ class EntryModeGuardSubscriber implements EventSubscriberInterface
         // lot ABO-1 : la pause, la reprise et la résiliation d'un abonnement passent par Stripe ; des droits offerts donnent de la valeur
         // sans paiement. « Utiliser » un droit (et son annulation) reste un geste ordinaire de la boutique.
         ['#^/api/site/abonnements/[^/]+/(pause|reprise|resiliation|droits)(/|$)#', [], 'payment'],
+        // lot ABO-CONF : créer, configurer, archiver ou supprimer une formule (son prix) et ses prestations : geste d'argent, fermé au directeur ;
+        // l'aperçu, qui n'écrit rien, reste ouvert
+        ['#^/api/site/abonnements/(formules(/(?!apercu$)[^/]+.*)?|prestations(/.*)?)$#', ['POST', 'PUT', 'PATCH', 'DELETE'], 'payment'],
         // lot FIS-1 (décision du chef, 19/11/2026) : les prêts sont en LECTURE SEULE pour le directeur (créer, modifier, supprimer un prêt
         // sont des écritures des comptes de la boutique) ; l'aperçu, qui n'écrit rien, reste ouvert
         ['#^/api/gestion/prets(/(?!apercu$)[^/]+.*)?$#', ['POST', 'PUT', 'PATCH', 'DELETE'], 'payment'],
@@ -418,6 +423,8 @@ class EntryModeGuardSubscriber implements EventSubscriberInterface
         'PaymentsCrudController' => 'payment', 'PaymentMethodCrudController' => 'payment', 'PaymentTypeCrudController' => 'payment', 'StatusPaymentCrudController' => 'payment',
         'OrderCrudController' => 'payment', 'OrderAllCrudController' => 'payment', 'OrderItemsCrudController' => 'payment', 'OrderItemsListController' => 'payment', 'OrderTaxCrudController' => 'payment',
         'SubscriptionPlanCrudController' => 'payment', 'ShippingLabelCrudController' => 'payment', 'AiUsageCrudController' => 'payment',
+        // lot ABO-CONF (relecture neuve) : les prestations d'une formule donnent de la valeur sans paiement, comme la formule elle-même
+        'BenefitCrudController' => 'payment', 'PlanBenefitCrudController' => 'payment',
         'CaisseCrudController' => 'cash', 'CashDetailsCrudController' => 'cash', 'CashDetailsListController' => 'cash', 'CashRegisterCrudController' => 'cash',
         'CashRegisterReportCrudController' => 'cash', 'TransactionCaisseCrudController' => 'cash', 'TransactionCaisseListController' => 'cash',
         'TransactionTypeCrudController' => 'cash', 'TypeCashCrudController' => 'cash', 'PosAuditLogCrudController' => 'cash',
@@ -484,6 +491,10 @@ class EntryModeGuardSubscriber implements EventSubscriberInterface
             return ['/admin', null, 'batch'];
         }
         $request->attributes->set(self::EA_READ, ($crud === null || $crud === '' || in_array($action, self::EA_READS, true)) && in_array($request->getMethod(), ['GET', 'HEAD'], true));
+        // lot ABO-CONF (décision du chef) : une agence entrée configure les formules de son client, n'en supprime jamais une, ici comme par l'API
+        if ($action === 'delete' && is_string($crud) && str_ends_with($crud, '\\SubscriptionPlanCrudController')) {
+            return ['/admin', null, 'delete'];
+        }
 
         return ['/admin', ScreenRegistry::adminTarget(is_string($crud) ? $crud : null, null, $request->getMethod()) ?? '?', null];
     }

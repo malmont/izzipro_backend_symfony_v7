@@ -19,7 +19,8 @@ use Symfony\Component\Console\Output\OutputInterface;
 #[AsCommand(name: 'app:abo:periodes', description: 'Droits d\'abonnement : réémet les périodes payées non traitées, reporte ou perd les droits échus')]
 final class AboPeriodsCommand extends Command
 {
-    public function __construct(private readonly TenantConnectionManager $tenants, private readonly TenantEntityManagerProvider $emProvider, private readonly AboRightsService $rights)
+    public function __construct(private readonly TenantConnectionManager $tenants, private readonly TenantEntityManagerProvider $emProvider, private readonly AboRightsService $rights,
+        private readonly ?\App\Services\SubscriptionService\SubscriptionFeeService $fees = null) // lot ABO-CONF C : rattrapage de la commission
     {
         parent::__construct();
     }
@@ -39,6 +40,11 @@ final class AboPeriodsCommand extends Command
             try {
                 $this->emProvider->switchTenant((string) $tenant['dbname'], (string) $tenant['code']);
                 $r = $this->rights->dailyPass();
+                // lot ABO-CONF C : la commission voulue posée sur les abonnements en cours, 50 par site et par passage (repris au suivant)
+                $f = $this->fees?->catchUp() ?? ['updated' => 0, 'failed' => 0];
+                if ($f['updated'] + $f['failed'] > 0) {
+                    $output->writeln(sprintf('%s : commission posée sur %d abonnement(s), %d en échec (repris au passage suivant).', $tenant['code'], $f['updated'], $f['failed']));
+                }
                 if ($r['redispatched'] + $r['carried'] + $r['expired'] > 0) {
                     $output->writeln(sprintf('%s : %d période(s) réémise(s), %d droit(s) reporté(s), %d perdu(s).', $tenant['code'], $r['redispatched'], $r['carried'], $r['expired']));
                 }

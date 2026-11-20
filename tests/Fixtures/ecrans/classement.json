@@ -411,7 +411,6 @@
     ],
     "abonnements": [
         "DELETE /api/site/abonnements/{id}/utilisations/{occurrenceId}",
-        "GET /api/site/abonnements/formules",
         "GET /api/site/abonnements/formules/{id}/abonnes",
         "GET /api/site/abonnements/{id}",
         "POST /api/site/abonnements/{id}/droits",
@@ -419,6 +418,21 @@
         "POST /api/site/abonnements/{id}/reprise",
         "POST /api/site/abonnements/{id}/resiliation",
         "POST /api/site/abonnements/{id}/utilisations"
+    ],
+    "abonnements.formules": [
+        "DELETE /api/site/abonnements/formules/{id}",
+        "DELETE /api/site/abonnements/prestations/{id}",
+        "GET /api/site/abonnements/formules",
+        "GET /api/site/abonnements/formules/{id}",
+        "GET /api/site/abonnements/prestations",
+        "PATCH /api/site/abonnements/formules/{id}",
+        "PATCH /api/site/abonnements/prestations/{id}",
+        "POST /api/site/abonnements/formules",
+        "POST /api/site/abonnements/formules/apercu",
+        "POST /api/site/abonnements/formules/{id}/archiver",
+        "POST /api/site/abonnements/formules/{id}/reactiver",
+        "POST /api/site/abonnements/prestations",
+        "PUT /api/site/abonnements/formules/{id}/prestations"
     ],
     "admin.accueil": [
         "GET|POST|PUT|PATCH|DELETE /admin"
@@ -527,6 +541,7 @@
         "POST /admin/plateforme/alertes",
         "POST /admin/plateforme/alertes/essai",
         "POST /admin/plateforme/boutique",
+        "POST /admin/plateforme/commission-abonnements",
         "POST /admin/plateforme/demande/{id}/{decision}",
         "POST /admin/plateforme/droit/{id}/{action}",
         "POST /admin/plateforme/expedition",

@@ -113,7 +113,7 @@ final class SubscriptionStripeGateway implements SubscriptionStripeGatewayInterf
         });
     }
 
-    public function create(string $customerId, string $priceId, int $quantity, int $trialDays, array $metadata, array $taxRateIds, bool $automaticTax, ?string $shippingPriceId = null, bool $cancelAtPeriodEnd = false): array
+    public function create(string $customerId, string $priceId, int $quantity, int $trialDays, array $metadata, array $taxRateIds, bool $automaticTax, ?string $shippingPriceId = null, bool $cancelAtPeriodEnd = false, ?float $applicationFeePercent = null): array
     {
         $items = [['price' => $priceId, 'quantity' => $quantity, 'metadata' => ['role' => 'plan']]];
         if ($shippingPriceId !== null) {
@@ -133,6 +133,9 @@ final class SubscriptionStripeGateway implements SubscriptionStripeGatewayInterf
         }
         if ($cancelAtPeriodEnd) {
             $params['cancel_at_period_end'] = true; // lot ABO-1 : carte de séances, payée une fois, fin posée dès la création
+        }
+        if ($applicationFeePercent !== null) {
+            $params['application_fee_percent'] = $applicationFeePercent; // lot ABO-CONF C : commission de la plateforme (compte connecté seulement)
         }
         if ($automaticTax) {
             $params['automatic_tax'] = ['enabled' => true];
@@ -155,6 +158,11 @@ final class SubscriptionStripeGateway implements SubscriptionStripeGatewayInterf
         }
 
         return self::normalize($this->call(fn (StripeClient $c, array $o) => $c->subscriptions->update($subscriptionId, ['cancel_at_period_end' => true], $o)));
+    }
+
+    public function updateFee(string $subscriptionId, float $percent, string $idempotencyKey): array
+    {
+        return self::normalize($this->call(fn (StripeClient $c, array $o) => $c->subscriptions->update($subscriptionId, ['application_fee_percent' => $percent], $o + ['idempotency_key' => $idempotencyKey])));
     }
 
     public function cancelAt(string $subscriptionId, int $timestamp): array
