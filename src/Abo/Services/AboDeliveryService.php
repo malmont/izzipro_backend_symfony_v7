@@ -551,10 +551,14 @@ class AboDeliveryService
     /** @param array<string, mixed> $o @throws AboException 409 OCCURRENCE_ALREADY_MARKED | OCCURRENCE_NOT_SCHEDULED | NOT_YET_DUE */
     private function assertMarkable(array $o): void
     {
+        // relecture neuve : une utilisation sans date (ABO-1) n'est jamais un constat, même « faite »
+        if ($o['scheduled_at'] === null) {
+            throw new AboException(409, 'OCCURRENCE_NOT_SCHEDULED', 'Seule une date planifiée se marque faite ou absente.');
+        }
         if (in_array($o['status'], self::MARKED, true)) {
             throw new AboException(409, 'OCCURRENCE_ALREADY_MARKED', 'Ce droit est déjà marqué : corrigez d\'abord le constat.');
         }
-        if ($o['status'] !== BenefitOccurrence::STATUS_SCHEDULED || $o['scheduled_at'] === null) {
+        if ($o['status'] !== BenefitOccurrence::STATUS_SCHEDULED) {
             throw new AboException(409, 'OCCURRENCE_NOT_SCHEDULED', 'Seule une date planifiée se marque faite ou absente.');
         }
         $this->assertDue(new \DateTimeImmutable((string) $o['scheduled_at'], new \DateTimeZone('UTC')));
