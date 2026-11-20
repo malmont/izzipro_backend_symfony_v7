@@ -90,7 +90,11 @@ class GroupEntryTest extends WebTestCase
             // ABO-3a (20/11/2026) : le directeur lit « À faire aujourd'hui », il ne marque, ne corrige ni ne tranche rien
             ['POST', '/api/site/abonnements/1/occurrences/1/fait', 'rights'], ['POST', '/api/site/abonnements/1/occurrences/1/absent', 'rights'],
             ['POST', '/api/site/abonnements/1/occurrences/1/correction', 'rights'], ['POST', '/api/site/abonnements/1/occurrences/1/contestation', 'rights'],
-            ['POST', '/api/site/abonnements/creneaux/1/fait', 'rights']] as [$method, $path, $reason]) {
+            ['POST', '/api/site/abonnements/creneaux/1/fait', 'rights'],
+            // ABO-3b (20/11/2026) : ni le fil de l'abonné (lu ou écrit), ni les intervenants, ni l'intervenant d'une date
+            ['GET', '/api/site/abonnements/1/fil', 'customers'], ['POST', '/api/site/abonnements/1/fil', 'customers'], ['GET', '/api/site/abonnements/fils', 'customers'],
+            ['GET', '/api/site/abonnements/intervenants', 'accounts'], ['POST', '/api/site/abonnements/intervenants', 'accounts'], ['DELETE', '/api/site/abonnements/intervenants/1', 'accounts'],
+            ['POST', '/api/site/abonnements/1/occurrences/1/intervenant', 'rights']] as [$method, $path, $reason]) {
             $this->assertSame([403, $reason], $this->reason($method, $path, $token), "$method $path");
         }
         // ... et par le fil de la gestion : un prêt ne s'y ouvre pas (le chemin de confirmation ne dit pas l'action : le fil refuse lui-même)
