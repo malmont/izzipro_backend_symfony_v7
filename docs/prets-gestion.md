@@ -98,8 +98,10 @@ Un prêt inconnu : 404 `LOAN_NOT_FOUND`. Création, modification et suppression 
 - **Année** (`GET /api/gestion/statistiques/annee`) : par période, `financialCharges` et `netAfterCharges` (`null` pour une période
   figée avant le lot). Les mois, les totaux, la rentabilité et le point mort de l'année n'intègrent pas encore les charges (lot FIS-6).
 - **« Toutes les boutiques »** (directeur d'un groupe) : le résultat du groupe porte `netAfterCharges` ; les prêts entrent dans
-  l'empreinte du cache (journée, année, résultat). Le directeur peut créer, modifier ou supprimer un prêt ; l'ajout et le retrait d'un
-  remboursement anticipé lui sont fermés (règle « remboursements » de sa garde, prudente).
+  l'empreinte du cache (journée, année, résultat). Pour le directeur entré dans une boutique, les prêts sont en LECTURE SEULE (décision
+  du chef, 19/11/2026 : créer, modifier, supprimer un prêt ou un remboursement anticipé sont des écritures des comptes de la boutique) :
+  routes d'écriture fermées par sa garde (raison `payment`, ou `refund` pour un remboursement), actions `loan.create` et `loan.prepayment`
+  refusées par le fil (403 `MODE_FORBIDDEN`) ; l'aperçu, qui n'écrit rien, reste ouvert.
 - **Statistiques** (`GET /api/gestion/statistiques?sections=charges`) : `charges: { financial, previous, lastYear, capitalRepaid }` ;
   `capitalRepaid` (de la plage) est de la trésorerie, jamais additionné aux charges. Les charges y sont recalculées en direct, même sur
   une plage qui contient une période figée.
