@@ -159,7 +159,7 @@ class CustomerAccountEraseAdminTest extends WebTestCase
         // La suppression physique d'un compte client est refusée même par une URL forgée
         [, $customerId] = $this->customer();
         $crawler = $this->client->request('GET', $this->crudUrl(['crudAction' => 'detail', 'entityId' => $customerId]));
-        $deleteToken = $crawler->filter('#delete-form input[name="token"]')->attr('value');
+        $deleteToken = $crawler->filter('#action-confirmation-form input[name="token"]')->attr('value');
         $this->client->request('POST', $this->crudUrl(['crudAction' => 'delete', 'entityId' => $customerId]), ['token' => $deleteToken]);
         $this->assertSame(403, $this->client->getResponse()->getStatusCode(), 'un compte client s\'efface, il ne se supprime pas');
         $this->assertSame(1, (int) $db->fetchOne('SELECT COUNT(*) FROM "user" WHERE id = ?', [$customerId]));

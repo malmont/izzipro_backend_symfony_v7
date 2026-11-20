@@ -85,6 +85,9 @@ Lire la fiche utile ci-dessous, puis aller droit aux fichiers qu'elle cite : ne 
   appliqué aussitôt à toutes les bases, `gmasuite` et le modèle des tests compris.
 - Aucun secret dans le code, la doc ou les journaux (ni valeur de `.env`, ni jeton, ni URL avec identifiants).
 - Tests : `docker exec -w /var/www -e SYMFONY_DEPRECATIONS_HELPER=disabled symfony_app_v2 php vendor/bin/phpunit tests/Functional`.
+  Après tout changement de vendor (composer), vider `var/cache` avant une suite : un vendor copié garde ses anciennes
+  dates, et des gabarits Twig compilés avec l'ancienne version passent pour frais (20/11/2026, montée 7.4 : 6 essais
+  verts à tort).
 - Après un changement de handler Messenger : `messenger:stop-workers` (vérifier d'abord qu'aucune génération n'est en cours).
 - **Tenir la doc à jour** : à chaque changement structurel, mettre à jour la fiche concernée ; après tout ajout ou
   changement de route, régénérer `docs/endpoints.md` (commande en tête du fichier).
