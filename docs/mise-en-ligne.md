@@ -37,6 +37,7 @@ de réécrire un cache.
 | Étape | Commande | Ce qu'on attend |
 |---|---|---|
 | 1. Jeton de contrôle | `ops/bascule/bascule.sh jeton` | « jeton écrit » (jamais affiché) |
+| 1 bis. Paquets, si `composer.lock` change | `ops/bascule/bascule.sh vendor <commit> <n>` | « vendor préparé : N paquet(s), N au composer.lock, 0 écart » (§ 2 bis) |
 | 2. Cache du nouveau code | `ops/bascule/bascule.sh build <commit> <n>` | gardes passées, conteneur de services « OK », schéma « OK », nombre de routes |
 | 3. Photo « avant » | `ops/bascule/bascule.sh photo <nom>-avant` | aucune réponse 5xx ; tous les sites en 200 / 200 / 401 |
 | 4. Migration, si le lot en a une | `scripts/migrate_all_v2_<sujet>.sh` | toutes les bases, **avant** l'échange du code (§ 3) |
@@ -50,6 +51,21 @@ de réécrire un cache.
 Puis : compte rendu **court** (5 à 10 lignes : ce qui change, chiffres clés, ce qui reste à faire, décisions à prendre ; le détail va
 dans la fiche du lot), et les suites propres au lot (minuteur à installer, worker à relancer, droits à accorder). Une commande
 `systemctl enable` ou `disable` n'est jamais lancée par une session : elle est donnée au propriétaire.
+
+### 2 bis. Un `composer.lock` changé : l'étape `vendor` (20/11/2026, préparée au lot TACHES-0, livrée au train 122 avec Symfony 7.4)
+
+La construction du cache monte le `vendor/` en lecture seule. Un paquet ajouté ou changé doit donc être prêt AVANT `build`, sans toucher
+au vendor en ligne.
+- `vendor <commit> <n>` copie le vendor en ligne dans `var/vendor_stage<n>`, dans un conteneur provisoire de la même image, en root
+  comme lui. Il y lance `composer install --no-interaction --no-scripts --no-plugins` avec les options d'aujourd'hui : paquets de dev
+  compris, car `APP_ENV=dev` charge DebugBundle, WebProfilerBundle et MakerBundle et les essais lancent phpunit depuis ce vendor ;
+  classmap optimisée du `composer.json`. Il vérifie ensuite que le vendor préparé correspond au `composer.lock` du commit, paquet par
+  paquet. Le code du commit est monté en lecture seule (la classmap de son `src/`).
+- `build` refuse un `composer.lock` changé sans vendor préparé, et construit le cache avec ce vendor.
+- `switch` échange d'abord le vendor (échange atomique des deux dossiers, en root : aucun instant sans vendor), puis le code et le
+  cache. L'ancien vendor reste dans `var/vendor_stage<n>`.
+- `retour` le remet par le même échange, quand le `composer.lock` revient en arrière.
+- Après la bascule, les workers repartent sur le nouveau vendor : `switch` les arrête déjà (`messenger:stop-workers`).
 
 **Repère `{{unique}}`** (16/11/2026) : dans le corps d'une lecture `POST`, il devient une valeur neuve à chaque photo. Une route limitée
 par adresse (« mot de passe oublié » : 3 par heure) ne bute ainsi pas sur les passages de la photo elle-même.

@@ -2,6 +2,7 @@
 # Mise en ligne par échange de cache : procédure dans docs/mise-en-ligne.md (à lire avant le premier usage).
 #
 #   ops/bascule/bascule.sh jeton                    jeton de contrôle (var/swap_token.txt, jamais affiché)
+#   ops/bascule/bascule.sh vendor <commit> <n>      paquets du commit (composer.lock changé) préparés dans var/vendor_stage<n>, AVANT build
 #   ops/bascule/bascule.sh build <commit> <n>       gardes, puis cache du commit construit dans var/swap_stage<n>
 #   ops/bascule/bascule.sh photo <nom>              lectures du site de contrôle + pages publiques de tous les sites
 #   ops/bascule/bascule.sh comparer <avant> <après> [motif à écarter]
@@ -78,6 +79,10 @@ restart_workers() {
 # Échange atomique de deux dossiers (renameat2, RENAME_EXCHANGE) : aucun instant sans cache
 exchange() { docker exec -u www-data "$APP" perl -e 'my $r = syscall(316, -100, $ARGV[0], -100, $ARGV[1], 2); print "échange : rc=$r $!\n"; exit($r == 0 ? 0 : 1)' "/var/www/var/swap_stage$1/dev" /var/www/var/cache/dev; }
 
+# Échange atomique du vendor (lot TACHES-0) : même appel que le cache, en root explicite (-u 0 : l'image tourne en www-data, et le vendor
+# appartient à root) ; aucun instant sans vendor
+exchange_vendor() { docker exec -u 0 "$APP" perl -e 'my $r = syscall(316, -100, $ARGV[0], -100, $ARGV[1], 2); print "échange du vendor : rc=$r $!\n"; exit($r == 0 ? 0 : 1)' "/var/www/var/vendor_stage$1" /var/www/vendor; }
+
 # Ancien cache lisible à son ancien chemin après l'échange : une requête ou un worker démarrés sur l'ancien conteneur de services
 # chargent encore ses fichiers par var/cache/dev/Container<ancien>/… Un lien de ce nom est posé AVANT l'échange dans le cache qui va
 # entrer, vers l'endroit où l'autre se trouvera après (var/swap_stage<n>/dev) : aucun instant sans fichier.
@@ -142,8 +147,40 @@ fin)
   docker exec -u www-data "$APP" rm -f /var/www/var/swap_token.txt && echo "jeton de contrôle supprimé"
   ;;
 workers) worker_email maintenant ;;
+vendor)
+  # Lot TACHES-0 : un composer.lock changé. Le vendor en ligne est copié (dans un conteneur provisoire de la MÊME image, en root comme lui : -u 0,
+  # l'image tourne en www-data)
+  # dans var/vendor_stage<n>, puis « composer install » y pose les paquets du commit, avec les options d'aujourd'hui (paquets de dev
+  # compris : APP_ENV=dev ; classmap optimisée du composer.json) ; le code du commit est monté en lecture seule (classmap de son src/).
+  # Le vendor en ligne n'est pas touché ; « build » montera ce vendor, « switch » l'échangera, « retour » remettra l'ancien.
+  number "${3:-}"; lock; clean_tree "$2"
+  [ -n "$(git diff --name-only HEAD "$2" -- composer.lock)" ] || { echo "COMPOSER.LOCK INCHANGÉ : aucune étape vendor pour ce commit"; exit 1; }
+  [ -e "$L/var/vendor_stage$3" ] && { echo "VENDOR vendor_stage$3 DÉJÀ LÀ : prendre un numéro neuf (aucune suppression ici)"; exit 1; }
+  [ -e "$L/var/swap_stage$3" ] && { echo "CACHE swap_stage$3 DÉJÀ LÀ : prendre le numéro du train à venir"; exit 1; }
+  git -C "$BUILD_WORKTREE" checkout -q --detach "$2" || { echo "WORKTREE DE CONSTRUCTION INUTILISABLE : $BUILD_WORKTREE"; exit 1; }
+  docker run --rm -u 0 -e COMPOSER_HOME=/tmp/composer -e COMPOSER_ALLOW_SUPERUSER=1 -v "$L/vendor":/src-vendor:ro -v "$L/var":/l-var \
+    -v "$BUILD_WORKTREE":/w:ro -w /w "$IMAGE" sh -c "cp -a /src-vendor /l-var/vendor_stage$3" || { echo "COPIE DU VENDOR IMPOSSIBLE"; exit 1; }
+  docker run --rm -u 0 -e COMPOSER_HOME=/tmp/composer -e COMPOSER_ALLOW_SUPERUSER=1 -v "$BUILD_WORKTREE":/w:ro -v "$L/var/vendor_stage$3":/w/vendor \
+    -w /w "$IMAGE" composer install --no-interaction --no-scripts --no-plugins --no-progress 2>&1 | grep -E 'Installing|Updating|Removing|Package operations|Nothing to install|rror' | head -20
+  # le vendor préparé correspond-il au composer.lock du commit, paquet par paquet ?
+  docker run --rm -u 0 -v "$BUILD_WORKTREE":/w:ro -v "$L/var/vendor_stage$3":/w/vendor:ro -w /w "$IMAGE" php -r '
+    $lock = json_decode(file_get_contents("composer.lock"), true); $want = [];
+    foreach (array_merge($lock["packages"], $lock["packages-dev"] ?? []) as $p) { $want[$p["name"]] = $p["version"]; }
+    $inst = json_decode(file_get_contents("vendor/composer/installed.json"), true); $have = [];
+    foreach ($inst["packages"] ?? $inst as $p) { $have[$p["name"]] = $p["version"]; }
+    $diff = array_diff_assoc($want, $have) + array_diff_assoc($have, $want);
+    echo "vendor préparé : " . count($have) . " paquet(s), " . count($want) . " au composer.lock, " . count($diff) . " écart(s)" . ($diff ? " : " . implode(", ", array_keys($diff)) : "") . "\n";
+    foreach (["autoload.php", "autoload_runtime.php", "composer/autoload_classmap.php"] as $f) { if (!is_file("vendor/$f")) { echo "FICHIER ABSENT : vendor/$f\n"; exit(1); } }
+    exit($diff ? 1 : 0);' || { echo "VENDOR PRÉPARÉ INCOMPLET : ne pas lancer build"; exit 1; }
+  ;;
 build)
   number "${3:-}"; lock; clean_tree "$2"
+  # Lot TACHES-0 : un composer.lock changé exige l'étape « vendor » d'abord ; le cache se construit alors avec le vendor préparé
+  VENDOR_SRC="$L/vendor"
+  if [ -n "$(git diff --name-only HEAD "$2" -- composer.lock)" ]; then
+    [ -d "$L/var/vendor_stage$3" ] || { echo "COMPOSER.LOCK CHANGÉ : lancer d'abord « vendor $2 $3 »"; exit 1; }
+    VENDOR_SRC="$L/var/vendor_stage$3"; echo "vendor préparé : var/vendor_stage$3"
+  fi
   # Garde des montages (incident du 13/11/2026) : la livraison ne touche aucun point de montage du conteneur ni aucun fichier
   # d'environnement, et n'apporte aucun lien symbolique
   SENS=$(git diff --name-only HEAD "$2" | grep -E '^(config/jwt|jwt/|docker/|\.env)' | tr '\n' ' ')
@@ -160,7 +197,7 @@ build)
   docker inspect "$APP" --format '{{range .Config.Env}}{{println .}}{{end}}' | grep -v '^$' > "$ENVF"
   mkdir -p "$L/var/swap_stage$3" && chmod 777 "$L/var/swap_stage$3"
   docker run --rm -u 33:33 --network "$NETWORK" --env-file "$ENVF" -v "$BUILD_WORKTREE":/var/www:ro -v "$L/.env":/var/www/.env:ro \
-    -v "$L/vendor":/var/www/vendor:ro -v "$L/var/swap_stage$3":/var/www/var/cache -v "$L/jwt":/var/www/config/jwt:ro \
+    -v "$VENDOR_SRC":/var/www/vendor:ro -v "$L/var/swap_stage$3":/var/www/var/cache -v "$L/jwt":/var/www/config/jwt:ro \
     -v "$L/docker/php/uploads.ini":/usr/local/etc/php/conf.d/uploads.ini:ro -v "$L/docker/php/zz-opcache-perf.ini":/usr/local/etc/php/conf.d/zz-opcache-perf.ini:ro \
     --tmpfs /var/www/var/log:uid=33,gid=33 -w /var/www "$IMAGE" sh -c 'php bin/console cache:warmup --no-interaction 2>&1 | grep -i error | head -3; php bin/console lint:container 2>&1 | grep -E "OK|ERROR"; php bin/console doctrine:schema:validate --skip-sync 2>&1 | grep -E "OK|ERROR"; php bin/console debug:router --format=json 2>/dev/null | php -r "echo count(json_decode(stream_get_contents(STDIN), true)), \" routes\n\";"'
   echo "cache construit : $(ls "$L/var/swap_stage$3/dev" | grep -c Container) conteneur(s) de services ; $(stat -c '%U:%G' "$L/var/swap_stage$3/dev")"
@@ -199,6 +236,11 @@ switch)
   pause 2
   link_old_container "$3"
   date -u +%FT%T > "$L/var/bascule.heure"; T0=$(date +%s.%N)
+  # lot TACHES-0 : le vendor d'abord (composer.lock changé), puis le code et le cache ; l'ancien vendor reste dans var/vendor_stage<n>
+  if [ -n "$(git diff --name-only HEAD "$2" -- composer.lock)" ]; then
+    [ -f "$L/var/vendor_stage$3/autoload.php" ] || { echo "COMPOSER.LOCK CHANGÉ ET VENDOR PRÉPARÉ ABSENT : lancer « vendor » puis « build »"; exit 1; }
+    exchange_vendor "$3" || { echo "ÉCHEC DE L'ÉCHANGE DU VENDOR : rien d'autre n'a bougé"; exit 1; }
+  fi
   git merge -q --ff-only "$2" && exchange "$3" || { echo "ÉCHEC DE LA BASCULE : vérifier l'état (git log -1, var/cache/dev) avant toute autre commande"; exit 1; }
   echo "bascule en $(awk -v a="$T0" -v b="$(date +%s.%N)" 'BEGIN{printf "%.2f", b-a}') s à $(cat "$L/var/bascule.heure") UTC ; retour arrière : « retour $(git rev-parse --short "HEAD@{1}") $3 »"
   restart_workers
@@ -213,6 +255,11 @@ retour)
   git merge-base --is-ancestor "$2" HEAD || { echo "CE COMMIT N'EST PAS UN ANCÊTRE DE L'ARBRE EN LIGNE : $2"; exit 1; }
   link_old_container "$3"
   date -u +%FT%T > "$L/var/bascule.heure"; T0=$(date +%s.%N)
+  # lot TACHES-0 : le composer.lock revient en arrière ? l'ancien vendor attend dans var/vendor_stage<n> depuis l'échange
+  if [ -n "$(git diff --name-only "$2" HEAD -- composer.lock)" ]; then
+    [ -f "$L/var/vendor_stage$3/autoload.php" ] || { echo "VENDOR D'AVANT ABSENT : var/vendor_stage$3 (rien n'a bougé)"; exit 1; }
+    exchange_vendor "$3" || { echo "ÉCHEC DE L'ÉCHANGE DU VENDOR : rien d'autre n'a bougé"; exit 1; }
+  fi
   git reset -q --hard "$2" && exchange "$3" || { echo "ÉCHEC DU RETOUR ARRIÈRE : vérifier l'état (git log -1, var/cache/dev)"; exit 1; }
   echo "retour arrière en $(awk -v a="$T0" -v b="$(date +%s.%N)" 'BEGIN{printf "%.2f", b-a}') s à $(cat "$L/var/bascule.heure") UTC : $(git log -1 --format=%h) ; le cache remis en avant reste dans var/swap_stage$3 (pour revenir : « switch <commit> $3 »)"
   restart_workers
