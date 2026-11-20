@@ -37,8 +37,23 @@ class CacheStateTest extends WebTestCase
     public function testStatePoolsHaveAFixedPrefixThatSurvivesTheAppCacheClear(): void
     {
         $c = static::getContainer();
+        // Nom RÉEL des clés dans Redis (base des essais) : une clé écrite par chaque pool commence par son préfixe fixe
+        $url = (string) ($_ENV['REDIS_URL'] ?? $_SERVER['REDIS_URL'] ?? getenv('REDIS_URL'));
+        $redis = new \Redis();
+        $redis->connect((string) parse_url($url, PHP_URL_HOST), (int) (parse_url($url, PHP_URL_PORT) ?: 6379), 2.0);
+        $redis->select(RedisAdminController::databaseOf($url));
+        $this->assertSame(2, RedisAdminController::databaseOf($url), 'base Redis des essais');
         foreach (FixedCacheNamespacePass::NAMESPACES as $id => $namespace) {
-            $this->assertSame($namespace . ':', self::namespaceOf($c->get($id)), "préfixe fixe de $id");
+            $pool = $c->get($id);
+            $probe = 'sonde_prefixe_' . bin2hex(random_bytes(4));
+            $pool->save($pool->getItem($probe)->set(1)->expiresAfter(60));
+            $keys = $redis->keys('*' . $probe . '*') ?: [];
+            $this->assertNotSame([], $keys, "clé écrite par $id");
+            foreach ($keys as $key) {
+                $this->assertStringStartsWith($namespace . ':', $key, "préfixe fixe de $id");
+                $this->assertTrue(RedisAdminController::isProtected($key), "$key épargnée par « Vider Redis »");
+            }
+            $pool->deleteItem($probe);
         }
 
         // Un état survit au vidage du cache applicatif (cache:pool:clear cache.app, invalidations de site)
@@ -63,6 +78,10 @@ class CacheStateTest extends WebTestCase
         foreach (['0srbwYjLJM:tagsdb.db_demo', '-Ep2S6ohcP:worker_heartbeat.email', 'iz_statex'] as $key) {
             $this->assertFalse(RedisAdminController::isProtected($key), "$key vidée");
         }
+        // le vidage travaille sur la base de l'adresse (les essais : base 2), jamais sur la base 0 par défaut
+        $this->assertSame(2, RedisAdminController::databaseOf('redis://redis:6379/2'));
+        $this->assertSame(0, RedisAdminController::databaseOf('redis://redis:6379'));
+        $this->assertSame(3, RedisAdminController::databaseOf('redis://user:secret@redis:6379/3'));
 
         $this->loginAs(['ROLE_ADMIN', 'ROLE_SUPER_ADMIN']);
         $app = static::getContainer()->get('cache.app');
@@ -80,7 +99,7 @@ class CacheStateTest extends WebTestCase
 
     public function testStripeObjectsAreCreatedOncePerAccountModeKindAndParameters(): void
     {
-        $store = static::getContainer()->get(StripeObjectRefStore::class);
+        $store = new StripeObjectRefStore(static::getContainer()->get(TenantConnectionManager::class)); // service inliné (un seul usage)
         $created = [];
         $create = function (string $label) use (&$created): callable {
             return function (int $generation) use (&$created, $label): string {
@@ -103,7 +122,10 @@ class CacheStateTest extends WebTestCase
         $ref8 = StripeObjectRefStore::refKey(SubscriptionStripeGateway::taxRateParams(['label' => 'TPS', 'rate' => 0.08]));
         $this->assertNotSame($ref20, $ref8);
         $this->assertNotSame($first, $store->ensure('acct_x', 'test', 'tax_rate', $ref8, $alive, $create('c')));
-        $this->assertNotSame(StripeObjectRefStore::idempotencyKey(1, 'tax', $ref20), StripeObjectRefStore::idempotencyKey(1, 'tax', $ref8));
+        $this->assertNotSame(StripeObjectRefStore::idempotencyKey(1, 'tax', 'acct_x', 'test', $ref20), StripeObjectRefStore::idempotencyKey(1, 'tax', 'acct_x', 'test', $ref8));
+        $this->assertNotSame(StripeObjectRefStore::idempotencyKey(1, 'tax', 'acct_x', 'test', $ref20), StripeObjectRefStore::idempotencyKey(1, 'tax', 'acct_z', 'test', $ref20), 'le compte est dans la clé d\'idempotence');
+        $this->assertNotSame(StripeObjectRefStore::idempotencyKey(1, 'tax', 'acct_x', 'test', $ref20), StripeObjectRefStore::idempotencyKey(1, 'tax', 'acct_x', 'live', $ref20), 'le mode est dans la clé d\'idempotence');
+        $this->assertNotSame(StripeObjectRefStore::idempotencyKey(1, 'tax', 'acct_x', 'test', $ref20), StripeObjectRefStore::idempotencyKey(2, 'tax', 'acct_x', 'test', $ref20), 'la génération change la clé');
         [$p1, $q1] = SubscriptionStripeGateway::shippingParams(3, 'Poste', 'site', 1500, 'CAD', 'month', 1);
         [$p2, $q2] = SubscriptionStripeGateway::shippingParams(3, 'Poste', 'site', 1500, 'CAD', 'month', 3);
         $this->assertNotSame(StripeObjectRefStore::refKey(['product' => $p1, 'price' => $q1]), StripeObjectRefStore::refKey(['product' => $p2, 'price' => $q2]), 'intervalle dans la clé');
@@ -124,16 +146,29 @@ class CacheStateTest extends WebTestCase
         $this->assertSame([['f', 2]], $created, 'génération 2');
         $this->assertSame('txr_f_g2', $recreated);
         $this->assertSame('txr_f_g2', $store->ensure('acct_x', 'test', 'tax_rate', $ref20, $alive, $create('g')), 'la ligne garde le nouvel objet');
-        $this->assertStringStartsWith('izref-g2-tax-', StripeObjectRefStore::idempotencyKey(2, 'tax', $ref20), 'clé d\'idempotence nouvelle');
         $this->assertSame(4, (int) $this->master()->query("SELECT COUNT(*) FROM stripe_object_ref WHERE kind = 'tax_rate'")->fetchColumn());
 
-        // Une création qui échoue ne laisse rien et ne bloque pas la suivante (verrou rendu)
+        // Une création qui échoue (Stripe en panne, 500 gardée 24 h sous sa clé) : l'erreur remonte, le verrou est rendu, et la génération
+        // AVANCE pour que l'essai suivant prenne une clé d'idempotence neuve
         try {
             $store->ensure('acct_y', 'test', 'tax_rate', $ref20, $alive, static fn (int $g): string => throw new \RuntimeException('Stripe en panne'));
             $this->fail('l\'erreur doit remonter');
         } catch (\RuntimeException) {
         }
-        $this->assertSame('txr_h_g1', $store->ensure('acct_y', 'test', 'tax_rate', $ref20, $alive, $create('h')));
+        $row = $this->master()->query("SELECT generation, stripe_id FROM stripe_object_ref WHERE account = 'acct_y'")->fetch(\PDO::FETCH_ASSOC);
+        $this->assertSame([2, null], [(int) $row['generation'], $row['stripe_id']], 'génération avancée, aucun identifiant');
+        $created = [];
+        $this->assertSame('txr_h_g2', $store->ensure('acct_y', 'test', 'tax_rate', $ref20, $alive, $create('h')));
+        $this->assertSame([['h', 2]], $created, 'nouvelle génération après l\'échec');
+        // Ligne « création en cours » laissée par un processus mort (stripe_id NULL, même génération) : MÊME clé, Stripe rend le même objet
+        $this->master()->exec("UPDATE stripe_object_ref SET stripe_id = NULL, generation = 5 WHERE account = 'acct_y'");
+        $created = [];
+        $store->ensure('acct_y', 'test', 'tax_rate', $ref20, $alive, $create('i'));
+        $this->assertSame([['i', 5]], $created, 'même génération après un processus mort');
+        // Objet vivant : aucune création, aucun verrou (vérifié hors transaction)
+        $created = [];
+        $store->ensure('acct_y', 'test', 'tax_rate', $ref20, $alive, $create('j'));
+        $this->assertSame([], $created);
     }
 
     public function testTheEssaiJobStateLivesInTheMasterDatabase(): void
@@ -160,36 +195,9 @@ class CacheStateTest extends WebTestCase
             $this->client->request('POST', 'https://' . MV_TEST_TENANT_HOST . $path, ['action' => 'mark', 'year' => '2025', 'format' => 'summary', '_token' => 'faux']);
             $this->assertSame(403, $this->client->getResponse()->getStatusCode(), "$path : faux jeton refusé");
             $crawler = $this->client->request('GET', 'https://' . MV_TEST_TENANT_HOST . $path);
-            if ($this->client->getResponse()->getStatusCode() === 200) {
-                $this->assertGreaterThan(0, $crawler->filter('form[method="post"] input[name="_token"]')->count(), "$path : le formulaire porte le jeton");
-            }
+            $this->assertSame(200, $this->client->getResponse()->getStatusCode(), "$path : page affichée");
+            $this->assertSame(1, $crawler->filter('form[method="post"] input[name="_token"]')->count(), "$path : le formulaire porte le jeton");
         }
-    }
-
-    /** Préfixe d'un pool : propriété `namespace` de l'adaptateur (ou de l'adaptateur qu'il enveloppe) */
-    private static function namespaceOf(object $pool): ?string
-    {
-        for ($o = $pool, $depth = 0; is_object($o) && $depth < 4; ++$depth) {
-            for ($class = new \ReflectionClass($o); $class; $class = $class->getParentClass()) {
-                if ($class->hasProperty('namespace') && $class->getProperty('namespace')->getDeclaringClass()->getName() === $class->getName()) {
-                    $value = $class->getProperty('namespace')->getValue($o);
-                    if (is_string($value) && $value !== '') {
-                        return $value;
-                    }
-                }
-            }
-            $next = null;
-            foreach (['pool', 'decorated'] as $inner) {
-                for ($class = new \ReflectionClass($o); $class && $next === null; $class = $class->getParentClass()) {
-                    if ($class->hasProperty($inner)) {
-                        $next = $class->getProperty($inner)->getValue($o);
-                    }
-                }
-            }
-            $o = $next;
-        }
-
-        return null;
     }
 
     private function master(): \PDO

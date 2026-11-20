@@ -15,8 +15,9 @@ use App\Services\TenantConnectionManager;
  * - Création sous verrou consultatif de la base maître (pg_advisory_xact_lock sur la clé complète) : on relit, on crée seulement si rien
  *   n'est gardé ; deux appels parallèles ne créent qu'UN objet. La clé d'idempotence passée à Stripe est fixe pour une génération : si le
  *   processus meurt entre la création chez Stripe et l'écriture de la ligne, Stripe rend le même objet au rejeu (24 h).
- * - Référence périmée : avant usage, l'objet gardé est vérifié (`$alive`) ; disparu (resource_missing) ou archivé chez Stripe, il est
- *   recréé SOUS LE MÊME VERROU avec generation + 1 (clé d'idempotence nouvelle, préfixée par la génération) et la ligne est mise à jour.
+ * - Référence périmée : avant usage, l'objet gardé est vérifié (`$alive`, hors verrou) ; disparu (resource_missing) ou archivé chez
+ *   Stripe, il est recréé SOUS LE VERROU avec generation + 1 (clé d'idempotence nouvelle) et la ligne est mise à jour. Une création en
+ *   échec avance aussi la génération : Stripe garde 24 h la réponse d'une clé, erreur 500 comprise.
  */
 class StripeObjectRefStore
 {
@@ -33,10 +34,13 @@ class StripeObjectRefStore
         return hash('sha256', json_encode(self::sorted($params), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRESERVE_ZERO_FRACTION));
     }
 
-    /** Clé d'idempotence d'une création : génération + rôle (un objet peut en demander deux : produit puis prix) + clé */
-    public static function idempotencyKey(int $generation, string $role, string $refKey): string
+    /**
+     * Clé d'idempotence d'une création : génération + rôle (un objet peut en demander deux : produit puis prix) + empreinte du compte, du
+     * mode et de la clé de l'objet (deux comptes connectés qui créent la même taxe n'envoient jamais la même clé).
+     */
+    public static function idempotencyKey(int $generation, string $role, string $account, string $mode, string $refKey): string
     {
-        return sprintf('izref-g%d-%s-%s', $generation, $role, $refKey);
+        return sprintf('izref-g%d-%s-%s', $generation, $role, hash('sha256', $account . '|' . $mode . '|' . $refKey));
     }
 
     public static function modeOf(?string $secretKey): string
@@ -55,31 +59,57 @@ class StripeObjectRefStore
     public function ensure(string $account, string $mode, string $kind, string $refKey, callable $alive, callable $create): string
     {
         $pdo = $this->tenants->getPdoMaster();
+        $find = $pdo->prepare('SELECT stripe_id, generation FROM stripe_object_ref WHERE account = ? AND mode = ? AND kind = ? AND ref_key = ?');
+        // Chemin courant, SANS verrou : l'objet gardé est vérifié chez Stripe hors de toute transaction (les souscriptions qui utilisent la
+        // même taxe ne passent pas l'une après l'autre au rythme des appels à Stripe)
+        $find->execute([$account, $mode, $kind, $refKey]);
+        $row = $find->fetch(\PDO::FETCH_ASSOC) ?: null;
+        if ($row !== null && $row['stripe_id'] !== null && $alive((string) $row['stripe_id'])) {
+            return (string) $row['stripe_id'];
+        }
+
         $pdo->beginTransaction();
+        $generation = 1;
         try {
             $pdo->prepare('SELECT pg_advisory_xact_lock(hashtextextended(?, 0))')->execute([implode('|', ['stripe_object_ref', $account, $mode, $kind, $refKey])]);
-            $find = $pdo->prepare('SELECT stripe_id, generation FROM stripe_object_ref WHERE account = ? AND mode = ? AND kind = ? AND ref_key = ?');
             $find->execute([$account, $mode, $kind, $refKey]);
             $row = $find->fetch(\PDO::FETCH_ASSOC) ?: null;
-            if ($row !== null && $alive((string) $row['stripe_id'])) {
+            // un autre appel l'a peut-être créé ou recréé pendant l'attente du verrou
+            if ($row !== null && $row['stripe_id'] !== null && $alive((string) $row['stripe_id'])) {
                 $pdo->commit();
 
                 return (string) $row['stripe_id'];
             }
-            $generation = $row === null ? 1 : (int) $row['generation'] + 1;
+            // pas de ligne : génération 1 ; objet périmé : génération suivante ; création en cours ou échouée (stripe_id NULL) : même
+            // génération (si un processus est mort entre la création chez Stripe et l'écriture, Stripe rend le même objet)
+            $generation = $row === null ? 1 : ((int) $row['generation'] + ($row['stripe_id'] !== null ? 1 : 0));
             $id = $create($generation);
-            $pdo->prepare('INSERT INTO stripe_object_ref (account, mode, kind, ref_key, stripe_id, generation, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW())
-                ON CONFLICT (account, mode, kind, ref_key) DO UPDATE SET stripe_id = EXCLUDED.stripe_id, generation = EXCLUDED.generation, updated_at = NOW()')
-                ->execute([$account, $mode, $kind, $refKey, $id, $generation]);
+            $this->write($pdo, $account, $mode, $kind, $refKey, $id, $generation);
             $pdo->commit();
 
             return $id;
         } catch (\Throwable $e) {
-            if ($pdo->inTransaction()) {
-                $pdo->rollBack();
+            // Création refusée ou en panne : la génération avance (clé d'idempotence neuve au prochain essai : Stripe garde 24 h la
+            // réponse d'une clé, erreur 500 comprise), puis l'erreur remonte ; le verrou est rendu avec la transaction
+            try {
+                if ($pdo->inTransaction()) {
+                    $this->write($pdo, $account, $mode, $kind, $refKey, null, $generation + 1);
+                    $pdo->commit();
+                }
+            } catch (\Throwable) {
+                if ($pdo->inTransaction()) {
+                    $pdo->rollBack();
+                }
             }
             throw $e;
         }
+    }
+
+    private function write(\PDO $pdo, string $account, string $mode, string $kind, string $refKey, ?string $id, int $generation): void
+    {
+        $pdo->prepare('INSERT INTO stripe_object_ref (account, mode, kind, ref_key, stripe_id, generation, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW())
+            ON CONFLICT (account, mode, kind, ref_key) DO UPDATE SET stripe_id = EXCLUDED.stripe_id, generation = EXCLUDED.generation, updated_at = NOW()')
+            ->execute([$account, $mode, $kind, $refKey, $id, $generation]);
     }
 
     private static function sorted(mixed $value): mixed

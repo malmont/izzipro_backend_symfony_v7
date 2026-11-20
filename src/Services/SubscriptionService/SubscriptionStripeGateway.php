@@ -82,9 +82,10 @@ final class SubscriptionStripeGateway implements SubscriptionStripeGatewayInterf
         foreach ($taxes as $tax) {
             $params = self::taxRateParams($tax);
             $ref = StripeObjectRefStore::refKey($params);
-            $ids[] = $this->refs->ensure($this->account() ?? 'platform', $this->mode(), 'tax_rate', $ref,
-                fn (string $id): bool => (bool) $this->retrieveAlive(fn (StripeClient $c, array $o) => $c->taxRates->retrieve($id, [], $o)),
-                fn (int $generation): string => $this->call(fn (StripeClient $c, array $o) => $c->taxRates->create($params, $o + ['idempotency_key' => StripeObjectRefStore::idempotencyKey($generation, 'tax', $ref)]))->id);
+            [$account, $mode] = [$this->account() ?? 'platform', $this->mode()];
+            $ids[] = $this->refs->ensure($account, $mode, 'tax_rate', $ref,
+                fn (string $id): bool => $this->retrieveAlive(fn (StripeClient $c, array $o) => (bool) $c->taxRates->retrieve($id, [], $o)->active),
+                fn (int $generation): string => $this->call(fn (StripeClient $c, array $o) => $c->taxRates->create($params, $o + ['idempotency_key' => StripeObjectRefStore::idempotencyKey($generation, 'tax', $account, $mode, $ref)]))->id);
         }
 
         return $ids;
@@ -108,12 +109,19 @@ final class SubscriptionStripeGateway implements SubscriptionStripeGatewayInterf
         [$productParams, $priceParams] = self::shippingParams((int) $carrier->getId(), (string) $carrier->getName(), (string) $this->tenantProvider->getTenantCode(), $amount, $currency, $interval, $intervalCount);
         $ref = StripeObjectRefStore::refKey(['product' => $productParams, 'price' => $priceParams]);
 
-        return $this->refs->ensure($this->account() ?? 'platform', $this->mode(), 'shipping_price', $ref,
-            fn (string $id): bool => (bool) $this->retrieveAlive(fn (StripeClient $c, array $o) => $c->prices->retrieve($id, [], $o)),
-            function (int $generation) use ($productParams, $priceParams, $ref): string {
-                $product = $this->call(fn (StripeClient $c, array $o) => $c->products->create($productParams, $o + ['idempotency_key' => StripeObjectRefStore::idempotencyKey($generation, 'prod', $ref)]));
+        [$account, $mode] = [$this->account() ?? 'platform', $this->mode()];
 
-                return $this->call(fn (StripeClient $c, array $o) => $c->prices->create(['product' => $product->id] + $priceParams, $o + ['idempotency_key' => StripeObjectRefStore::idempotencyKey($generation, 'price', $ref)]))->id;
+        return $this->refs->ensure($account, $mode, 'shipping_price', $ref,
+            // le prix ET son produit doivent être actifs (un produit archivé chez Stripe refuse les nouveaux abonnements)
+            fn (string $id): bool => $this->retrieveAlive(function (StripeClient $c, array $o) use ($id): bool {
+                $price = $c->prices->retrieve($id, ['expand' => ['product']], $o);
+
+                return (bool) $price->active && is_object($price->product) && (bool) ($price->product->active ?? false);
+            }),
+            function (int $generation) use ($productParams, $priceParams, $ref, $account, $mode): string {
+                $product = $this->call(fn (StripeClient $c, array $o) => $c->products->create($productParams, $o + ['idempotency_key' => StripeObjectRefStore::idempotencyKey($generation, 'prod', $account, $mode, $ref)]));
+
+                return $this->call(fn (StripeClient $c, array $o) => $c->prices->create(['product' => $product->id] + $priceParams, $o + ['idempotency_key' => StripeObjectRefStore::idempotencyKey($generation, 'price', $account, $mode, $ref)]))->id;
             });
     }
 
@@ -330,7 +338,7 @@ final class SubscriptionStripeGateway implements SubscriptionStripeGatewayInterf
     {
         return (bool) $this->call(function (StripeClient $c, array $o) use ($retrieve): bool {
             try {
-                return (bool) ($retrieve($c, $o)->active ?? false);
+                return (bool) $retrieve($c, $o);
             } catch (\Stripe\Exception\InvalidRequestException $e) {
                 if ($e->getStripeCode() === 'resource_missing') {
                     return false;

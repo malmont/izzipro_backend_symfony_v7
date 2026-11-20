@@ -4,14 +4,15 @@
 -- Identifiants des objets Stripe créés à la demande (taux de taxe, produit et prix de livraison des abonnements) : une ligne par compte
 -- Stripe (identifiant du compte connecté, ou « platform »), MODE (test / live), genre et clé (sha256 de TOUS les paramètres de création).
 -- Création sous verrou consultatif (StripeObjectRefStore) : jamais de doublon chez Stripe, même pour deux appels parallèles. Un objet
--- disparu ou archivé chez Stripe est recréé sous le même verrou : generation + 1 (préfixe de la clé d'idempotence).
+-- disparu ou archivé chez Stripe est recréé sous le même verrou : generation + 1 (préfixe de la clé d'idempotence) ; une création en
+-- échec avance aussi la génération (Stripe garde 24 h la réponse d'une clé, erreur 500 comprise).
 CREATE TABLE IF NOT EXISTS stripe_object_ref (
     id SERIAL PRIMARY KEY,
     account VARCHAR(255) NOT NULL,
     mode VARCHAR(4) NOT NULL,
     kind VARCHAR(32) NOT NULL,
     ref_key CHAR(64) NOT NULL,
-    stripe_id VARCHAR(255) NOT NULL,
+    stripe_id VARCHAR(255) DEFAULT NULL, -- NULL : création en cours ou échouée (la génération suivante prend une clé d'idempotence neuve)
     generation INT NOT NULL DEFAULT 1,
     created_at TIMESTAMP(0) WITHOUT TIME ZONE NOT NULL,
     updated_at TIMESTAMP(0) WITHOUT TIME ZONE NOT NULL,

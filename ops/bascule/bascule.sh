@@ -78,26 +78,39 @@ restart_workers() {
   local w0; w0=$(started)
   docker exec -w /var/www "$APP" php bin/console messenger:stop-workers >/dev/null 2>&1
   for _ in $(seq 1 30); do pause 2; [ "$(started)" != "$w0" ] && beat_after_restart && break; done
-  # Lot CACHE-ETAT (contrôle g) : CHAQUE conteneur de worker doit avoir démarré APRÈS l'heure de bascule. Sinon (signal non reçu : ancien
-  # préfixe du cache après une montée de version d'avant ce lot), docker restart des retardataires, puis nouvelle vérification.
-  late=$(late_workers)
-  if [ -n "$late" ]; then
-    echo "workers démarrés AVANT la bascule : $late : docker restart"
-    # shellcheck disable=SC2086
-    docker restart $late >/dev/null
-    for _ in $(seq 1 30); do pause 2; [ -z "$(late_workers)" ] && break; done
-  fi
+  # Lot CACHE-ETAT (contrôle g) : CHAQUE conteneur de worker doit avoir démarré APRÈS l'heure de bascule. Un worker en retard qui traite
+  # encore un message (lecture IA, chapitre, PDF…) s'arrêtera de lui-même à la fin de ce message (le signal a un préfixe fixe depuis ce
+  # lot) : on l'attend, 15 min au plus, sans jamais l'interrompre. Un worker en retard ET au repos n'a pas reçu le signal (montée de
+  # version d'avant ce lot) : docker restart, sans risque puisqu'il ne traite rien.
+  for _ in $(seq 1 90); do
+    late=$(late_workers); [ -z "$late" ] && break
+    idle=""; for c in $late; do busy_worker "$c" || idle="$idle $c"; done
+    if [ -n "${idle# }" ]; then
+      echo "workers démarrés AVANT la bascule et au repos :$idle : docker restart"
+      # shellcheck disable=SC2086
+      docker restart $idle >/dev/null
+    fi
+    pause 10
+  done
   # les workers reconstruisent leur cache avant de battre (10 à 30 s) : on attend 60 s au plus que tout soit vert, puis on dit l'état
   for _ in $(seq 1 30); do workers_g >/dev/null 2>&1 && break; pause 2; done
   workers_g
   worker_email "après" || echo "ATTENTION : le worker des courriels ne bat pas 60 s après : le relancer (docker restart $WORKER) et prévenir"
 }
 
-# Conteneurs de workers (hors planificateur, noté à part) démarrés avant l'heure de bascule (var/bascule.heure)
+# File Redis (base 1) d'un conteneur de worker ; un message en cours = une entrée « pending » du groupe symfony
+worker_stream() { local t; t=$(docker inspect -f '{{join .Config.Cmd " "}}' "$1" | sed -E 's/.*consume\.sh ([a-z_]+).*/\1/'); [ "$t" = async ] && echo messages || echo "messages_$t"; }
+busy_worker() { local n; n=$(docker exec "$REDIS" redis-cli -n 1 XINFO GROUPS "$(worker_stream "$1")" 2>/dev/null | awk 'p == 1 { print; exit } $0 == "pending" { p = 1 }'); [ "${n:-0}" -gt 0 ]; }
+transport_busy() { local c; c=$(docker ps --format '{{.Names}} {{.Command}}' | awk -v t="consume.sh $1" 'index($0, t) { print $1; exit }'); [ -n "$c" ] && busy_worker "$c"; }
+
+# Heure de bascule (UTC, écrite avec « Z ») ; absente = erreur, jamais minuit
+switch_epoch() { [ -s "$L/var/bascule.heure" ] || { echo "HEURE DE BASCULE ABSENTE (var/bascule.heure)" >&2; return 1; }; date -u -d "$(sed 's/Z$//' "$L/var/bascule.heure")Z" +%s; }
+
+# Conteneurs de workers EN MARCHE (hors planificateur, noté à part) démarrés avant l'heure de bascule
 late_workers() {
-  local c t0 out=""; t0=$(date -d "$(cat "$L/var/bascule.heure")" +%s)
-  for c in $(docker ps -a --format '{{.Names}}' | grep -E '^symfony_messenger_worker.*_v2$' | grep -v scheduler | sort); do
-    [ "$(date -d "$(docker inspect -f '{{.State.StartedAt}}' "$c")" +%s)" -ge "$t0" ] || out="$out $c"
+  local c t0 out=""; t0=$(switch_epoch) || return 1
+  for c in $(docker ps --format '{{.Names}}' | grep -E '^symfony_messenger_worker.*_v2$' | grep -v scheduler | sort); do
+    [ "$(date -u -d "$(docker inspect -f '{{.State.StartedAt}}' "$c")" +%s)" -ge "$t0" ] || out="$out $c"
   done
   echo "${out# }"
 }
@@ -109,7 +122,8 @@ workers_g() {
     n=$((n + 1)); [ "$(docker inspect -f '{{.State.Status}}' "$c")" = running ] || bad=$((bad + 1))
   done
   [ -z "$(late_workers)" ] || bad=$((bad + 1))
-  for t in async esg landing_ai media email pdf gestion_ai; do a=$(beat_age "$t"); [ "$a" -lt 60 ] || { bad=$((bad + 1)); echo "ATTENTION battement $t : $a s"; }; done
+  # un worker ne bat pas pendant qu'il traite un message : battement ancien toléré si sa file a un message en cours
+  for t in async esg landing_ai media email pdf gestion_ai; do a=$(beat_age "$t"); [ "$a" -lt 60 ] || transport_busy "$t" || { bad=$((bad + 1)); echo "ATTENTION battement $t : $a s"; }; done
   echo "workers (contrôle g) : $n conteneur(s), $bad anomalie(s)$([ "$bad" = 0 ] && echo ' : OK' || echo ' : RETOUR ARRIÈRE IMMÉDIAT') ; planificateur : $(docker ps --format '{{.Names}}' | grep -q scheduler && echo "battement il y a $(beat_age scheduler_default) s" || echo 'arrêté (conteneur absent)')"
   [ "$bad" = 0 ]
 }
@@ -119,8 +133,12 @@ workers_g() {
 reload_fpm() {
   local before after kept
   before=$(fpm_pools); docker exec "$APP" sh -c 'kill -USR2 1' || { echo "RECHARGEMENT FPM IMPOSSIBLE : RETOUR ARRIÈRE"; return 1; }
-  pause 3; after=$(fpm_pools)
-  kept=$(comm -12 <(echo "$before" | tr ' ' '\n' | sort) <(echo "$after" | tr ' ' '\n' | sort) | grep -c .)
+  # un processus occupé finit sa requête (process_control_timeout = 30 s) avant que le maître n'en crée de nouveaux : 40 s au plus
+  for _ in $(seq 1 20); do
+    pause 2; after=$(fpm_pools)
+    kept=$(comm -12 <(echo "$before" | tr ' ' '\n' | sort) <(echo "$after" | tr ' ' '\n' | sort) | grep -c .)
+    [ "$kept" = 0 ] && [ -n "${after// /}" ] && break
+  done
   echo "FPM rechargé : $(echo "$after" | wc -w) processus de pool, $kept repris d'avant$([ "$kept" = 0 ] && echo ' : OK' || echo ' : RETOUR ARRIÈRE IMMÉDIAT') ; $(docker exec "$APP" grep -m1 'const VERSION ' /var/www/vendor/symfony/http-kernel/Kernel.php | tr -s ' ' | sed 's/^ //')"
   [ "$kept" = 0 ]
 }
@@ -344,7 +362,7 @@ switch)
   # Laisser finir la requête de contrôle ci-dessus AVANT l'échange : sa fin de traitement charge encore des fichiers du cache sortant
   pause 2
   link_old_container "$3"
-  date -u +%FT%T > "$L/var/bascule.heure"; T0=$(date +%s.%N)
+  date -u +%FT%TZ > "$L/var/bascule.heure"; T0=$(date +%s.%N)
   # lot TACHES-0 : le vendor et public/bundles d'abord (composer.lock changé), puis le code et le cache ; l'ancien vendor reste dans
   # var/vendor_stage<n>, l'ancien public/bundles dans var/bundles_stage<n>
   if [ -n "$(git diff --name-only HEAD "$2" -- composer.lock)" ]; then
@@ -367,7 +385,7 @@ retour)
   git merge-base --is-ancestor "$2" HEAD || { echo "CE COMMIT N'EST PAS UN ANCÊTRE DE L'ARBRE EN LIGNE : $2"; exit 1; }
   ea_assets avant
   link_old_container "$3"
-  date -u +%FT%T > "$L/var/bascule.heure"; T0=$(date +%s.%N)
+  date -u +%FT%TZ > "$L/var/bascule.heure"; T0=$(date +%s.%N)
   # lot TACHES-0 : le composer.lock revient en arrière ? l'ancien vendor attend dans var/vendor_stage<n> et l'ancien public/bundles dans
   # var/bundles_stage<n> depuis l'échange
   if [ -n "$(git diff --name-only "$2" HEAD -- composer.lock)" ]; then
@@ -384,6 +402,7 @@ retour)
   ;;
 logs)
   [ -n "${2:-}" ] || set -- logs "$(cat "$L/var/bascule.heure" 2>/dev/null)"
+  set -- logs "${2%Z}" # heure écrite avec « Z » depuis le lot CACHE-ETAT : le journal se compare sans lui
   echo "erreurs du journal depuis $2 : $(docker exec "$APP" sh -c "awk -v t=$2 'substr(\$1,2,19) >= t' /var/www/var/log/dev.log | grep -c 'CRITICAL\|\.ERROR'")"
   docker exec "$APP" sh -c "awk -v t=$2 'substr(\$1,2,19) >= t' /var/www/var/log/dev.log | grep 'CRITICAL\|\.ERROR' | cut -c1-300 | head -5"
   echo "codes du serveur web : $(docker logs --since "${2}Z" "$NGINX" 2>&1 | grep -oE '" [1-5][0-9]{2} ' | sort | uniq -c | tr -s ' ' | tr '\n' ';')"

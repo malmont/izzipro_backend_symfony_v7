@@ -55,7 +55,7 @@ class RedisAdminController extends AbstractController
                     }
                     // Lot CACHE-ETAT : la base de l'adresse (/2 pour les essais) ; avant, toujours la base 0, celle de la production,
                     // même depuis l'environnement des essais
-                    $database = (int) ltrim((string) ($parsed['path'] ?? ''), '/');
+                    $database = self::databaseOf($redisUrl);
                     if ($database > 0) {
                         $redis->select($database);
                     }
@@ -160,5 +160,11 @@ class RedisAdminController extends AbstractController
         }
 
         return false;
+    }
+
+    /** Base Redis d'une adresse (« redis://hôte:6379/2 » → 2 ; sans chemin → 0) */
+    public static function databaseOf(string $url): int
+    {
+        return (int) ltrim((string) (parse_url($url, PHP_URL_PATH) ?? ''), '/');
     }
 }
