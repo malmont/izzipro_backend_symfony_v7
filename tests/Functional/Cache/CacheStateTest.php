@@ -181,10 +181,38 @@ class CacheStateTest extends WebTestCase
         $created = [];
         $store->ensure('acct_y', 'test', 'tax_rate', $ref20, $alive, $create('i'));
         $this->assertSame([['i', 5]], $created, 'même génération après un processus mort');
-        // Objet vivant : aucune création, aucun verrou (vérifié hors transaction)
+        // Objet vivant : aucune création et AUCUN verrou. Une autre connexion tient le verrou de cet objet ; avec un statement_timeout
+        // de 2 s sur la connexion du magasin, un appel qui prendrait le verrou échouerait au lieu de rendre l'objet
         $created = [];
-        $store->ensure('acct_y', 'test', 'tax_rate', $ref20, $alive, $create('j'));
+        $other = $this->secondMasterConnection();
+        $other->query("SELECT pg_advisory_lock(hashtextextended('stripe_object_ref|acct_y|test|tax_rate|" . $ref20 . "', 0))");
+        $this->master()->exec("SET statement_timeout = '2s'");
+        try {
+            $this->assertSame('txr_i_g5', $store->ensure('acct_y', 'test', 'tax_rate', $ref20, $alive, $create('j')), 'rendu sans attendre le verrou');
+        } finally {
+            $this->master()->exec('SET statement_timeout = 0');
+            $other->query("SELECT pg_advisory_unlock_all()");
+        }
         $this->assertSame([], $created);
+
+        // Vérification SOUS verrou en panne (429, coupure) : l'erreur remonte, la ligne reste telle qu'elle était (ni génération qui
+        // recule, ni identifiant effacé)
+        $this->master()->exec("UPDATE stripe_object_ref SET stripe_id = 'txr_archive', generation = 3 WHERE account = 'acct_y'");
+        $calls = 0;
+        $flaky = function (string $id) use (&$calls): bool {
+            if (++$calls === 1) {
+                return false; // hors verrou : l'objet semble archivé
+            }
+            throw new \RuntimeException('429 de Stripe');
+        };
+        try {
+            $store->ensure('acct_y', 'test', 'tax_rate', $ref20, $flaky, $create('k'));
+            $this->fail('l\'erreur doit remonter');
+        } catch (\RuntimeException) {
+        }
+        $row = $this->master()->query("SELECT generation, stripe_id FROM stripe_object_ref WHERE account = 'acct_y'")->fetch(\PDO::FETCH_ASSOC);
+        $this->assertSame([3, 'txr_archive'], [(int) $row['generation'], $row['stripe_id']], 'ligne intacte');
+        $this->assertSame([], $created, 'aucune création');
     }
 
     public function testTheEssaiJobStateLivesInTheMasterDatabase(): void
@@ -214,6 +242,19 @@ class CacheStateTest extends WebTestCase
             $this->assertSame(200, $this->client->getResponse()->getStatusCode(), "$path : page affichée");
             $this->assertSame(1, $crawler->filter('form[method="post"] input[name="_token"]')->count(), "$path : le formulaire porte le jeton");
         }
+        // Avec le jeton du formulaire, l'action passe (coupons, action « report » : lecture seule)
+        $crawler = $this->client->request('GET', 'https://' . MV_TEST_TENANT_HOST . '/admin/pos/coupons');
+        $token = $crawler->filter('form[method="post"] input[name="_token"]')->attr('value');
+        $this->client->request('POST', 'https://' . MV_TEST_TENANT_HOST . '/admin/pos/coupons', ['action' => 'report', '_token' => $token]);
+        $this->assertSame(200, $this->client->getResponse()->getStatusCode(), 'jeton valide accepté');
+    }
+
+    /** Une connexion maître DISTINCTE de celle du magasin (même base de test) */
+    private function secondMasterConnection(): \PDO
+    {
+        $u = parse_url((string) ($_ENV['MASTER_DATABASE_URL'] ?? $_SERVER['MASTER_DATABASE_URL'] ?? getenv('MASTER_DATABASE_URL')));
+
+        return new \PDO(sprintf('pgsql:host=%s;port=%d;dbname=%s', $u['host'], $u['port'] ?? 5432, ltrim($u['path'], '/')), urldecode($u['user']), urldecode($u['pass'] ?? ''), [\PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION]);
     }
 
     private function master(): \PDO

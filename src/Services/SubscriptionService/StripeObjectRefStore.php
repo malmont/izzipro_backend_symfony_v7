@@ -69,7 +69,9 @@ class StripeObjectRefStore
         }
 
         $pdo->beginTransaction();
-        $generation = 1;
+        // génération de la création en cours ; null tant que la création n'a pas commencé (une erreur avant elle, par exemple la
+        // vérification sous verrou en 429, ne touche pas la ligne)
+        $generation = null;
         try {
             $pdo->prepare('SELECT pg_advisory_xact_lock(hashtextextended(?, 0))')->execute([implode('|', ['stripe_object_ref', $account, $mode, $kind, $refKey])]);
             $find->execute([$account, $mode, $kind, $refKey]);
@@ -92,9 +94,11 @@ class StripeObjectRefStore
             // Création refusée ou en panne : la génération avance (clé d'idempotence neuve au prochain essai : Stripe garde 24 h la
             // réponse d'une clé, erreur 500 comprise), puis l'erreur remonte ; le verrou est rendu avec la transaction
             try {
-                if ($pdo->inTransaction()) {
+                if ($pdo->inTransaction() && $generation !== null) {
                     $this->write($pdo, $account, $mode, $kind, $refKey, null, $generation + 1);
                     $pdo->commit();
+                } elseif ($pdo->inTransaction()) {
+                    $pdo->rollBack(); // erreur avant la création : la ligne reste telle qu'elle était
                 }
             } catch (\Throwable) {
                 if ($pdo->inTransaction()) {

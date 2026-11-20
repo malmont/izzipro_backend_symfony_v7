@@ -83,13 +83,15 @@ restart_workers() {
   # lot) : on l'attend, 15 min au plus, sans jamais l'interrompre. Un worker en retard ET au repos n'a pas reçu le signal (montée de
   # version d'avant ce lot) : docker restart, sans risque puisqu'il ne traite rien.
   for _ in $(seq 1 90); do
-    late=$(late_workers); [ -z "$late" ] && break
-    idle=""; for c in $late; do busy_worker "$c" || idle="$idle $c"; done
-    if [ -n "${idle# }" ]; then
-      echo "workers démarrés AVANT la bascule et au repos :$idle : docker restart"
-      # shellcheck disable=SC2086
-      docker restart $idle >/dev/null
-    fi
+    late=$(late_workers) || { echo "ATTENTION : heure de bascule illisible, workers non vérifiés"; break; }
+    [ -z "$late" ] && break
+    # un conteneur à la fois, relancé SANS délai (-t 0) juste après avoir été vu au repos : php en PID 1 ignore SIGTERM, et un délai
+    # de 10 s lui laisserait le temps de prendre un message qu'il perdrait
+    for c in $late; do
+      busy_worker "$c" && continue
+      echo "worker démarré AVANT la bascule et au repos : $c : docker restart"
+      docker restart -t 0 "$c" >/dev/null
+    done
     pause 10
   done
   # les workers reconstruisent leur cache avant de battre (10 à 30 s) : on attend 60 s au plus que tout soit vert, puis on dit l'état
@@ -101,7 +103,8 @@ restart_workers() {
 # File Redis (base 1) d'un conteneur de worker ; un message en cours = une entrée « pending » du groupe symfony
 worker_stream() { local t; t=$(docker inspect -f '{{join .Config.Cmd " "}}' "$1" | sed -E 's/.*consume\.sh ([a-z_]+).*/\1/'); [ "$t" = async ] && echo messages || echo "messages_$t"; }
 busy_worker() { local n; n=$(docker exec "$REDIS" redis-cli -n 1 XINFO GROUPS "$(worker_stream "$1")" 2>/dev/null | awk 'p == 1 { print; exit } $0 == "pending" { p = 1 }'); [ "${n:-0}" -gt 0 ]; }
-transport_busy() { local c; c=$(docker ps --format '{{.Names}} {{.Command}}' | awk -v t="consume.sh $1" 'index($0, t) { print $1; exit }'); [ -n "$c" ] && busy_worker "$c"; }
+# Le transport a-t-il un message en cours ? (file retrouvée par docker inspect : docker ps tronque la commande)
+transport_busy() { local c want; want=$([ "$1" = async ] && echo messages || echo "messages_$1"); for c in $(docker ps --format '{{.Names}}' | grep -E '^symfony_messenger_worker.*_v2$'); do [ "$(worker_stream "$c")" = "$want" ] && { busy_worker "$c"; return; }; done; return 1; }
 
 # Heure de bascule (UTC, écrite avec « Z ») ; absente = erreur, jamais minuit
 switch_epoch() { [ -s "$L/var/bascule.heure" ] || { echo "HEURE DE BASCULE ABSENTE (var/bascule.heure)" >&2; return 1; }; date -u -d "$(sed 's/Z$//' "$L/var/bascule.heure")Z" +%s; }
@@ -117,11 +120,12 @@ late_workers() {
 
 # Contrôle g : workers démarrés après la bascule, en marche, battement de moins de 60 s (clé la plus jeune) ; le planificateur à part
 workers_g() {
-  local n=0 bad=0 c t a
+  local n=0 bad=0 c t a late
   for c in $(docker ps -a --format '{{.Names}}' | grep -E '^symfony_messenger_worker.*_v2$' | grep -v scheduler | sort); do
     n=$((n + 1)); [ "$(docker inspect -f '{{.State.Status}}' "$c")" = running ] || bad=$((bad + 1))
   done
-  [ -z "$(late_workers)" ] || bad=$((bad + 1))
+  late=$(late_workers) || { bad=$((bad + 1)); echo "ATTENTION : heure de bascule illisible"; }
+  [ -z "$late" ] || bad=$((bad + 1))
   # un worker ne bat pas pendant qu'il traite un message : battement ancien toléré si sa file a un message en cours
   for t in async esg landing_ai media email pdf gestion_ai; do a=$(beat_age "$t"); [ "$a" -lt 60 ] || transport_busy "$t" || { bad=$((bad + 1)); echo "ATTENTION battement $t : $a s"; }; done
   echo "workers (contrôle g) : $n conteneur(s), $bad anomalie(s)$([ "$bad" = 0 ] && echo ' : OK' || echo ' : RETOUR ARRIÈRE IMMÉDIAT') ; planificateur : $(docker ps --format '{{.Names}}' | grep -q scheduler && echo "battement il y a $(beat_age scheduler_default) s" || echo 'arrêté (conteneur absent)')"
@@ -402,6 +406,7 @@ retour)
   ;;
 logs)
   [ -n "${2:-}" ] || set -- logs "$(cat "$L/var/bascule.heure" 2>/dev/null)"
+  [ -n "${2:-}" ] || { echo "HEURE ATTENDUE : logs <ISO UTC>, ou var/bascule.heure écrit par switch ou retour"; exit 1; }
   set -- logs "${2%Z}" # heure écrite avec « Z » depuis le lot CACHE-ETAT : le journal se compare sans lui
   echo "erreurs du journal depuis $2 : $(docker exec "$APP" sh -c "awk -v t=$2 'substr(\$1,2,19) >= t' /var/www/var/log/dev.log | grep -c 'CRITICAL\|\.ERROR'")"
   docker exec "$APP" sh -c "awk -v t=$2 'substr(\$1,2,19) >= t' /var/www/var/log/dev.log | grep 'CRITICAL\|\.ERROR' | cut -c1-300 | head -5"
