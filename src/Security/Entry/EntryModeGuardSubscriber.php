@@ -89,7 +89,7 @@ class EntryModeGuardSubscriber implements EventSubscriberInterface
         ['#^/api/site/abonnements/[^/]+/(pause|reprise|resiliation|droits)(/|$)#', [], 'payment'],
         // lot ABO-CONF : créer, configurer, archiver ou supprimer une formule (son prix) et ses prestations : geste d'argent, fermé au directeur ;
         // l'aperçu, qui n'écrit rien, reste ouvert
-        ['#^/api/site/abonnements/(formules(/(?!apercu$)[^/]+.*)?|prestations(/.*)?)$#', ['POST', 'PUT', 'PATCH', 'DELETE'], 'payment'],
+        ['#^/api/site/abonnements/(formules(/(?!apercu$)[^/]+.*)?|prestations(/.*)?|produits(/.*)?)$#', ['POST', 'PUT', 'PATCH', 'DELETE'], 'payment'], // + produits porteurs (lot ABO-CONF-b)
         // lot FIS-1 (décision du chef, 19/11/2026) : les prêts sont en LECTURE SEULE pour le directeur (créer, modifier, supprimer un prêt
         // sont des écritures des comptes de la boutique) ; l'aperçu, qui n'écrit rien, reste ouvert
         ['#^/api/gestion/prets(/(?!apercu$)[^/]+.*)?$#', ['POST', 'PUT', 'PATCH', 'DELETE'], 'payment'],

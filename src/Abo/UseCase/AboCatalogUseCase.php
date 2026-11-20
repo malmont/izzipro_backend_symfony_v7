@@ -12,8 +12,39 @@ use App\Abo\Services\BenefitService;
  */
 class AboCatalogUseCase
 {
-    public function __construct(private readonly AboCatalogService $catalog, private readonly BenefitService $benefits)
+    public function __construct(private readonly AboCatalogService $catalog, private readonly BenefitService $benefits,
+        private readonly ?\App\Abo\Services\AboCarrierService $carriers = null, // lot ABO-CONF-b : produits porteurs
+        private readonly ?\App\Services\TenantEntityManagerProvider $emProvider = null)
     {
+    }
+
+    /**
+     * Lot ABO-CONF-b : les produits porteurs et ceux qui peuvent le devenir.
+     *
+     * @return array{items: list<array<string, mixed>>, total: int, page: int, pageSize: int}
+     */
+    public function products(string $filter, ?string $q, int $page, int $pageSize): array
+    {
+        return $this->carriers->list($filter, $q, $page, $pageSize);
+    }
+
+    /**
+     * Lot ABO-CONF-b : activer ou désactiver l'abonnement sur un produit.
+     *
+     * @return array{product: array<string, mixed>, warnings: list<array<string, mixed>>}
+     * @throws AboException
+     */
+    public function setProductSubscription(int $id, mixed $enabled, ?string $by): array
+    {
+        if (!is_bool($enabled)) {
+            throw new AboException(422, 'MUST_BE_BOOLEAN', 'subscriptionEnabled : vrai ou faux.', 'subscriptionEnabled');
+        }
+        $product = $this->emProvider->getEntityManager()->getRepository(\App\Entity\Product::class)->find($id);
+        if ($product === null) {
+            throw new AboException(404, 'PRODUCT_NOT_FOUND', 'Produit introuvable.', 'id');
+        }
+
+        return $this->carriers->setSubscription($product, $enabled, $by);
     }
 
     /** @return array<string, mixed> */

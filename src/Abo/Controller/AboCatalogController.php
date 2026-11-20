@@ -23,6 +23,30 @@ class AboCatalogController extends AbstractController
     {
     }
 
+    /**
+     * Lot ABO-CONF-b : les produits porteurs (`porteurs=oui`), ceux qui peuvent le devenir (`non`) ou tous (défaut), `q` (nom), `page`,
+     * `pageSize` (≤ 100). Par produit : formules actives, archivées, ayant eu un abonné ; `canEnable`, `canDisable`, `reason`.
+     */
+    #[Route('/api/site/abonnements/produits', name: 'site_abo_products', methods: ['GET'])]
+    public function products(Request $request): JsonResponse
+    {
+        return $this->guard(fn () => $this->useCase->products((string) $request->query->get('porteurs', 'tous'), $request->query->get('q'),
+            max(1, $request->query->getInt('page', 1)), max(1, $request->query->getInt('pageSize', 25))));
+    }
+
+    /**
+     * Lot ABO-CONF-b : `{ subscriptionEnabled: bool }`. Désactiver : 409 PRODUCT_HAS_SUBSCRIBERS dès qu'une formule de ce produit a eu un
+     * abonné ; sinon permis, avec `warnings: [{ code: "PLANS_HIDDEN", count, plans }]` (les formules qui sortent de la vente). Activer :
+     * 422 PRODUCT_NOT_ELIGIBLE pour un véhicule ou le porteur d'une formule branchée. Idempotent.
+     */
+    #[Route('/api/site/abonnements/produits/{id}', name: 'site_abo_product_update', requirements: ['id' => '\d+'], methods: ['PATCH'])]
+    public function updateProduct(Request $request, int $id): JsonResponse
+    {
+        $body = self::body($request);
+
+        return $this->guard(fn () => $this->useCase->setProductSubscription($id, $body['subscriptionEnabled'] ?? null, $this->by()));
+    }
+
     /** Ce que sera la formule, SANS rien écrire : `{ plan, summary, priceChange, warnings }` (`?planId=` pour une formule existante) */
     #[Route('/api/site/abonnements/formules/apercu', name: 'site_abo_plan_preview', methods: ['POST'])]
     public function preview(Request $request): JsonResponse

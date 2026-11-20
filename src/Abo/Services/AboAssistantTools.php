@@ -17,16 +17,19 @@ use App\Services\TenantEntityManagerProvider;
  */
 class AboAssistantTools
 {
-    public const READS = ['get_subscription_plans', 'get_benefits', 'get_plan_subscribers', 'get_subscription', 'get_expiring_rights', 'get_slots', 'get_to_schedule'];
+    public const READS = ['get_subscription_plans', 'get_benefits', 'get_plan_subscribers', 'get_subscription', 'get_expiring_rights', 'get_slots', 'get_to_schedule',
+        'list_subscription_products']; // lot ABO-CONF-b : produits porteurs
     /** Lot ABO-1 : gestes du quotidien (résiliation EN FIN DE PÉRIODE seulement ; jamais immédiate, ni remboursement, ni retrait de droits payés) */
     public const ACTIONS = ['propose_benefit', 'propose_plan', 'propose_plan_update', 'set_plan_benefits', 'propose_use', 'propose_gift', 'propose_pause', 'propose_resume', 'propose_cancel_subscription',
-        'propose_slot_rule', 'propose_assign_date', 'propose_move_occurrence']; // lot ABO-2 : agenda
+        'propose_slot_rule', 'propose_assign_date', 'propose_move_occurrence', // lot ABO-2 : agenda
+        'propose_subscription_product']; // lot ABO-CONF-b : activer ou désactiver l'abonnement sur un produit
     public const MAX_BENEFITS = 10;
 
     public function __construct(private readonly BenefitService $benefits, private readonly AboFollowUpService $followUp, private readonly TenantEntityManagerProvider $emProvider,
         private readonly ?AboRightsService $rights = null, // lot ABO-1
         private readonly ?AboCatalogService $catalog = null, // lot ABO-CONF : le service commun des formules
-        private readonly ?AboAgendaService $agenda = null) // lot ABO-2 : l'agenda des prestations
+        private readonly ?AboAgendaService $agenda = null, // lot ABO-2 : l'agenda des prestations
+        private readonly ?AboCarrierService $carriers = null) // lot ABO-CONF-b : produits porteurs
     {
     }
 
@@ -49,9 +52,15 @@ class AboAssistantTools
             ['name' => 'propose_benefit', 'description' => 'Abonnements : propose de créer (sans benefitId) ou de modifier une prestation : type session (séance planifiée), service (service à rendre) ou quota ; noms par langue, durée en minutes, lieu. L\'administrateur confirme.', 'input_schema' => ['type' => 'object', 'properties' => [
                 'benefitId' => ['type' => 'integer'], 'kind' => ['type' => 'string', 'enum' => ['session', 'service', 'quota']], 'names' => ['type' => 'object', 'description' => '{"fr": "...", "en": "..."}'],
                 'descriptions' => ['type' => 'object'], 'durationMinutes' => ['type' => 'integer'], 'location' => ['type' => 'string'], 'active' => ['type' => 'boolean']]]],
-            ['name' => 'propose_plan', 'description' => 'Abonnements : propose de créer une formule d\'abonnement sur un produit porteur EXISTANT (productId, parmi les produits porteurs de get_subscription_plans), avec son prix en centimes, sa période et les prestations qu\'elle livre (benefits : prestations existantes, créées d\'abord par propose_benefit). Règles par défaut : annulation sans frais 24 h avant, report jusqu\'à la quantité. L\'administrateur confirme. Exemple : « formule yoga 2 séances par semaine à 60 $ par mois » = interval month, quantity 8 ou interval week, quantity 2.', 'input_schema' => ['type' => 'object', 'properties' => [
-                'productId' => ['type' => 'integer'], 'names' => ['type' => 'object', 'description' => '{"fr": "...", "en": "..."}'], 'price' => ['type' => 'integer', 'description' => 'centimes'],
-                'interval' => ['type' => 'string', 'enum' => ['week', 'month', 'year']], 'intervalCount' => ['type' => 'integer'], 'benefits' => ['type' => 'array', 'items' => $rules]], 'required' => ['productId', 'names', 'price', 'interval', 'benefits']]],
+            ['name' => 'propose_plan', 'description' => 'Abonnements : propose de créer une formule d\'abonnement sur un produit porteur EXISTANT (productId, parmi les produits porteurs de get_subscription_plans ou list_subscription_products) OU sur un produit porteur créé avec elle (newProduct : {"names": {"fr": "..."}}, quand le commerçant vend un service sans produit ; il sera visible dans la boutique et ne s\'achète jamais seul), avec son prix en centimes, sa période et les prestations qu\'elle livre (benefits : prestations existantes, créées d\'abord par propose_benefit). Règles par défaut : annulation sans frais 24 h avant, report jusqu\'à la quantité. L\'administrateur confirme. Exemple : « formule yoga 2 séances par semaine à 60 $ par mois » = interval month, quantity 8 ou interval week, quantity 2.', 'input_schema' => ['type' => 'object', 'properties' => [
+                'productId' => ['type' => 'integer'], 'newProduct' => ['type' => 'object', 'description' => '{"names": {"fr": "..."}} : à la place de productId'],
+                'names' => ['type' => 'object', 'description' => '{"fr": "...", "en": "..."}'], 'price' => ['type' => 'integer', 'description' => 'centimes'],
+                'interval' => ['type' => 'string', 'enum' => ['week', 'month', 'year']], 'intervalCount' => ['type' => 'integer'], 'benefits' => ['type' => 'array', 'items' => $rules]], 'required' => ['names', 'price', 'interval', 'benefits']]],
+            // --- lot ABO-CONF-b : les produits porteurs
+            ['name' => 'list_subscription_products', 'description' => 'Abonnements : les produits porteurs d\'abonnement (porteurs: oui), ceux qui peuvent le devenir (non) ou tous, 20 au plus, filtre q sur le nom ; par produit : formules actives, archivées, ayant eu un abonné, canEnable, canDisable.', 'input_schema' => ['type' => 'object', 'properties' => [
+                'porteurs' => ['type' => 'string', 'enum' => ['oui', 'non', 'tous']], 'q' => ['type' => 'string']]]],
+            ['name' => 'propose_subscription_product', 'description' => 'Abonnements : propose d\'activer (enabled: true) ou de désactiver (false) l\'abonnement sur un produit (productId). Désactiver est refusé si une formule de ce produit a eu un abonné ; sinon ses formules actives sortent de la vente (l\'aperçu les nomme). L\'administrateur confirme.', 'input_schema' => ['type' => 'object', 'properties' => [
+                'productId' => ['type' => 'integer'], 'enabled' => ['type' => 'boolean']], 'required' => ['productId', 'enabled']]],
             // --- lot ABO-CONF : modifier une formule (prix, rythme, archivage) ; jamais de prix sans confirmation
             ['name' => 'propose_plan_update', 'description' => 'Abonnements : propose de modifier une formule existante (planId) : prix en centimes, période, noms, ou archivage (active: false, elle n\'est plus vendue, les abonnés continuent). Un nouveau prix ne vaut que pour les NOUVEAUX abonnés. L\'administrateur confirme.', 'input_schema' => ['type' => 'object', 'properties' => [
                 'planId' => ['type' => 'integer'], 'price' => ['type' => 'integer', 'description' => 'centimes'], 'interval' => ['type' => 'string', 'enum' => ['week', 'month', 'year']],
@@ -97,6 +106,7 @@ class AboAssistantTools
                 'get_slots' => [['slots' => $this->agendaOrFail()->slots(isset($input['benefitId']) ? (int) $input['benefitId'] : null, isset($input['from']) ? (string) $input['from'] : null,
                     isset($input['to']) ? (string) $input['to'] : null, false)], 'abo_slots'],
                 'get_to_schedule' => [['subscriptions' => $this->agendaOrFail()->toSchedule(false, 100)], 'subscriptions'],
+                'list_subscription_products' => [['products' => $this->carriersOrFail()->list((string) ($input['porteurs'] ?? 'tous'), isset($input['q']) ? (string) $input['q'] : null, 1, 20)['items']], 'subscription_plans'],
                 default => [['error' => 'outil inconnu'], null],
             };
         } catch (AboException $e) {
@@ -123,7 +133,10 @@ class AboAssistantTools
                     return [['benefitId' => $benefit?->getId(), 'data' => $data], sprintf('%s la prestation « %s » (%s%s%s)', $benefit === null ? 'Créer' : 'Modifier', $probe->getName(),
                         self::kindLabel($probe->getKind()), $probe->getDurationMinutes() !== null ? ', ' . $probe->getDurationMinutes() . ' min' : '', $probe->getLocation() !== null ? ', ' . $probe->getLocation() : ''), null, 'abo_benefits'];
                 case 'propose_plan':
-                    $product = $this->emProvider->getEntityManager()->getRepository(Product::class)->find((int) ($input['productId'] ?? 0));
+                    // lot ABO-CONF-b : un porteur créé avec la formule (newProduct), à la place d'un produit existant
+                    $newProduct = !isset($input['productId']) && is_array($input['newProduct'] ?? null) ? $input['newProduct'] : null;
+                    $product = $newProduct !== null ? $this->carriersOrFail()->draftCarrier($newProduct, false)
+                        : $this->emProvider->getEntityManager()->getRepository(Product::class)->find((int) ($input['productId'] ?? 0));
                     if ($product === null || !$product->isSubscriptionEnabled()) {
                         throw new AboException(422, 'PRODUCT_NOT_SUBSCRIBABLE', 'Choisissez un produit porteur dont l\'abonnement est activé (Produits, « Modes de vente »).', 'productId');
                     }
@@ -134,9 +147,11 @@ class AboAssistantTools
                         throw new AboException(422, 'PLAN_INVALID', 'Formule incomplète : un nom, un prix en centimes (0 ou plus) et une période (semaine, mois, année).');
                     }
                     $rows = $this->benefitRows($input['benefits'] ?? []);
-                    $data = ['productId' => (int) $product->getId(), 'names' => $names, 'price' => $price, 'interval' => $interval, 'intervalCount' => max(1, (int) ($input['intervalCount'] ?? 1)), 'benefits' => $rows];
+                    $data = ($newProduct !== null ? ['newProduct' => ['names' => ['fr' => (string) $product->getName()]]] : ['productId' => (int) $product->getId()])
+                        + ['names' => $names, 'price' => $price, 'interval' => $interval, 'intervalCount' => max(1, (int) ($input['intervalCount'] ?? 1)), 'benefits' => $rows];
 
-                    return [$data, sprintf('Créer la formule « %s » sur « %s » : %s %s par %s%s, avec %s', (string) ($names['fr'] ?? reset($names)), (string) $product->getName(),
+                    return [$data, sprintf('Créer la formule « %s » sur %s : %s %s par %s%s, avec %s', (string) ($names['fr'] ?? reset($names)),
+                        $newProduct !== null ? sprintf('un NOUVEAU produit porteur « %s » (visible dans la boutique, jamais achetable seul)', (string) $product->getName()) : '« ' . $product->getName() . ' »',
                         number_format($price / 100, 2, ',', ' '), $this->catalog?->siteCurrency() ?? $this->currencyFor($product), self::intervalLabel($interval), // la devise imposée : celle du site
                         $data['intervalCount'] > 1 ? ' (tous les ' . $data['intervalCount'] . ')' : '',
                         $this->rowsSummary($rows)), null, 'subscription_plans'];
@@ -159,6 +174,14 @@ class AboAssistantTools
 
                     return [['planId' => (int) $plan->getId(), 'data' => $data], sprintf('Modifier la formule « %s »%s : %s%s', $plan->getName(), $changes !== [] ? ' (' . implode(' ; ', $changes) . ')' : '',
                         $preview['summary'], $preview['priceChange'] !== null ? ' ' . $preview['priceChange'] : ''), null, 'subscription_plans'];
+                case 'propose_subscription_product':
+                    $product = $this->productOrFail((int) ($input['productId'] ?? 0));
+                    $enabled = ($input['enabled'] ?? null) === true;
+                    $warnings = $this->carriersOrFail()->assertCanSet($product, $enabled);
+                    $hidden = $warnings[0]['plans'] ?? [];
+
+                    return [['productId' => (int) $product->getId(), 'enabled' => $enabled], sprintf('%s l\'abonnement sur « %s »%s', $enabled ? 'Activer' : 'Désactiver', (string) $product->getName(),
+                        $hidden !== [] ? sprintf(' : ces formules SORTENT DE LA VENTE (les abonnés n\'en ont pas) : %s', implode(', ', array_map(static fn (string $n) => '« ' . $n . ' »', $hidden))) : ''), null, 'subscription_plans'];
                 case 'set_plan_benefits':
                     $plan = $this->planOrFail((int) ($input['planId'] ?? 0));
                     if ($plan->hasFulfillment()) {
@@ -284,15 +307,16 @@ class AboAssistantTools
 
                 return ['benefitId' => (int) $saved->getId(), 'created' => $benefit === null ? 1 : 0, 'written' => 1];
             case 'propose_plan':
-                $product = $em->getRepository(Product::class)->find((int) ($input['productId'] ?? 0));
-                if ($product === null || !$product->isSubscriptionEnabled()) {
+                $newProduct = !isset($input['productId']) && is_array($input['newProduct'] ?? null) ? $input['newProduct'] : null;
+                $product = $newProduct !== null ? null : $em->getRepository(Product::class)->find((int) ($input['productId'] ?? 0));
+                if ($newProduct === null && ($product === null || !$product->isSubscriptionEnabled())) {
                     throw new AboException(422, 'PRODUCT_NOT_SUBSCRIBABLE', 'Le produit porteur n\'accepte plus l\'abonnement.', 'productId');
                 }
                 $rows = $this->benefitRows($input['benefits'] ?? []);
                 // lot ABO-CONF : par le service commun (mêmes contrôles que la gestion web et EasyAdmin, devise du site, historique des prix)
                 $catalog = $this->catalog ?? throw new AboException(503, 'TOOL_UNAVAILABLE', 'Outil indisponible.');
-                $plan = $em->wrapInTransaction(function () use ($em, $catalog, $product, $input, $rows) {
-                    $plan = $catalog->savePlan(null, ['productId' => (int) $product->getId(), 'names' => array_map('strval', array_filter((array) ($input['names'] ?? []), 'is_scalar')),
+                $plan = $em->wrapInTransaction(function () use ($em, $catalog, $product, $newProduct, $input, $rows) {
+                    $plan = $catalog->savePlan(null, ($product !== null ? ['productId' => (int) $product->getId()] : ['newProduct' => $newProduct]) + ['names' => array_map('strval', array_filter((array) ($input['names'] ?? []), 'is_scalar')),
                         'price' => (int) ($input['price'] ?? 0), 'interval' => (string) ($input['interval'] ?? 'month'), 'intervalCount' => max(1, (int) ($input['intervalCount'] ?? 1))], 'assistant');
                     foreach ($rows as $row) {
                         $this->benefits->setPlanBenefit($plan, $this->benefitOrFail((int) $row['benefitId']), $row, false);
@@ -303,6 +327,10 @@ class AboAssistantTools
                 });
 
                 return ['planId' => (int) $plan->getId(), 'created' => 1, 'benefits' => count($rows)];
+            case 'propose_subscription_product':
+                $r = $this->carriersOrFail()->setSubscription($this->productOrFail((int) ($input['productId'] ?? 0)), ($input['enabled'] ?? null) === true, 'assistant');
+
+                return ['productId' => (int) ($input['productId'] ?? 0), 'written' => 1, 'warnings' => count($r['warnings'])];
             case 'propose_plan_update':
                 $plan = ($this->catalog ?? throw new AboException(503, 'TOOL_UNAVAILABLE', 'Outil indisponible.'))->savePlan($this->planOrFail((int) ($input['planId'] ?? 0)), is_array($input['data'] ?? null) ? $input['data'] : [], 'assistant');
 
@@ -423,6 +451,16 @@ class AboAssistantTools
     }
 
     /** @return list<array{id: int, name: string}> les produits dont l'abonnement est activé */
+    private function carriersOrFail(): AboCarrierService
+    {
+        return $this->carriers ?? throw new AboException(503, 'TOOL_UNAVAILABLE', 'Outil indisponible.');
+    }
+
+    private function productOrFail(int $id): Product
+    {
+        return $this->emProvider->getEntityManager()->getRepository(Product::class)->find($id) ?? throw new AboException(404, 'PRODUCT_NOT_FOUND', 'Produit introuvable.', 'productId');
+    }
+
     private function carrierProducts(): array
     {
         $rows = $this->emProvider->getEntityManager()->getRepository(Product::class)->findBy(['subscriptionEnabled' => true], ['name' => 'ASC'], 50);
