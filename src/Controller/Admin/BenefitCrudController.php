@@ -63,6 +63,18 @@ class BenefitCrudController extends BaseTenantCrudController
 
     public function updateEntity(EntityManagerInterface $entityManager, $entityInstance): void
     {
+        // lot ABO-CONF : la même règle que la gestion web : une prestation qui a des droits à utiliser ne se désactive pas
+        $original = $entityManager->getUnitOfWork()->getOriginalEntityData($entityInstance);
+        if ($entityInstance instanceof Benefit && ($original['active'] ?? false) === true && !$entityInstance->isActive()) {
+            try {
+                $this->benefits->assertDeactivatable($entityInstance);
+            } catch (\App\Abo\Services\AboException $e) {
+                $entityInstance->setActive(true);
+                $this->addFlash('danger', $e->getMessage());
+
+                return;
+            }
+        }
         if ($this->valid($entityInstance)) {
             parent::updateEntity($entityManager, $entityInstance);
         }

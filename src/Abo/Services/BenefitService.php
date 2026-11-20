@@ -85,6 +85,39 @@ class BenefitService
     }
 
     /**
+     * Lot ABO-CONF : une prestation dont des droits sont encore disponibles ou planifiés ne se désactive pas (409 BENEFIT_IN_USE, avec leur
+     * nombre) : la retirer d'une formule garde ces droits au solde (ABO-1). EasyAdmin, la gestion web et l'assistant passent par ici.
+     *
+     * @throws AboException 409 BENEFIT_IN_USE
+     */
+    public function assertDeactivatable(Benefit $benefit): void
+    {
+        if ($benefit->getId() === null) {
+            return;
+        }
+        $pending = (int) $this->emProvider->getEntityManager()->getConnection()->fetchOne("SELECT COUNT(*) FROM benefit_occurrence WHERE benefit_id = ? AND status IN ('available', 'scheduled')", [$benefit->getId()]);
+        if ($pending > 0) {
+            throw new AboException(409, 'BENEFIT_IN_USE', sprintf('%d droit(s) d\'abonnés sont encore à utiliser sur cette prestation : retirez-la plutôt de la formule (les droits restent au solde).', $pending), 'active', ['pendingRights' => $pending]);
+        }
+    }
+
+    /** Lot ABO-CONF : supprime une prestation qui n'est livrée par aucune formule et que nul droit ne cite. @throws AboException 409 BENEFIT_IN_USE */
+    public function deleteBenefit(Benefit $benefit): void
+    {
+        $this->assertDeletable($benefit);
+        $em = $this->emProvider->getEntityManager();
+        $em->remove($benefit);
+        $em->flush();
+    }
+
+    /** @return array<string, mixed> une prestation pour la gestion web (jamais l'intervenant par défaut hors de l'équipe : ici, l'équipe) */
+    public function benefitView(Benefit $benefit, string $locale): array
+    {
+        return ['id' => (int) $benefit->getId(), 'kind' => $benefit->getKind(), 'names' => $benefit->getNames(), 'name' => $benefit->getName($locale), 'descriptions' => $benefit->getDescriptions(),
+            'durationMinutes' => $benefit->getDurationMinutes(), 'location' => $benefit->getLocation(), 'active' => $benefit->isActive(), 'position' => $benefit->getPosition()];
+    }
+
+    /**
      * Crée ou modifie une prestation (assistant du site après confirmation) ; mêmes règles que l'écran.
      *
      * @param array{kind?: string, names?: array<string, string>, descriptions?: ?array<string, string>, durationMinutes?: ?int, location?: ?string, active?: bool} $data
@@ -109,6 +142,9 @@ class BenefitService
             $benefit->setLocation($data['location'] !== null ? (string) $data['location'] : null);
         }
         if (array_key_exists('active', $data)) {
+            if ($data['active'] === false && $benefit->isActive()) {
+                $this->assertDeactivatable($benefit);
+            }
             $benefit->setActive((bool) $data['active']);
         }
         $this->validateBenefit($benefit);

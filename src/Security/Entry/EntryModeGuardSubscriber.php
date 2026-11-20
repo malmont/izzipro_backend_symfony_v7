@@ -52,6 +52,8 @@ class EntryModeGuardSubscriber implements EventSubscriberInterface
     private const WRITE = ['POST', 'PUT', 'PATCH', 'DELETE'];
     /** Fermés même dans la construction : expression du chemin => [méthodes (vide : toutes), raison] */
     private const CLOSED_PATHS = [
+        // lot ABO-CONF (décision du chef, 19/11/2026) : l'agence crée et configure les formules de son client, mais n'en supprime jamais une
+        ['#^/api/site/abonnements/formules/[^/]+$#', ['DELETE'], 'delete'],
         ['#^/api/app-keys(/|$)#', [], 'keys'],
         ['#(^|/)exports?(/|\.|$)#i', [], 'export'],
         ['#stripe#i', [], 'payment'],
@@ -85,6 +87,9 @@ class EntryModeGuardSubscriber implements EventSubscriberInterface
         // lot ABO-1 : la pause, la reprise et la résiliation d'un abonnement passent par Stripe ; des droits offerts donnent de la valeur
         // sans paiement. « Utiliser » un droit (et son annulation) reste un geste ordinaire de la boutique.
         ['#^/api/site/abonnements/[^/]+/(pause|reprise|resiliation|droits)(/|$)#', [], 'payment'],
+        // lot ABO-CONF : créer, configurer, archiver ou supprimer une formule (son prix) et ses prestations : geste d'argent, fermé au directeur ;
+        // l'aperçu, qui n'écrit rien, reste ouvert
+        ['#^/api/site/abonnements/(formules(/(?!apercu$)[^/]+.*)?|prestations(/.*)?)$#', ['POST', 'PUT', 'PATCH', 'DELETE'], 'payment'],
         ['#^/api/site/features/.+/(request|trial|enable|disable)(/|$)#', [], 'modules'],
         ['#^/api/site/features/?$#', ['PUT', 'PATCH', 'POST'], 'modules'],
         // les mêmes gestes de module dans EasyAdmin (« Mon site »)

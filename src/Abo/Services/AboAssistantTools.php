@@ -19,11 +19,12 @@ class AboAssistantTools
 {
     public const READS = ['get_subscription_plans', 'get_benefits', 'get_plan_subscribers', 'get_subscription', 'get_expiring_rights'];
     /** Lot ABO-1 : gestes du quotidien (résiliation EN FIN DE PÉRIODE seulement ; jamais immédiate, ni remboursement, ni retrait de droits payés) */
-    public const ACTIONS = ['propose_benefit', 'propose_plan', 'set_plan_benefits', 'propose_use', 'propose_gift', 'propose_pause', 'propose_resume', 'propose_cancel_subscription'];
+    public const ACTIONS = ['propose_benefit', 'propose_plan', 'propose_plan_update', 'set_plan_benefits', 'propose_use', 'propose_gift', 'propose_pause', 'propose_resume', 'propose_cancel_subscription'];
     public const MAX_BENEFITS = 10;
 
     public function __construct(private readonly BenefitService $benefits, private readonly AboFollowUpService $followUp, private readonly TenantEntityManagerProvider $emProvider,
-        private readonly ?AboRightsService $rights = null) // lot ABO-1
+        private readonly ?AboRightsService $rights = null, // lot ABO-1
+        private readonly ?AboCatalogService $catalog = null) // lot ABO-CONF : le service commun des formules
     {
     }
 
@@ -49,6 +50,10 @@ class AboAssistantTools
             ['name' => 'propose_plan', 'description' => 'Abonnements : propose de créer une formule d\'abonnement sur un produit porteur EXISTANT (productId, parmi les produits porteurs de get_subscription_plans), avec son prix en centimes, sa période et les prestations qu\'elle livre (benefits : prestations existantes, créées d\'abord par propose_benefit). Règles par défaut : annulation sans frais 24 h avant, report jusqu\'à la quantité. L\'administrateur confirme. Exemple : « formule yoga 2 séances par semaine à 60 $ par mois » = interval month, quantity 8 ou interval week, quantity 2.', 'input_schema' => ['type' => 'object', 'properties' => [
                 'productId' => ['type' => 'integer'], 'names' => ['type' => 'object', 'description' => '{"fr": "...", "en": "..."}'], 'price' => ['type' => 'integer', 'description' => 'centimes'],
                 'interval' => ['type' => 'string', 'enum' => ['week', 'month', 'year']], 'intervalCount' => ['type' => 'integer'], 'benefits' => ['type' => 'array', 'items' => $rules]], 'required' => ['productId', 'names', 'price', 'interval', 'benefits']]],
+            // --- lot ABO-CONF : modifier une formule (prix, rythme, archivage) ; jamais de prix sans confirmation
+            ['name' => 'propose_plan_update', 'description' => 'Abonnements : propose de modifier une formule existante (planId) : prix en centimes, période, noms, ou archivage (active: false, elle n\'est plus vendue, les abonnés continuent). Un nouveau prix ne vaut que pour les NOUVEAUX abonnés. L\'administrateur confirme.', 'input_schema' => ['type' => 'object', 'properties' => [
+                'planId' => ['type' => 'integer'], 'price' => ['type' => 'integer', 'description' => 'centimes'], 'interval' => ['type' => 'string', 'enum' => ['week', 'month', 'year']],
+                'intervalCount' => ['type' => 'integer'], 'names' => ['type' => 'object'], 'active' => ['type' => 'boolean']], 'required' => ['planId']]],
             // --- lot ABO-1 : droits par période ; un abonné = son numéro, jamais son identité
             ['name' => 'get_expiring_rights', 'description' => 'Abonnements : les droits disponibles qui expirent dans les N prochains jours (7 par défaut, 30 au plus), par numéro d\'abonnement et prestation. Pour « qui a des séances qui expirent cette semaine ? ».', 'input_schema' => ['type' => 'object', 'properties' => ['days' => ['type' => 'integer']]]],
             ['name' => 'propose_use', 'description' => 'Abonnements : propose de marquer UNE utilisation d\'une prestation pour un abonnement (le droit qui expire le premier) ; annulable 24 h. L\'administrateur confirme.', 'input_schema' => ['type' => 'object', 'properties' => ['subscriptionId' => ['type' => 'integer'], 'benefitId' => ['type' => 'integer'], 'note' => ['type' => 'string']], 'required' => ['subscriptionId', 'benefitId']]],
@@ -117,6 +122,18 @@ class AboAssistantTools
                     return [$data, sprintf('Créer la formule « %s » sur « %s » : %s %s par %s%s, avec %s', (string) ($names['fr'] ?? reset($names)), (string) $product->getName(),
                         number_format($price / 100, 2, ',', ' '), $this->currencyFor($product), self::intervalLabel($interval), $data['intervalCount'] > 1 ? ' (tous les ' . $data['intervalCount'] . ')' : '',
                         $this->rowsSummary($rows)), null, 'subscription_plans'];
+                case 'propose_plan_update':
+                    $plan = $this->planOrFail((int) ($input['planId'] ?? 0));
+                    $data = array_intersect_key($input, array_flip(['price', 'interval', 'intervalCount', 'names', 'active']));
+                    if ($data === []) {
+                        throw new AboException(422, 'PLAN_INVALID', 'Rien à modifier : un prix, une période, des noms ou l\'archivage.');
+                    }
+                    if (isset($data['names'])) {
+                        $data['names'] = is_array($data['names']) ? array_map('strval', array_filter($data['names'], 'is_scalar')) : [];
+                    }
+                    $preview = ($this->catalog ?? throw new AboException(503, 'TOOL_UNAVAILABLE', 'Outil indisponible.'))->preview($plan, $data, 'fr');
+
+                    return [['planId' => (int) $plan->getId(), 'data' => $data], sprintf('Modifier la formule « %s » : %s%s', $plan->getName(), $preview['summary'], $preview['priceChange'] !== null ? ' ' . $preview['priceChange'] : ''), null, 'subscription_plans'];
                 case 'set_plan_benefits':
                     $plan = $this->planOrFail((int) ($input['planId'] ?? 0));
                     $rows = $this->benefitRows($input['benefits'] ?? []);
@@ -207,18 +224,24 @@ class AboAssistantTools
                     throw new AboException(422, 'PRODUCT_NOT_SUBSCRIBABLE', 'Le produit porteur n\'accepte plus l\'abonnement.', 'productId');
                 }
                 $rows = $this->benefitRows($input['benefits'] ?? []);
-                $plan = (new SubscriptionPlan())->setProduct($product)->setNames(array_map('strval', array_filter((array) ($input['names'] ?? []), 'is_scalar')))->setPrice((int) ($input['price'] ?? 0))
-                    ->setInterval((string) ($input['interval'] ?? 'month'))->setIntervalCount((int) ($input['intervalCount'] ?? 1))->setCurrency($this->currencyFor($product))->setActive(true);
-                $em->wrapInTransaction(function () use ($em, $plan, $rows) {
-                    $em->persist($plan);
-                    $em->flush();
+                // lot ABO-CONF : par le service commun (mêmes contrôles que la gestion web et EasyAdmin, devise du site, historique des prix)
+                $catalog = $this->catalog ?? throw new AboException(503, 'TOOL_UNAVAILABLE', 'Outil indisponible.');
+                $plan = $em->wrapInTransaction(function () use ($em, $catalog, $product, $input, $rows) {
+                    $plan = $catalog->savePlan(null, ['productId' => (int) $product->getId(), 'names' => array_map('strval', array_filter((array) ($input['names'] ?? []), 'is_scalar')),
+                        'price' => (int) ($input['price'] ?? 0), 'interval' => (string) ($input['interval'] ?? 'month'), 'intervalCount' => max(1, (int) ($input['intervalCount'] ?? 1))], 'assistant');
                     foreach ($rows as $row) {
                         $this->benefits->setPlanBenefit($plan, $this->benefitOrFail((int) $row['benefitId']), $row, false);
                     }
                     $em->flush();
+
+                    return $plan;
                 });
 
                 return ['planId' => (int) $plan->getId(), 'created' => 1, 'benefits' => count($rows)];
+            case 'propose_plan_update':
+                $plan = ($this->catalog ?? throw new AboException(503, 'TOOL_UNAVAILABLE', 'Outil indisponible.'))->savePlan($this->planOrFail((int) ($input['planId'] ?? 0)), is_array($input['data'] ?? null) ? $input['data'] : [], 'assistant');
+
+                return ['planId' => (int) $plan->getId(), 'written' => 1];
             case 'set_plan_benefits':
                 $plan = $this->planOrFail((int) ($input['planId'] ?? 0));
                 $rows = $this->benefitRows($input['benefits'] ?? []);

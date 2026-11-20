@@ -1096,6 +1096,55 @@ Les prestations à quantité deviennent des **droits** que l'abonné consomme ; 
   rembourser, retirer des droits payés. Une note ou un motif porteur d'une consigne n'entraîne rien (essai d'injection).
 - Essais : `tests/Functional/Abo/AboRightsTest.php`.
 
+### Créer et configurer les formules dans la gestion web (lot ABO-CONF, 19/11/2026, décision du propriétaire)
+
+La création et la configuration des formules du commerçant se font AUSSI dans la gestion web ; les mobiles (MAUI, commerce mobile) voient,
+ajustent et répondent, mais ne créent rien. Les formules de la plateforme et des agences (formule « branchée », `fulfillmentType` ≠
+`none`) restent dans EasyAdmin seulement.
+
+- **Service commun** `App\Abo\Services\AboCatalogService` (formules) avec `BenefitService` (prestations, lien formule ↔ prestations) :
+  EasyAdmin (écrans « Formules d'abonnement » et « Prestations »), les routes et l'assistant passent par eux ; mêmes contrôles et codes :
+  PLAN_NAME_REQUIRED, PLAN_PRICE_INVALID, PLAN_INTERVAL_INVALID, PLAN_TRIAL_INVALID, PLAN_TERMS_INVALID, PLAN_PAUSE_INVALID,
+  PRODUCT_NOT_SUBSCRIBABLE, PLAN_PLATFORM_ONLY (403), FIELD_UNKNOWN, MUST_BE_BOOLEAN, PLAN_HAS_SUBSCRIBERS (409), BENEFIT_IN_USE (409),
+  BENEFIT_NOT_FOUND. Devise : celle du site, imposée (jamais un champ de l'écran).
+- **Routes** (`ROLE_ADMIN`, module Boutique ; écran du registre `abonnements.formules`, famille construction) :
+  - `POST /api/site/abonnements/formules/apercu[?planId=]` : AUCUNE écriture ; `{ plan, summary, priceChange, warnings }` : la formule telle
+    qu'elle sera et la phrase « ce que verra l'abonné » (prix et rythme, essai, engagement, carte, prestations), fr / en ;
+  - `POST /api/site/abonnements/formules` (201), `GET` et `PATCH …/formules/{id}` : la fiche `{ plan, benefits, priceHistory, summary,
+    hasSubscribers, warnings }` ; champs : `productId`, `names`, `descriptions`, `features`, `badges`, `price` (cents), `interval`,
+    `intervalCount`, `trialDays`, `minimumTerms`, `maxPauseDays`, `pausesPerYear`, `singlePeriod`, `highlighted`, `active` ;
+  - `POST …/formules/{id}/archiver` et `…/reactiver` ; `DELETE …/formules/{id}` (204 ; 409 PLAN_HAS_SUBSCRIBERS dès qu'elle a eu un
+    abonné : elle s'archive, n'est plus vendue, les abonnés continuent) ;
+  - `PUT …/formules/{id}/prestations { benefits: [...] }` : la liste COMPLÈTE ; une prestation retirée garde les droits nés au solde ;
+  - `GET` et `POST /api/site/abonnements/prestations`, `PATCH` et `DELETE …/prestations/{id}` (409 BENEFIT_IN_USE si une formule la
+    livre ou si des droits la citent) ; désactiver une prestation dont des droits sont encore à utiliser : 409 BENEFIT_IN_USE avec
+    `pendingRights` (la retirer de la formule à la place) ; la même règle dans EasyAdmin.
+- **Prix et Stripe** : produit et prix Stripe naissent à la première souscription, sur le compte connecté du site (sinon celui de la
+  plateforme), un produit par formule. Prix, devise ou rythme modifiés : la ligne en cours de l'historique `subscription_plan_price`
+  (migration `Version20270201800000`, script `scripts/migrate_all_v2_abo_catalog.sh`) se clôt avec le prix Stripe de son époque, une autre
+  s'ouvre, et le prix Stripe de la formule repart à zéro : les NOUVEAUX abonnés paient le nouveau prix (sur le même produit Stripe), les
+  abonnés en cours gardent le leur. Défaut corrigé : avant, un prix modifié dans EasyAdmin gardait l'ancien prix Stripe, même pour les
+  nouveaux abonnés. La migration des abonnés en cours vers un nouveau prix (préavis) est un lot à part, après l'avis de l'avocat (ABO-PRIX).
+- **Droits** : écritures `ROLE_ADMIN` du site ; le directeur d'un groupe entré dans une boutique : aucune (raison `payment`, l'aperçu
+  reste ouvert) ; l'agence entrée chez son client crée et configure, mais ne supprime jamais une formule ; le personnel : lecture, avec le
+  rôle de l'intervenant d'ABO-3.
+- **Assistant du site** : `propose_plan` passe par le service commun ; `propose_plan_update` (prix, rythme, noms, archivage) dont
+  l'aperçu dit « nouveau prix pour les nouveaux abonnés seulement » ; jamais de prix sans confirmation.
+- **Avertissement** à la création (gestion web et EasyAdmin) : un site extérieur sans compte Stripe connecté actif ne pourra pas vendre
+  en réel (`warnings: [{ code: "STRIPE_ACCOUNT_REQUIRED" }]`).
+- Essais : `tests/Functional/Abo/AboCatalogTest.php`.
+
+### Avant le passage en réel des abonnements (liste tenue avec le chef, 19/11/2026)
+
+- **Compte Stripe** : une vente de la boutique d'un site extérieur sans compte connecté actif est REFUSÉE (seul un site interne de la
+  plateforme encaisse sur le compte de la plateforme) ; jusqu'à ABO-CONF, un abonnement passait alors sur le compte de la plateforme.
+  Décision du propriétaire : en réel, la souscription est refusée (409 `STRIPE_ACCOUNT_REQUIRED`) ; en test, rien ne change.
+- **Mode Stripe par site** : la boutique et les abonnements suivent le mode de la clé du serveur (test ou réel pour tous les sites à la
+  fois) ; la caisse a son propre réglage test / réel PAR SITE (`Entreprise.posStripeMode`, clés réelles à part, compte réel distinct,
+  passage en réel par le super administrateur, journal `STRIPE_MODE_CHANGED`). Au passage en réel, la boutique et les abonnements doivent
+  prendre ce modèle par site (`StripeAccountResolver`, canal `shop`), pour que `demo` et les sites d'essai restent en test.
+- **Commission de la plateforme sur les abonnements** : voir le réglage « Commission abonnements (%) ».
+
 ### Codes des refus des abonnements (04/11/2026, application e-commerce mobile)
 
 Même contrat que les codes du devis : chaque refus (`SubscriptionException`) porte un `code` de premier niveau et un `message`

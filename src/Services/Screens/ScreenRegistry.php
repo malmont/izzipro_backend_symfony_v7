@@ -79,6 +79,8 @@ final class ScreenRegistry
         'groupe' => ['family' => self::VENTE, 'module' => null],
         // lot ABO-0 : le suivi des abonnements (gestion web et application de gestion mobile) : identité des abonnés, impayés
         'abonnements' => ['family' => self::VENTE, 'module' => 'module.boutique'],
+        // lot ABO-CONF : créer et configurer les formules et les prestations (le catalogue des abonnements), comme le catalogue des produits
+        'abonnements.formules' => self::SHOP,
         'imports.commandes' => ['family' => self::VENTE, 'module' => 'module.boutique'],
         'imports.clients' => ['family' => self::CLIENTS, 'module' => 'module.boutique'],
         // --- Clients, assistance, contenus (web)
@@ -304,6 +306,8 @@ final class ScreenRegistry
         ['#^/api/site/imports/archive/orders$#', 'imports.commandes'],
         ['#^/api/site/imports/[^/]+/(customers|invitations)$#', 'imports.clients'],
         ['#^/api/site/imports(/|$)#', 'imports'],
+        ['#^/api/site/abonnements/formules/[^/]+/abonnes$#', 'abonnements'], // l'identité des abonnés : la vente
+        ['#^/api/site/abonnements/(formules|prestations)(/|$)#', 'abonnements.formules'], // lot ABO-CONF
         ['#^/api/site/abonnements(/|$)#', 'abonnements'], // lot ABO-0
         ['#^/api/site/storefront(/preview)?$#', '@public'],
         ['#^/api/site/storefront/#', 'site.ouverture'],

@@ -47,7 +47,7 @@ final class SiteAssistantTools
         'add_default_variant' => ['boutique'],
         // lot ABO-0 (18/11/2026) : abonnements universels, outils donnés seulement avec le module Boutique
         'get_subscription_plans' => ['boutique'], 'get_benefits' => ['boutique'], 'get_plan_subscribers' => ['boutique'], 'get_subscription' => ['boutique'],
-        'propose_benefit' => ['boutique'], 'propose_plan' => ['boutique'], 'set_plan_benefits' => ['boutique'],
+        'propose_benefit' => ['boutique'], 'propose_plan' => ['boutique'], 'set_plan_benefits' => ['boutique'], 'propose_plan_update' => ['boutique'], // ABO-CONF
         // lot ABO-1 : droits par période
         'get_expiring_rights' => ['boutique'], 'propose_use' => ['boutique'], 'propose_gift' => ['boutique'], 'propose_pause' => ['boutique'],
         'propose_resume' => ['boutique'], 'propose_cancel_subscription' => ['boutique'],
@@ -70,6 +70,7 @@ final class SiteAssistantTools
     /** Lot IA-A : propositions des fonctions ajoutées, appliquées après confirmation (ConfirmSiteAssistantActionUseCase) et tracées « par l'assistant » */
     public const IAA_ACTIONS = ['add_default_variant', 'start_loss_exercise', 'start_loss_count', 'toggle_module', 'start_module_trial', 'generate_missing_barcodes', 'request_agency_assistance',
         'propose_benefit', 'propose_plan', 'set_plan_benefits', // lot ABO-0
+        'propose_plan_update', // lot ABO-CONF
         'propose_use', 'propose_gift', 'propose_pause', 'propose_resume', 'propose_cancel_subscription', // lot ABO-1
         'propose_group_invitation', 'propose_group_copy', 'propose_group_same_company']; // lot IA-G, G-1d
 
