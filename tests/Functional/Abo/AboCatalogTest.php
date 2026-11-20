@@ -245,6 +245,9 @@ class AboCatalogTest extends WebTestCase
             $this->db->executeStatement("UPDATE stripe_config SET is_active = true, account_id = 'acct_abo_conf', subscription_fee_bp = NULL");
             $this->provider->getEntityManager()->clear();
             $this->assertSame(100, $fees->effectiveBp());
+            $master->prepare('UPDATE tenants SET is_internal_store = true WHERE code = ?')->execute([MV_TEST_TENANT_CODE]);
+            $this->assertNull($fees->effectiveBp(), 'un site interne de la plateforme : aucune commission, même avec un compte connecté');
+            $master->prepare('UPDATE tenants SET is_internal_store = false WHERE code = ?')->execute([MV_TEST_TENANT_CODE]);
             foreach ([-1, 2001] as $bad) {
                 try {
                     $fees->setPlatformBp($bad, 'essai');
@@ -271,16 +274,24 @@ class AboCatalogTest extends WebTestCase
             \App\Tests\Fake\FakeSubscriptionStripeGateway::$feeFailure = 'sub_abo_conf_f2';
             $this->assertSame(['updated' => 1, 'failed' => 1], $fees->catchUp());
             $this->assertSame(1, $fees->pendingCount(), 'l\'échec est repris au passage suivant');
+            // un abonnement jamais essayé passe avant celui qui vient d'échouer : un échec permanent ne bloque jamais le lot
+            $this->db->executeStatement("INSERT INTO subscription (user_id, plan_id, quantity, status, created_at, updated_at, stripe_subscription_id, fee_bp_applied) SELECT id, ?, 1, 'active', NOW(), NOW(), 'sub_abo_conf_f3', 100 FROM \"user\" WHERE email = 'admin@arkanoa-media.com'", [$plan->getId()]);
+            $this->assertSame(['updated' => 1, 'failed' => 0], $fees->catchUp(1), 'le jamais essayé d\'abord');
             \App\Tests\Fake\FakeSubscriptionStripeGateway::$feeFailure = null;
             $this->assertSame(['updated' => 1, 'failed' => 0], $fees->catchUp());
             $this->assertSame(0, $fees->pendingCount());
-            $this->assertSame(2, count(array_filter(\App\Tests\Fake\FakeSubscriptionStripeGateway::$calls, fn ($c) => $c[0] === 'updateFee' && $c[2] === 2.5)), 'une mise à jour par abonnement, au bon pourcentage');
+            // une souscription neuve reçoit la commission du moment chez Stripe
+            $client = $this->provider->getEntityManager()->getRepository(\App\Entity\User::class)->findOneBy(['email' => 'client-abo-conf@example.invalid']);
+            $created = static::getContainer()->get(\App\Services\SubscriptionService\SubscriptionService::class)->subscribe($client, (int) $plan->getId(), 1, null, null)['subscription'];
+            $this->assertSame([2.5, 250], [\App\Tests\Fake\FakeSubscriptionStripeGateway::$subscriptions[$created->getStripeSubscriptionId()]['applicationFeePercent'] ?? null, $created->getFeeBpApplied()], 'commission posée à la souscription');
+            $this->db->executeStatement('UPDATE subscription SET status = ? WHERE id = ?', ['canceled', $created->getId()]); // hors des rattrapages suivants
+            $this->assertSame(3, count(array_filter(\App\Tests\Fake\FakeSubscriptionStripeGateway::$calls, fn ($c) => $c[0] === 'updateFee' && $c[2] === 2.5)), 'une mise à jour par abonnement, au bon pourcentage');
             // relecture neuve : 2,5 % → 0 % → 2,5 % dans la journée : la clé porte la version du réglage, l'aller-retour est bien reposé chez Stripe
             $fees->setSiteBp(0, 'super@example.invalid');
-            $this->assertSame(['updated' => 2, 'failed' => 0], $fees->catchUp());
+            $this->assertSame(['updated' => 3, 'failed' => 0], $fees->catchUp());
             $fees->setSiteBp(null, 'super@example.invalid');
-            $this->assertSame(['updated' => 2, 'failed' => 0], $fees->catchUp());
-            $this->assertSame(4, count(array_filter(\App\Tests\Fake\FakeSubscriptionStripeGateway::$calls, fn ($c) => $c[0] === 'updateFee' && $c[2] === 2.5)), 'jamais une ancienne réponse rejouée');
+            $this->assertSame(['updated' => 3, 'failed' => 0], $fees->catchUp());
+            $this->assertSame(6, count(array_filter(\App\Tests\Fake\FakeSubscriptionStripeGateway::$calls, fn ($c) => $c[0] === 'updateFee' && $c[2] === 2.5)), 'jamais une ancienne réponse rejouée');
         } finally {
             $master->prepare('UPDATE tenants SET is_internal_store = ? WHERE code = ?')->execute([$internal, MV_TEST_TENANT_CODE]);
             $master->exec("DELETE FROM platform_settings WHERE key = 'subscription_fee_bp'");
