@@ -64,6 +64,7 @@ class AboRightsService
         }
         $rows = array_values(array_filter($this->benefits->planBenefits()->forPlan($plan), fn (PlanBenefit $pb) => $pb->getQuantity() !== null && $pb->getBenefit() !== null));
         if ($rows === []) {
+            $this->agenda?->convertHolds($subscription); // relecture neuve d'ABO-2 : aucune place retenue n'attend en vain (hold_lost)
             return 0;
         }
         $trial = $amountPaid === 0 && $billingReason === 'subscription_create';
@@ -71,6 +72,7 @@ class AboRightsService
             // un second essai gratuit du même client sur la même formule ne donne aucun droit (Q1)
             $em->persist(new SubscriptionAboEvent($subscription, 'trial_without_rights'));
             $em->flush();
+            $this->agenda?->convertHolds($subscription); // sans droit, ses places retenues sont rendues (hold_lost)
 
             return 0;
         }
@@ -337,8 +339,11 @@ class AboRightsService
             $subscription->setPauses($pauses);
             // lot ABO-2 (décision 3) : les dates planifiées PENDANT la pause sont annulées sans perte (elles redeviennent à planifier, puis sont
             // prolongées comme les autres) ; celles d'après la reprise restent
-            $released = $em->getConnection()->executeStatement("UPDATE benefit_occurrence SET status = 'available', slot_id = NULL, scheduled_at = NULL, scheduled_end = NULL, scheduled_by = NULL, scheduled_source = NULL
-                WHERE subscription_id = ? AND status = 'scheduled' AND scheduled_at >= ? AND scheduled_at < ?", [$subscription->getId(), gmdate('Y-m-d H:i:s', $now->getTimestamp()), gmdate('Y-m-d H:i:s', $until->getTimestamp())]);
+            // relecture neuve : une date de l'équipe au-delà de la validité reste due (même plancher que AboAgendaService::returnToPlan)
+            $released = $em->getConnection()->executeStatement("UPDATE benefit_occurrence SET status = 'available', slot_id = NULL, scheduled_at = NULL, scheduled_end = NULL, scheduled_by = NULL, scheduled_source = NULL,
+                valid_until = CASE WHEN valid_until <= ? THEN ? ELSE valid_until END
+                WHERE subscription_id = ? AND status = 'scheduled' AND scheduled_at >= ? AND scheduled_at < ?", [gmdate('Y-m-d H:i:s', $now->getTimestamp()), AboAgendaService::floor($em->getConnection(), (int) $subscription->getId()),
+                $subscription->getId(), gmdate('Y-m-d H:i:s', $now->getTimestamp()), gmdate('Y-m-d H:i:s', $until->getTimestamp())]);
             if ($released > 0) {
                 $em->persist(new SubscriptionAboEvent($subscription, 'unscheduled', null, $released, 'pause', $by));
             }

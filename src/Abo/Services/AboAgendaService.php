@@ -77,8 +77,11 @@ class AboAgendaService
         if ($creating) {
             $em->persist($rule);
         }
-        $em->flush();
-        $this->regenerate($rule);
+        // la règle et ses créneaux d'un seul tenant : un créneau tenu (409 SLOT_BUSY) laisse la règle telle qu'elle était
+        $this->conn()->transactional(function () use ($em, $rule) {
+            $em->flush();
+            $this->regenerate($rule);
+        });
 
         return $rule;
     }
@@ -91,8 +94,10 @@ class AboAgendaService
         if ($rule->getId() === null) {
             $em->persist($rule);
         }
-        $em->flush();
-        $this->regenerate($rule);
+        $this->conn()->transactional(function () use ($em, $rule) {
+            $em->flush();
+            $this->regenerate($rule);
+        });
 
         return $rule;
     }
@@ -153,18 +158,46 @@ class AboAgendaService
     }
 
     /**
-     * Refait les créneaux futurs d'une règle : ceux SANS réservation ni place retenue sont retirés puis recréés d'après la règle ; ceux qui en
-     * ont restent tels quels (heure, capacité, lieu). Une règle désactivée ne garde que ses créneaux réservés.
+     * Refait les créneaux futurs d'une règle. Chaque créneau futur sans réservation ni place retenue est relu SOUS SON VERROU (relecture
+     * neuve : jamais supprimé pendant qu'une réservation le prend) : s'il tombe encore un jour et à l'heure de la règle, il est gardé (même
+     * numéro) et mis à jour (fin, places, lieu, intervenant) ; sinon il est retiré. Les créneaux manquants sont ensuite créés. Ceux qui ont
+     * une réservation restent tels quels. Une règle désactivée ne garde que ses créneaux réservés.
+     *
+     * @throws AboException 409 SLOT_BUSY (un créneau en cours de réservation : à refaire)
      */
     public function regenerate(BenefitSlotRule $rule, ?\DateTimeImmutable $now = null): int
     {
         $now ??= new \DateTimeImmutable();
-        $conn = $this->conn();
-        $conn->executeStatement("DELETE FROM benefit_slot s WHERE s.rule_id = ? AND s.status = 'open' AND s.starts_at > ?
-            AND NOT EXISTS (SELECT 1 FROM benefit_occurrence o WHERE o.slot_id = s.id AND o.status IN ('scheduled', 'late_cancelled'))
-            AND NOT EXISTS (SELECT 1 FROM benefit_slot_hold h WHERE h.slot_id = s.id)", [$rule->getId(), self::utc($now)]);
+        $tz = $this->clock->timezone();
+        $this->conn()->transactional(function (Connection $conn) use ($rule, $now, $tz) {
+            foreach ($conn->fetchAllAssociative("SELECT id FROM benefit_slot WHERE rule_id = ? AND status = 'open' AND starts_at > ? ORDER BY id", [$rule->getId(), self::utc($now)]) as $row) {
+                $id = (int) $row['id'];
+                $this->lockSlot($conn, $id);
+                $slot = $conn->fetchAssociative('SELECT id, starts_at FROM benefit_slot WHERE id = ?', [$id]);
+                if ($slot === false || $conn->fetchOne("SELECT 1 FROM benefit_occurrence WHERE slot_id = ? AND status IN ('scheduled', 'late_cancelled') LIMIT 1", [$id]) !== false
+                    || $conn->fetchOne('SELECT 1 FROM benefit_slot_hold WHERE slot_id = ? LIMIT 1', [$id]) !== false) {
+                    continue; // réservé (ou parti) : jamais touché
+                }
+                $start = new \DateTimeImmutable((string) $slot['starts_at'], new \DateTimeZone('UTC'));
+                if ($this->matches($rule, $start->setTimezone($tz))) {
+                    $conn->executeStatement('UPDATE benefit_slot SET ends_at = ?, capacity = ?, location = ?, staff_user_id = ? WHERE id = ?',
+                        [self::utc($start->modify('+' . $rule->getDurationMinutes() . ' minutes')), $rule->getCapacity(), $rule->getLocation(), $rule->getStaffUserId(), $id]);
+                } else {
+                    $conn->executeStatement('DELETE FROM benefit_slot WHERE id = ?', [$id]);
+                }
+            }
+        });
 
         return $this->generate($rule, $now);
+    }
+
+    /** Un début (à l'heure du magasin) tombe-t-il encore un jour, à l'heure et dans les dates de la règle active ? */
+    private function matches(BenefitSlotRule $rule, \DateTimeImmutable $local): bool
+    {
+        $ymd = $local->format('Y-m-d');
+
+        return $rule->isActive() && $local->format('H:i') === $rule->getLocalTime() && in_array((int) $local->format('N'), $rule->getWeekdays(), true)
+            && ($rule->getValidFrom() === null || $ymd >= $rule->getValidFrom()->format('Y-m-d')) && ($rule->getValidUntil() === null || $ymd <= $rule->getValidUntil()->format('Y-m-d'));
     }
 
     /**
@@ -208,6 +241,7 @@ class AboAgendaService
         foreach ($this->emProvider->getEntityManager()->getRepository(BenefitSlotRule::class)->active() as $rule) {
             $created += $this->generate($rule, $now);
         }
+        $this->convertPending();
         $this->conn()->executeStatement('DELETE FROM benefit_slot_hold WHERE expires_at < ?', [self::utc(($now ?? new \DateTimeImmutable())->modify('-1 day'))]);
 
         return $created;
@@ -304,7 +338,7 @@ class AboAgendaService
             throw new AboException(403, 'SCHEDULING_NOT_BY_CLIENT', 'Les dates de cette prestation sont attribuées par la boutique.', 'benefitId');
         }
         $tz = $this->clock->timezone();
-        $rows = $this->emProvider->getEntityManager()->getRepository(BenefitSlot::class)->between($benefitId, new \DateTimeImmutable(), (new \DateTimeImmutable('today', $tz))->modify('+' . self::GENERATE_DAYS . ' days'), true);
+        $rows = $this->emProvider->getEntityManager()->getRepository(BenefitSlot::class)->between($benefitId, new \DateTimeImmutable(), (new \DateTimeImmutable('today', $tz))->modify('+' . self::GENERATE_DAYS . ' days')->setTimezone(new \DateTimeZone('UTC')), true);
 
         return $this->slotViews($rows, false);
     }
@@ -334,14 +368,20 @@ class AboAgendaService
                 throw new AboException(409, 'SLOT_CANCELLED', 'Ce créneau est déjà annulé.');
             }
             $conn->executeStatement('UPDATE benefit_slot SET status = ?, cancelled_at = ?, cancel_reason = ? WHERE id = ?', [BenefitSlot::STATUS_CANCELLED, self::utc(new \DateTimeImmutable()), mb_substr($reason, 0, 300), $slotId]);
-            $rows = $conn->fetchAllAssociative("SELECT o.id, o.subscription_id FROM benefit_occurrence o WHERE o.slot_id = ? AND o.status IN ('scheduled', 'late_cancelled') ORDER BY o.id", [$slotId]);
+            // relecture neuve : lignes verrouillées (un déplacement en cours finit d'abord, et sa ligne n'est plus sur ce créneau) ; seules les
+            // lignes réellement rendues comptent et reçoivent un courriel
+            $rows = $conn->fetchAllAssociative("SELECT o.id, o.subscription_id FROM benefit_occurrence o WHERE o.slot_id = ? AND o.status IN ('scheduled', 'late_cancelled') ORDER BY o.id FOR UPDATE", [$slotId]);
+            $released = [];
             foreach ($rows as $r) {
-                $this->returnToPlan($conn, (int) $r['id'], (int) $r['subscription_id']);
+                if ($this->returnToPlan($conn, (int) $r['id'], (int) $r['subscription_id'], $slotId) === 1) {
+                    $released[] = $r;
+                }
             }
             $conn->executeStatement('DELETE FROM benefit_slot_hold WHERE slot_id = ?', [$slotId]);
 
-            return $rows;
+            return $released;
         });
+        $this->audit?->record('benefit_slot', (string) $slotId, 'cancel', null, ['reason' => $reason, 'released' => count($affected)], ['abonnements']); // avant les courriels
         $em->clear(BenefitSlot::class);
         $slot = $em->getRepository(BenefitSlot::class)->find($slotId);
         $bySubscription = [];
@@ -361,7 +401,6 @@ class AboAgendaService
             ]]);
         }
         $em->flush();
-        $this->audit?->record('benefit_slot', (string) $slotId, 'cancel', null, ['reason' => $reason, 'released' => count($affected)], ['abonnements']);
 
         return ['slotId' => $slotId, 'released' => count($affected)];
     }
@@ -398,10 +437,10 @@ class AboAgendaService
                     throw new AboException(409, 'CANCEL_DEADLINE_PASSED', sprintf('Le délai pour déplacer ce rendez-vous est passé (%d h avant).', $this->deadlineHours($o)));
                 }
                 $this->clearDate($conn, (int) $o['id']);
-                $view = $this->bookIn($conn, $subscription, (int) $o['benefit_id'], (int) $o['id'], $slotId, $startsAt, $source, $by, false);
+                $view = $this->bookIn($conn, $subscription, (int) $o['benefit_id'], (int) $o['id'], $slotId, $startsAt, $source, $by, false, true);
                 $this->event($subscription, 'moved', (int) $o['benefit_id'], $by, $source);
                 if ($source === BenefitOccurrence::SOURCE_TEAM) {
-                    $this->journal($subscription, 'appointment_moved', ['occurrenceId' => (int) $o['id'], 'slotId' => $slotId, 'startsAt' => $view['startsAt']]);
+                    $this->journal($subscription, 'appointment_move', ['occurrenceId' => (int) $o['id'], 'slotId' => $slotId, 'startsAt' => $view['startsAt']]);
                 }
 
                 return $view;
@@ -431,7 +470,7 @@ class AboAgendaService
                 $this->returnToPlan($conn, (int) $o['id'], (int) $subscription->getId());
                 $this->event($subscription, 'unscheduled', (int) $o['benefit_id'], $by, $source);
                 if ($source === BenefitOccurrence::SOURCE_TEAM) {
-                    $this->journal($subscription, 'appointment_cancelled', ['occurrenceId' => (int) $o['id']]);
+                    $this->journal($subscription, 'appointment_cancel', ['occurrenceId' => (int) $o['id']]);
                 }
 
                 return ['occurrenceId' => (int) $o['id'], 'status' => BenefitOccurrence::STATUS_AVAILABLE];
@@ -527,6 +566,9 @@ class AboAgendaService
             if ($pb->getScheduling() !== PlanBenefit::SCHEDULING_CLIENT) {
                 throw new AboException(403, 'SCHEDULING_NOT_BY_CLIENT', 'Les dates de cette prestation ne se choisissent pas à la souscription.', 'slots');
             }
+            if ($pb->getQuantity() === null) {
+                throw new AboException(422, 'SLOTS_INVALID', 'Une prestation sans limite ne se planifie pas.', 'slots');
+            }
             $wanted[$row['benefitId']][] = $row['slotId'];
             if ($pb->getQuantity() !== null && count($wanted[$row['benefitId']]) > $pb->getQuantity() * max(1, $quantity)) {
                 throw new AboException(422, 'SLOTS_INVALID', 'Plus de dates que de séances comprises dans une période.', 'slots');
@@ -581,12 +623,15 @@ class AboAgendaService
      * place retenue échue n'est convertie que s'il reste de la place ; sinon le droit reste à planifier (événement `hold_lost`). Appelé sous
      * le verrou de l'abonnement (webhook, passage).
      */
-    public function convertHolds(Subscription $subscription): int
+    public function convertHolds(Subscription $subscription, bool $onlyIfBorn = false): int
     {
         $conn = $this->conn();
         $holds = $conn->fetchAllAssociative('SELECT id, slot_id, benefit_id FROM benefit_slot_hold WHERE subscription_id = ? ORDER BY id', [$subscription->getId()]);
         $converted = 0;
         foreach ($holds as $h) {
+            if ($onlyIfBorn && $conn->fetchOne("SELECT 1 FROM benefit_occurrence WHERE subscription_id = ? AND benefit_id = ? AND status = 'available' LIMIT 1", [$subscription->getId(), (int) $h['benefit_id']]) === false) {
+                continue; // droits pas encore nés (paiement en attente) : la place attend sa facture
+            }
             try {
                 $conn->transactional(function (Connection $conn) use ($subscription, $h) {
                     $this->lockSlot($conn, (int) $h['slot_id']);
@@ -598,7 +643,10 @@ class AboAgendaService
                     $this->writeDate($conn, $id, (int) $h['slot_id'], (string) $slot['starts_at'], (string) $slot['ends_at'], BenefitOccurrence::SOURCE_CLIENT, null);
                 });
                 ++$converted;
-            } catch (AboException) {
+            } catch (AboException $e) {
+                if ($e->errorCode === 'SLOT_BUSY') {
+                    continue; // créneau tenu un instant : la place reste retenue, reprise au passage horaire (convertPending)
+                }
                 $conn->executeStatement('DELETE FROM benefit_slot_hold WHERE id = ?', [(int) $h['id']]);
                 $this->event($subscription, 'hold_lost', (int) $h['benefit_id'], null, BenefitOccurrence::SOURCE_CLIENT);
             }
@@ -610,10 +658,39 @@ class AboAgendaService
         return $converted;
     }
 
+    /** Convertit tout de suite les places retenues, sous le verrou de l'abonnement (souscription reprise dont les droits sont déjà nés) */
+    public function convertNow(Subscription $subscription): int
+    {
+        return $this->locked($subscription, fn () => $this->convertHolds($subscription, true));
+    }
+
+    /**
+     * Passage horaire : les places retenues d'abonnements dont les droits sont DÉJÀ nés (conversion manquée : créneau tenu un instant) sont
+     * reprises. Une place d'un abonnement pas encore payé attend sa facture.
+     */
+    public function convertPending(): int
+    {
+        $n = 0;
+        $ids = $this->conn()->fetchFirstColumn("SELECT DISTINCT h.subscription_id FROM benefit_slot_hold h WHERE h.subscription_id IS NOT NULL
+            AND EXISTS (SELECT 1 FROM benefit_occurrence o WHERE o.subscription_id = h.subscription_id AND o.benefit_id = h.benefit_id AND o.status = 'available')");
+        foreach ($ids as $id) {
+            $s = $this->emProvider->getEntityManager()->getRepository(Subscription::class)->find((int) $id);
+            if ($s !== null) {
+                try {
+                    $n += $this->convertNow($s);
+                } catch (\Throwable $e) {
+                    $this->logger->error(sprintf('[Abo] places retenues de l\'abonnement %d non converties (%s)', (int) $id, $e::class));
+                }
+            }
+        }
+
+        return $n;
+    }
+
     // ---- interne -------------------------------------------------------------------------------------------------------------------------
 
     /** @return array<string, mixed> */
-    private function bookIn(Connection $conn, Subscription $subscription, int $benefitId, ?int $occurrenceId, ?int $slotId, ?string $startsAt, string $source, ?string $by, bool $withEvent = true): array
+    private function bookIn(Connection $conn, Subscription $subscription, int $benefitId, ?int $occurrenceId, ?int $slotId, ?string $startsAt, string $source, ?string $by, bool $withEvent = true, bool $moving = false): array
     {
         $byClient = $source === BenefitOccurrence::SOURCE_CLIENT;
         if (!in_array($subscription->getStatus(), $byClient ? self::CLIENT_STATUSES : self::TEAM_STATUSES, true)) {
@@ -641,7 +718,7 @@ class AboAgendaService
                 throw new AboException(409, 'SLOT_ALREADY_BOOKED', 'Cet abonnement a déjà une place sur ce créneau.', 'slotId');
             }
             $this->assertRoom($conn, $slotId, null);
-            $id = $this->pickOccurrence($conn, $subscription, $benefitId, $occurrenceId, $byClient ? (string) $slot['starts_at'] : null);
+            $id = $this->pickOccurrence($conn, $subscription, $benefitId, $occurrenceId, $byClient ? (string) $slot['starts_at'] : null, $moving && !$byClient);
             $this->writeDate($conn, $id, $slotId, (string) $slot['starts_at'], (string) $slot['ends_at'], $source, $by);
         } else {
             if ($mode !== PlanBenefit::SCHEDULING_ADMIN || $byClient) {
@@ -649,7 +726,7 @@ class AboAgendaService
             }
             $start = $this->parseStart($startsAt);
             $end = $start->modify('+' . ($pb->getBenefit()?->getDurationMinutes() ?? self::DEFAULT_DURATION) . ' minutes');
-            $id = $this->pickOccurrence($conn, $subscription, $benefitId, $occurrenceId, null);
+            $id = $this->pickOccurrence($conn, $subscription, $benefitId, $occurrenceId, null, $moving);
             $this->writeDate($conn, $id, null, self::utc($start), self::utc($end), $source, $by);
         }
         if ($withEvent) {
@@ -676,12 +753,13 @@ class AboAgendaService
      *
      * @throws AboException 404 OCCURRENCE_NOT_FOUND, 409 BALANCE_EMPTY | SLOT_AFTER_VALIDITY
      */
-    private function pickOccurrence(Connection $conn, Subscription $subscription, int $benefitId, ?int $occurrenceId, ?string $validAt): int
+    private function pickOccurrence(Connection $conn, Subscription $subscription, int $benefitId, ?int $occurrenceId, ?string $validAt, bool $anyValidity = false): int
     {
         $now = self::utc(new \DateTimeImmutable());
         if ($occurrenceId !== null) {
             $r = $conn->fetchAssociative('SELECT id, status, valid_until FROM benefit_occurrence WHERE id = ? AND subscription_id = ? AND benefit_id = ? FOR UPDATE', [$occurrenceId, $subscription->getId(), $benefitId]);
-            if ($r === false || $r['status'] !== BenefitOccurrence::STATUS_AVAILABLE || (string) $r['valid_until'] <= $now) {
+            // relecture neuve : l'équipe déplace à tout moment, même une date déjà passée ou au-delà de la validité (`$anyValidity`)
+            if ($r === false || $r['status'] !== BenefitOccurrence::STATUS_AVAILABLE || (!$anyValidity && (string) $r['valid_until'] <= $now)) {
                 throw new AboException(404, 'OCCURRENCE_NOT_FOUND', 'Droit à planifier introuvable.', 'occurrenceId');
             }
             if ($validAt !== null && (string) $r['valid_until'] < $validAt) {
@@ -712,14 +790,27 @@ class AboAgendaService
         }
     }
 
-    /** Le droit redevient à planifier, sans perte : s'il a dépassé sa validité, il vaut jusqu'à la fin de la période en cours (ou 30 jours) */
-    private function returnToPlan(Connection $conn, int $id, int $subscriptionId): void
+    /**
+     * Le droit redevient à planifier, sans perte : s'il a dépassé sa validité, il vaut jusqu'à la fin de la période en cours (ou 30 jours).
+     * Avec `$fromSlot`, seulement s'il est encore sur ce créneau. Rend le nombre de lignes rendues (0 ou 1).
+     */
+    private function returnToPlan(Connection $conn, int $id, int $subscriptionId, ?int $fromSlot = null): int
+    {
+        $now = new \DateTimeImmutable();
+        $floor = self::floor($conn, $subscriptionId);
+
+        return $conn->executeStatement("UPDATE benefit_occurrence SET status = 'available', slot_id = NULL, scheduled_at = NULL, scheduled_end = NULL, scheduled_by = NULL, scheduled_source = NULL, done_at = NULL,
+            valid_until = CASE WHEN valid_until <= ? THEN ? ELSE valid_until END WHERE id = ? AND status IN ('scheduled', 'late_cancelled')" . ($fromSlot !== null ? ' AND slot_id = ' . $fromSlot : ''),
+            [self::utc($now), $floor, $id]);
+    }
+
+    /** La validité d'un droit rendu après sa fin : la fin de la période en cours si elle est à venir, sinon dans 30 jours (UTC) */
+    public static function floor(Connection $conn, int $subscriptionId): string
     {
         $end = $conn->fetchOne('SELECT current_period_end FROM subscription WHERE id = ?', [$subscriptionId]);
         $now = new \DateTimeImmutable();
-        $floor = is_string($end) && new \DateTimeImmutable($end, new \DateTimeZone('UTC')) > $now ? $end : self::utc($now->modify('+30 days'));
-        $conn->executeStatement("UPDATE benefit_occurrence SET status = 'available', slot_id = NULL, scheduled_at = NULL, scheduled_end = NULL, scheduled_by = NULL, scheduled_source = NULL, done_at = NULL,
-            valid_until = CASE WHEN valid_until <= ? THEN ? ELSE valid_until END WHERE id = ?", [self::utc($now), $floor, $id]);
+
+        return is_string($end) && new \DateTimeImmutable($end, new \DateTimeZone('UTC')) > $now ? $end : self::utc($now->modify('+30 days'));
     }
 
     private function clearDate(Connection $conn, int $id): void

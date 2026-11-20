@@ -91,6 +91,9 @@ class ManageSubscriptionUseCase
             throw $e;
         }
         $this->agenda?->attachHolds($holds, $result['subscription']);
+        if ($holds !== [] && ($result['reused'] ?? false)) {
+            $this->agenda?->convertNow($result['subscription']); // souscription reprise : ses droits sont peut-être déjà nés (essai)
+        }
 
         return [
             'subscriptionId' => (int) $result['subscription']->getId(), 'clientSecret' => $result['clientSecret'],

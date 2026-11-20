@@ -72,7 +72,7 @@ class AboAssistantTools
                 'capacity' => ['type' => 'integer'], 'location' => ['type' => 'string'], 'staffUserId' => ['type' => 'integer'], 'from' => ['type' => 'string'], 'until' => ['type' => 'string']], 'required' => ['benefitId', 'weekdays', 'time', 'capacity']]],
             ['name' => 'propose_assign_date', 'description' => 'Abonnements : propose de donner une date à un droit à planifier d\'un abonnement (subscriptionId, benefitId) : un créneau (slotId, de get_slots) ou, pour une prestation à date libre, une date startsAt (AAAA-MM-JJTHH:MM, heure du magasin). La place est vérifiée à la confirmation. L\'administrateur confirme.', 'input_schema' => ['type' => 'object', 'properties' => [
                 'subscriptionId' => ['type' => 'integer'], 'benefitId' => ['type' => 'integer'], 'slotId' => ['type' => 'integer'], 'startsAt' => ['type' => 'string']], 'required' => ['subscriptionId', 'benefitId']]],
-            ['name' => 'propose_move_occurrence', 'description' => 'Abonnements : propose de déplacer une date planifiée d\'un abonnement (subscriptionId, occurrenceId de get_subscription, upcoming) vers un autre créneau (slotId) ou une autre date libre (startsAt). Sans perte pour l\'abonné. L\'administrateur confirme.', 'input_schema' => ['type' => 'object', 'properties' => [
+            ['name' => 'propose_move_occurrence', 'description' => 'Abonnements : propose de déplacer une date planifiée d\'un abonnement (subscriptionId, occurrenceId lu dans get_subscription, champ upcoming ; une date choisie par l\'abonné : seulement avant le délai d\'annulation) vers un autre créneau (slotId) ou une autre date libre (startsAt). Sans perte pour l\'abonné. L\'administrateur confirme.', 'input_schema' => ['type' => 'object', 'properties' => [
                 'subscriptionId' => ['type' => 'integer'], 'occurrenceId' => ['type' => 'integer'], 'slotId' => ['type' => 'integer'], 'startsAt' => ['type' => 'string']], 'required' => ['subscriptionId', 'occurrenceId']]],
             ['name' => 'set_plan_benefits', 'description' => 'Abonnements : propose de régler les prestations d\'une formule existante (ajouter une prestation ou changer sa quantité, son mode de dates, ses règles). L\'administrateur confirme.', 'input_schema' => ['type' => 'object', 'properties' => ['planId' => ['type' => 'integer'], 'benefits' => ['type' => 'array', 'items' => $rules]], 'required' => ['planId', 'benefits']]],
         ];
@@ -235,8 +235,7 @@ class AboAssistantTools
                             sprintf('Donner une date à « %s » pour l\'abonnement n° %d : %s (place vérifiée à la confirmation)', $line['name'], $sub->getId(), $when), null, 'subscriptions'];
                     }
                     $occurrenceId = (int) ($input['occurrenceId'] ?? 0);
-                    $current = array_values(array_filter($agenda->upcoming($sub, false), fn (array $u) => $u['occurrenceId'] === $occurrenceId))[0]
-                        ?? throw new AboException(404, 'OCCURRENCE_NOT_FOUND', 'Rendez-vous introuvable.', 'occurrenceId');
+                    $current = $this->movable($sub, $occurrenceId);
 
                     return [['subscriptionId' => (int) $sub->getId(), 'occurrenceId' => $occurrenceId, 'slotId' => $slotId, 'startsAt' => $startsAt],
                         sprintf('Déplacer « %s » de l\'abonnement n° %d du %s au %s (sans perte)', $current['name'], $sub->getId(), $current['startsAt'], $when), null, 'subscriptions'];
@@ -345,6 +344,7 @@ class AboAssistantTools
 
                 return ['written' => 1, 'occurrenceId' => $r['occurrenceId']];
             case 'propose_move_occurrence':
+                $this->movable($this->subscriptionOrFail((int) ($input['subscriptionId'] ?? 0)), (int) ($input['occurrenceId'] ?? 0)); // relu à la confirmation
                 $r = $this->agendaOrFail()->move($this->subscriptionOrFail((int) ($input['subscriptionId'] ?? 0)), (int) ($input['occurrenceId'] ?? 0),
                     isset($input['slotId']) ? (int) $input['slotId'] : null, isset($input['startsAt']) ? (string) $input['startsAt'] : null, \App\Abo\Entity\BenefitOccurrence::SOURCE_TEAM, 'assistant');
 
@@ -376,6 +376,24 @@ class AboAssistantTools
     private function subscriptionOrFail(int $id): \App\Entity\Subscription
     {
         return $this->emProvider->getEntityManager()->getRepository(\App\Entity\Subscription::class)->find($id) ?? throw new AboException(404, 'SUBSCRIPTION_NOT_FOUND', 'Abonnement introuvable.', 'subscriptionId');
+    }
+
+    /**
+     * Le rendez-vous que l'assistant peut déplacer (contrat § 7) : une date choisie par l'abonné, seulement avant le délai d'annulation.
+     *
+     * @return array<string, mixed>
+     * @throws AboException 404 OCCURRENCE_NOT_FOUND, 409 CANCEL_DEADLINE_PASSED
+     */
+    private function movable(\App\Entity\Subscription $sub, int $occurrenceId): array
+    {
+        $current = array_values(array_filter($this->agendaOrFail()->upcoming($sub, true), fn (array $u) => $u['occurrenceId'] === $occurrenceId))[0]
+            ?? throw new AboException(404, 'OCCURRENCE_NOT_FOUND', 'Rendez-vous introuvable.', 'occurrenceId');
+        if ($current['source'] === \App\Abo\Entity\BenefitOccurrence::SOURCE_CLIENT && new \DateTimeImmutable((string) $current['cancellableUntil']) <= new \DateTimeImmutable()) {
+            throw new AboException(409, 'CANCEL_DEADLINE_PASSED', 'Ce rendez-vous a été choisi par l\'abonné et le délai pour le déplacer est passé : seule l\'équipe le déplace, depuis la fiche.', 'occurrenceId');
+        }
+        unset($current['staffUserId'], $current['source']); // jamais au modèle
+
+        return $current;
     }
 
     private function agendaOrFail(): AboAgendaService

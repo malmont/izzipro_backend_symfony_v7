@@ -110,18 +110,39 @@ class AboAgendaTest extends WebTestCase
         $this->assertSame('2027-03-16 22:00:00', $this->db->fetchOne("SELECT starts_at FROM benefit_slot WHERE rule_id = ? AND starts_at::date = '2027-03-16'", [$rule->getId()]), 'mardi 16 mars : 18:00 à l\'heure d\'été (UTC−4)');
         $this->assertSame(60 * 60, (int) $this->db->fetchOne("SELECT EXTRACT(EPOCH FROM ends_at - starts_at) FROM benefit_slot WHERE rule_id = ? AND starts_at::date = '2027-03-16'", [$rule->getId()]));
 
+        // relecture neuve : un réglage qui ne déplace rien (le lieu) garde chaque créneau, son numéro compris, et le met à jour
+        $ids = $this->db->fetchFirstColumn('SELECT id FROM benefit_slot WHERE rule_id = ? ORDER BY id', [$rule->getId()]);
+        $agenda->saveRule($this->prov()->getEntityManager()->getRepository(BenefitSlotRule::class)->find($rule->getId()), ['location' => 'Salle 2']);
+        $this->assertSame($ids, $this->db->fetchFirstColumn('SELECT id FROM benefit_slot WHERE rule_id = ? ORDER BY id', [$rule->getId()]));
+        $this->assertSame(['Salle 2'], $this->db->fetchFirstColumn('SELECT DISTINCT location FROM benefit_slot WHERE rule_id = ?', [$rule->getId()]));
+        // un créneau tenu par une réservation en cours : la règle ne le touche pas (409 SLOT_BUSY, rien de retiré)
+        $other = new \PDO(...$this->siteDsn());
+        $other->beginTransaction();
+        $other->query("SELECT pg_advisory_xact_lock(hashtext('benefit_slot:" . MV_TEST_TENANT_CODE . ':' . (int) $ids[0] . "'))");
+        try {
+            $agenda->saveRule($this->prov()->getEntityManager()->getRepository(BenefitSlotRule::class)->find($rule->getId()), ['time' => '07:00']);
+            $this->fail('créneau tenu : la règle aurait dû attendre');
+        } catch (\App\Abo\Services\AboException $e) {
+            $this->assertSame('SLOT_BUSY', $e->errorCode);
+        }
+        $other->rollBack();
+        $other = null;
+        $this->assertSame($ids, $this->db->fetchFirstColumn('SELECT id FROM benefit_slot WHERE rule_id = ? ORDER BY id', [$rule->getId()]), 'rien de retiré');
+        $this->assertSame('18:00', $this->db->fetchOne('SELECT local_time FROM benefit_slot_rule WHERE id = ?', [$rule->getId()]), 'la règle reste telle qu\'elle était');
+        $this->prov()->getEntityManager()->clear();
+
         // un créneau réservé reste tel quel quand la règle change ; les autres sont refaits à 19:00
         [$s] = $this->subscription($yoga, ['scheduling' => 'fixed_slots', 'slotChoice' => 'client', 'quantity' => 2]);
         $booked = (int) $this->db->fetchOne('SELECT id FROM benefit_slot WHERE rule_id = ? ORDER BY starts_at LIMIT 1', [$rule->getId()]);
         $this->json('POST', '/api/subscriptions/' . $s->getId() . '/rendez-vous', ['benefitId' => $yoga->getId(), 'slotId' => $booked], 201, 'client');
-        $agenda->saveRule($this->provider->getEntityManager()->getRepository(BenefitSlotRule::class)->find($rule->getId()), ['time' => '19:00']);
+        $agenda->saveRule($this->prov()->getEntityManager()->getRepository(BenefitSlotRule::class)->find($rule->getId()), ['time' => '19:00', 'location' => null]);
         $hours = array_map(fn ($r) => (new \DateTimeImmutable($r['starts_at'], new \DateTimeZone('UTC')))->setTimezone($tz)->format('H:i') . ($r['id'] == $booked ? '*' : ''),
             $this->db->fetchAllAssociative('SELECT id, starts_at FROM benefit_slot WHERE rule_id = ? ORDER BY starts_at', [$rule->getId()]));
         $this->assertSame('18:00*', $hours[0], 'le créneau réservé est gardé');
         $this->assertSame(['19:00'], array_values(array_unique(array_slice($hours, 1))), 'les autres refaits à la nouvelle heure');
         $this->assertSame(0, (int) $this->db->fetchOne("SELECT COUNT(*) FROM benefit_slot WHERE rule_id = ? AND starts_at > '2027-01-31'", [$rule->getId()]), 'les créneaux futurs sans réservation (mars) sont retirés');
         // désactiver la règle : seuls ses créneaux réservés restent
-        $agenda->saveRule($this->provider->getEntityManager()->getRepository(BenefitSlotRule::class)->find($rule->getId()), ['active' => false]);
+        $agenda->saveRule($this->prov()->getEntityManager()->getRepository(BenefitSlotRule::class)->find($rule->getId()), ['active' => false]);
         $this->assertSame([$booked], array_map('intval', $this->db->fetchFirstColumn('SELECT id FROM benefit_slot WHERE rule_id = ?', [$rule->getId()])));
         foreach ([['weekdays' => [8]], ['time' => '25:00'], ['capacity' => 0], ['durationMinutes' => 2], ['active' => 0]] as $bad) {
             try {
@@ -194,10 +215,18 @@ class AboAgendaTest extends WebTestCase
         $this->db->executeStatement("UPDATE benefit_occurrence SET scheduled_at = NOW() + INTERVAL '1 hour' WHERE id = ?", [$team['appointment']['occurrenceId']]);
         $fiche = $this->json('DELETE', '/api/site/abonnements/' . $s->getId() . '/rendez-vous/' . $team['appointment']['occurrenceId'], null, 200);
         $this->assertSame([2, 0, 1], [$fiche['balance'][0]['available'], $fiche['balance'][0]['scheduled'], $fiche['balance'][0]['used']], 'l\'équipe : jamais de perte');
-        $this->assertSame(1, (int) $this->db->fetchOne("SELECT COUNT(*) FROM content_audit_log WHERE resource = 'subscription' AND action = 'appointment_cancelled'"));
+        $this->assertSame(1, (int) $this->db->fetchOne("SELECT COUNT(*) FROM content_audit_log WHERE resource = 'subscription' AND action = 'appointment_cancel'"));
         // l'abonné ne réserve pas au-delà de la validité de ses droits
         $far = $this->slot($yoga, '+40 days', 5);
         $this->assertSame('SLOT_AFTER_VALIDITY', $this->json('POST', $client . '/rendez-vous', ['benefitId' => $yoga->getId(), 'slotId' => $far], 409, 'client')['code']);
+        // relecture neuve : l'équipe déplace à tout moment, même un droit dont la validité est passée ; la fiche de l'équipe montre ses dates
+        $e = $this->slot($yoga, '+7 days', 3);
+        $kept = $this->json('POST', '/api/site/abonnements/' . $s->getId() . '/rendez-vous', ['benefitId' => $yoga->getId(), 'slotId' => $e], 201)['appointment']['occurrenceId'];
+        $this->db->executeStatement("UPDATE benefit_occurrence SET valid_until = NOW() - INTERVAL '1 day' WHERE id = ?", [$kept]);
+        $this->assertSame($far, $this->json('PATCH', '/api/site/abonnements/' . $s->getId() . '/rendez-vous/' . $kept, ['slotId' => $far], 200)['appointment']['slotId']);
+        $upcoming = $this->json('GET', '/api/site/abonnements/' . $s->getId(), null, 200)['upcoming'];
+        $this->assertSame([$kept], array_column($upcoming, 'occurrenceId'));
+        $this->assertArrayHasKey('staffUserId', $upcoming[0]);
         // l'abonnement d'un autre client : 404
         $this->assertSame(404, $this->api('POST', '/api/subscriptions/' . $s->getId() . '/rendez-vous', ['benefitId' => $yoga->getId(), 'slotId' => $d], 'other')->getStatusCode());
     }
@@ -214,9 +243,13 @@ class AboAgendaTest extends WebTestCase
         $first = $this->json('POST', $team, ['benefitId' => $yoga->getId(), 'slotId' => $soon], 201)['appointment']['occurrenceId'];
         $second = $this->json('POST', $team, ['benefitId' => $yoga->getId(), 'slotId' => $later], 201)['appointment']['occurrenceId'];
 
+        // une date de l'équipe au-delà de la validité, pendant la pause : rendue, elle reste due (relecture neuve)
+        $third = $this->json('POST', $team, ['benefitId' => $yoga->getId(), 'slotId' => $this->slot($yoga, '+2 days', 4)], 201)['appointment']['occurrenceId'];
+        $this->db->executeStatement("UPDATE benefit_occurrence SET valid_until = NOW() - INTERVAL '1 day' WHERE id = ?", [$third]);
         // pause de 5 jours : la date pendant la pause redevient à planifier, sans perte ; celle d'après reste
         $this->json('POST', '/api/site/abonnements/' . $s->getId() . '/pause', ['until' => (new \DateTimeImmutable('+5 days', new \DateTimeZone(self::TZ)))->format('Y-m-d')], 200);
-        $this->assertSame(['available', 'scheduled'], [$this->status($first), $this->status($second)]);
+        $this->assertSame(['available', 'scheduled', 'available'], [$this->status($first), $this->status($second), $this->status($third)]);
+        $this->assertTrue((bool) $this->db->fetchOne('SELECT valid_until > NOW() FROM benefit_occurrence WHERE id = ?', [$third]), 'rendue par la pause : toujours due');
         $this->json('POST', '/api/site/abonnements/' . $s->getId() . '/reprise', null, 200);
 
         // créneau annulé par la boutique : motif obligatoire ; ses droits redeviennent à planifier, l'abonné reçoit un courriel
@@ -236,7 +269,7 @@ class AboAgendaTest extends WebTestCase
 
         // date libre (admin_after) : l'équipe donne une date, sans capacité ; l'abonné ne peut pas ; un créneau n'est pas une date libre
         $menage = $this->benefit('service', 'Ménage agenda', 120);
-        static::getContainer()->get(BenefitService::class)->setPlanBenefit($this->plan(), $menage, ['quantity' => 2, 'scheduling' => 'admin_after']);
+        static::getContainer()->get(BenefitService::class)->setPlanBenefit($this->plan(), $this->fresh($menage), ['quantity' => 2, 'scheduling' => 'admin_after']);
         $this->born($s, 'free');
         $at = (new \DateTimeImmutable('+2 days', new \DateTimeZone(self::TZ)))->setTime(10, 30);
         $free = $this->json('POST', $team, ['benefitId' => $menage->getId(), 'startsAt' => $at->format('Y-m-d\TH:i')], 201)['appointment'];
@@ -252,7 +285,7 @@ class AboAgendaTest extends WebTestCase
     public function testSlotsChosenAtSubscriptionAreHeldDuringPaymentReleasedOnFailureAndBecomeAppointments(): void
     {
         $yoga = $this->benefit('session', 'Yoga souscription', 60);
-        static::getContainer()->get(BenefitService::class)->setPlanBenefit($this->plan(), $yoga, ['quantity' => 2, 'scheduling' => 'client_at_subscription']);
+        static::getContainer()->get(BenefitService::class)->setPlanBenefit($this->plan(), $this->fresh($yoga), ['quantity' => 2, 'scheduling' => 'client_at_subscription']);
         $slot = $this->slot($yoga, '+3 days', 1);
         $this->assertCount(1, $this->json('GET', '/api/subscription-plans/' . $this->planId . '/creneaux?benefitId=' . $yoga->getId(), null, 200, 'client')['slots']);
         // une souscription refusée (transporteur inconnu) rend la place tout de suite
@@ -264,7 +297,7 @@ class AboAgendaTest extends WebTestCase
         $this->assertSame(0, $this->find($this->json('GET', '/api/site/abonnements/creneaux?benefitId=' . $yoga->getId(), null, 200)['slots'], $slot)['remaining']);
         $this->assertSame('SLOT_FULL', $this->json('POST', '/api/subscriptions', ['planId' => $this->planId, 'slots' => [['benefitId' => $yoga->getId(), 'slotId' => $slot]]], 409, 'other')['code']);
         // la facture payée : le droit né devient le rendez-vous, la place retenue disparaît
-        $s = $this->provider->getEntityManager()->getRepository(Subscription::class)->find((int) $created['subscriptionId']);
+        $s = $this->prov()->getEntityManager()->getRepository(Subscription::class)->find((int) $created['subscriptionId']);
         $this->db->executeStatement("UPDATE subscription SET status = 'active' WHERE id = ?", [$s->getId()]);
         $this->born($s, 'hold');
         $this->assertSame(0, (int) $this->db->fetchOne('SELECT COUNT(*) FROM benefit_slot_hold'));
@@ -304,13 +337,32 @@ class AboAgendaTest extends WebTestCase
         $action = $this->chat('Attribue une date à l\'abonné ' . $s->getId())['actions'][0];
         $this->assertSame(200, $this->api('POST', '/api/site/assistant/actions/' . $action['id'] . '/confirm', null, 'admin')->getStatusCode());
         $this->assertSame(1, (int) $this->db->fetchOne("SELECT COUNT(*) FROM benefit_occurrence WHERE subscription_id = ? AND slot_id = ? AND scheduled_by = 'assistant'", [$s->getId(), $slot]));
+        // une date choisie par l'abonné, le délai passé : l'assistant ne la déplace pas (contrat § 7)
+        $occ = (int) $this->db->fetchOne("SELECT id FROM benefit_occurrence WHERE subscription_id = ? AND slot_id = ?", [$s->getId(), $slot]);
+        $this->db->executeStatement("UPDATE benefit_occurrence SET scheduled_source = 'client', scheduled_at = NOW() + INTERVAL '1 hour' WHERE id = ?", [$occ]);
+        $other = (int) $this->db->fetchOne("SELECT id FROM benefit_slot WHERE status = 'open' AND id <> ? ORDER BY starts_at LIMIT 1", [$slot]);
+        $this->answer([['propose_move_occurrence', ['subscriptionId' => $s->getId(), 'occurrenceId' => $occ, 'slotId' => $other]]]);
+        $this->assertSame([], $this->chat('Déplace son rendez-vous')['actions']);
+        $this->assertStringContainsString('CANCEL_DEADLINE_PASSED', (string) json_encode(FakeLandingAiClient::$requests[1]['messages'][2]['content']));
     }
 
     // ---- aides ------------------------------------------------------------------------------------------------------------------------
 
+    /** Le fournisseur du conteneur COURANT (une requête en fait naître un neuf) : ses entités sont celles des services */
+    private function prov(): TenantEntityManagerProvider
+    {
+        return static::getContainer()->get(TenantEntityManagerProvider::class); // api() le remet sur le site de l'essai après chaque requête
+    }
+
+    /** La prestation relue dans le gestionnaire courant */
+    private function fresh(Benefit $b): Benefit
+    {
+        return $this->prov()->getEntityManager()->getRepository(Benefit::class)->find($b->getId());
+    }
+
     private function plan(): SubscriptionPlan
     {
-        return $this->provider->getEntityManager()->getRepository(SubscriptionPlan::class)->find($this->planId);
+        return $this->prov()->getEntityManager()->getRepository(SubscriptionPlan::class)->find($this->planId);
     }
 
     private function benefit(string $kind, string $name, int $minutes): Benefit
@@ -325,8 +377,8 @@ class AboAgendaTest extends WebTestCase
      */
     private function subscription(Benefit $benefit, array $rules, int $count = 1): array
     {
-        static::getContainer()->get(BenefitService::class)->setPlanBenefit($this->plan(), $benefit, $rules);
-        $em = $this->provider->getEntityManager();
+        static::getContainer()->get(BenefitService::class)->setPlanBenefit($this->plan(), $this->fresh($benefit), $rules);
+        $em = $this->prov()->getEntityManager();
         $user = $em->getRepository(User::class)->findOneBy(['email' => self::CLIENT]);
         $out = [];
         for ($i = 0; $i < $count; ++$i) {
@@ -351,7 +403,7 @@ class AboAgendaTest extends WebTestCase
     private function slot(Benefit $benefit, string $when, int $capacity): int
     {
         $start = (new \DateTimeImmutable($when))->setTime(15, 0);
-        $slot = (new BenefitSlot())->setBenefit($this->provider->getEntityManager()->getRepository(Benefit::class)->find($benefit->getId()))->setStartsAt($start)->setEndsAt($start->modify('+1 hour'))->setCapacity($capacity);
+        $slot = (new BenefitSlot())->setBenefit($this->fresh($benefit))->setStartsAt($start)->setEndsAt($start->modify('+1 hour'))->setCapacity($capacity);
 
         return (int) static::getContainer()->get(AboAgendaService::class)->createSlot($slot)->getId();
     }
@@ -407,16 +459,16 @@ class AboAgendaTest extends WebTestCase
             'HTTP_AUTHORIZATION' => 'Bearer ' . $this->token($as)];
         $this->client->getCookieJar()->clear();
         $this->client->request($method, 'https://' . MV_TEST_TENANT_HOST . $path, [], [], $server, $body !== null ? json_encode($body) : null);
-        $this->provider->switchTenant(MV_TEST_TENANT_DB, MV_TEST_TENANT_CODE);
+        $this->prov()->switchTenant(MV_TEST_TENANT_DB, MV_TEST_TENANT_CODE);
 
         return $this->client->getResponse();
     }
 
     private function token(string $as): string
     {
-        $this->provider->switchTenant(MV_TEST_TENANT_DB, MV_TEST_TENANT_CODE);
+        $this->prov()->switchTenant(MV_TEST_TENANT_DB, MV_TEST_TENANT_CODE);
         $email = ['admin' => 'admin@arkanoa-media.com', 'client' => self::CLIENT, 'other' => 'client-abo2@example.invalid'][$as];
-        $user = $this->provider->getEntityManager()->getRepository(User::class)->findOneBy(['email' => $email]);
+        $user = $this->prov()->getEntityManager()->getRepository(User::class)->findOneBy(['email' => $email]);
 
         return static::getContainer()->get('lexik_jwt_authentication.jwt_manager')->create($user);
     }
