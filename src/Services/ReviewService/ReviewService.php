@@ -22,7 +22,8 @@ final class ReviewService
     public function __construct(
         private readonly TenantEntityManagerProvider $emProvider,
         private readonly ReviewSettingsProvider $settings,
-        private readonly ReviewAggregateService $aggregates
+        private readonly ReviewAggregateService $aggregates,
+        private readonly ?\App\Services\Storefront\PublicProductVisibility $visibility = null, // lot FICHES-HORS-LIGNE (21/11/2026)
     ) {
     }
 
@@ -30,7 +31,8 @@ final class ReviewService
     public function product(int $id): Product
     {
         $product = $this->emProvider->getEntityManager()->getRepository(Product::class)->find($id);
-        if ($product === null) {
+        // lot FICHES-HORS-LIGNE : un article hors ligne n'a ni avis publics, ni avis à donner, pour le public (même 404 qu'absent)
+        if ($product === null || $this->visibility?->hidden($id)) {
             throw new ReviewException(404, 'Produit introuvable.', [], null, 'PRODUCT_NOT_FOUND');
         }
 

@@ -15,7 +15,8 @@ class GetVariantCustomizationConfigUseCase
 
     public function __construct(
         TenantEntityManagerProvider $emProvider,
-        CustomizationFactoryService $dtoFactory
+        CustomizationFactoryService $dtoFactory,
+        private readonly ?\App\Services\Storefront\PublicProductVisibility $visibility = null, // lot FICHES-HORS-LIGNE (21/11/2026)
     ) {
         $this->emProvider = $emProvider;
         $this->dtoFactory = $dtoFactory;
@@ -28,7 +29,7 @@ class GetVariantCustomizationConfigUseCase
 
         $variant = $tenantEm->getRepository(ProductVariant::class)->find($variantId);
 
-        if (!$variant) {
+        if (!$variant || ($variant->getProduct() !== null && $this->visibility?->hidden((int) $variant->getProduct()->getId()))) {
             throw new NotFoundHttpException("Variant introuvable (ID: $variantId)");
         }
 

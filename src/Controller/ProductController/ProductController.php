@@ -9,7 +9,6 @@ use App\UseCase\ProductUseCase\GetProductsByCommandeUseCase;
 use App\UseCase\ProductUseCase\CreateProductByCommandeUseCase;
 use App\UseCase\ProductUseCase\GetLandingPageProductsUseCase;
 use App\UseCase\ProductUseCase\GetProductByIdUseCase; 
-use App\UseCase\ProductUseCase\GetProductBySlugUseCase;
 use App\UseCase\ProductUseCase\DeleteProductUseCase;
 use App\UseCase\ProductUseCase\GetProductsByOfferUseCase;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -32,7 +31,6 @@ class ProductController extends AbstractController
     private GetProductsByOfferUseCase $getProductsByOfferUseCase;
     private TenantCacheService $cache;
     private GetProductByIdUseCase $getProductByIdUseCase; 
-    private GetProductBySlugUseCase $getProductBySlugUseCase;
     private ?MediaUrlResolver $mediaUrlResolver;
 
     public function __construct(
@@ -44,10 +42,10 @@ class ProductController extends AbstractController
         GetProductsByOfferUseCase $getProductsByOfferUseCase,
         TenantCacheService $cache,
         GetProductByIdUseCase $getProductByIdUseCase,
-        GetProductBySlugUseCase $getProductBySlugUseCase,
         ?MediaUrlResolver $mediaUrlResolver = null,
         private readonly ?\App\Gestion\Services\PeriodGuard $periodGuard = null, // périodes (lot P1, 10/11/2026)
         private readonly ?\App\Services\Http\ClientSafeError $safeError = null, // lot ERREURS-1 (12/11/2026) : plus de message technique au client
+        private readonly ?\App\Services\Storefront\PublicProductVisibility $visibility = null, // lot FICHES-HORS-LIGNE (21/11/2026)
     ) {
         $this->getProductsByCommandeUseCase = $getProductsByCommandeUseCase;
         $this->createProductByCommandeUseCase = $createProductByCommandeUseCase;
@@ -57,7 +55,6 @@ class ProductController extends AbstractController
         $this->getProductsByOfferUseCase = $getProductsByOfferUseCase;
         $this->cache = $cache;
         $this->getProductByIdUseCase = $getProductByIdUseCase;
-        $this->getProductBySlugUseCase = $getProductBySlugUseCase;
         $this->mediaUrlResolver = $mediaUrlResolver;
     }
 
@@ -180,6 +177,10 @@ class ProductController extends AbstractController
         try {
             $host = $this->resolveHost($request);
             $locale = CacheLocale::normalize($request->query->get('locale'));
+            // lot FICHES-HORS-LIGNE : un article hors ligne est absent pour le public (même exception que le service), AVANT le cache partagé
+            if ($this->visibility?->hidden($id)) {
+                throw new \Symfony\Component\HttpKernel\Exception\NotFoundHttpException('Product not found for ID: ' . $id);
+            }
             $product = $this->cache->get(
                 'product_detail_' . $id . '_' . $locale,
                 fn () => $this->getProductByIdUseCase->execute($id, $host, $locale),
@@ -211,12 +212,12 @@ class ProductController extends AbstractController
             $locale = CacheLocale::normalize($request->query->get('locale'));
             // même entrée de cache que la fiche par identifiant : une fiche est vidée par l'écriture de son produit
             $id = $this->emProvider->getEntityManager()->getRepository(Product::class)->findBySlugAndLocale($slug, $locale)?->getId();
-            if ($id === null) {
+            if ($id === null || $this->visibility?->hidden($id)) { // lot FICHES-HORS-LIGNE : hors ligne = la réponse d'un slug inconnu
                 return $this->json(['error' => 'Produit introuvable'], JsonResponse::HTTP_NOT_FOUND);
             }
             $product = $this->cache->get(
                 'product_detail_' . $id . '_' . $locale,
-                fn () => $this->getProductBySlugUseCase->execute($slug, $host, $locale),
+                fn () => $this->getProductByIdUseCase->execute($id, $host, $locale), // l'article CONTRÔLÉ (le slug n'est pas unique)
                 300,
                 CacheTags::productItemTags($id)
             );

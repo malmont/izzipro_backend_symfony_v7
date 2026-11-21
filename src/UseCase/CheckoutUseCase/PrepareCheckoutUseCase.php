@@ -41,7 +41,7 @@ final class PrepareCheckoutUseCase
             $payload['shippingAddress'] = $this->taxAddress($order, $user);
         }
         try {
-            $quote = $this->quotes->quote(CartQuoteInputDto::fromArray($payload));
+            $quote = $this->quotes->quote(CartQuoteInputDto::fromArray($payload), web: true); // intention de paiement : circuit web
         } catch (CartQuoteException $e) {
             throw new CheckoutException($e->getStatusCode(), $e->getMessage(), $e->errors, $e->code()); // code et errors[] codées du devis (02/11/2026)
         }

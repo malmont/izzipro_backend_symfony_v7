@@ -49,7 +49,8 @@ final class CartQuoteCalculator
         private readonly ?\App\Services\BoutiqueSettingsService\BoutiqueSettingsService $settings = null, // livraison offerte (lot 1, 07/11/2026)
         private readonly ?OrderTaxAddressResolver $taxAddress = null, // retrait en magasin : taxes du lieu de remise (B20, 08/11/2026)
         private readonly ?\App\Services\Booking\RentalPromotionService $rentalPromotions = null, // promotion de location (lot LOC3, 11/11/2026)
-        private readonly ?VariantPriceResolver $variantPrices = null // promotion par variante (lot VAR, 11/11/2026)
+        private readonly ?VariantPriceResolver $variantPrices = null, // promotion par variante (lot VAR, 11/11/2026)
+        private readonly ?\App\Services\Storefront\PublicProductVisibility $visibility = null, // lot FICHES-HORS-LIGNE (21/11/2026)
     ) {
     }
 
@@ -57,7 +58,11 @@ final class CartQuoteCalculator
      * @return array{lines: list<array<string, mixed>>, subtotal: int, shipping: int, taxes: list<array{label: string, rate: float, amount: int, jurisdiction?: string}>, taxStatus: string, taxProvider: string, taxCalculationId: ?string, deposit: int, total: int, currency: string, shippingAddress: ?array, carrier: ?array{id: int, name: ?string, isFree: bool}}
      * @throws CartQuoteException
      */
-    public function quote(CartQuoteInputDto $input): array
+    /**
+     * @param bool $web circuit web (devis du panier sans poste de caisse, intention de paiement) : un article hors ligne y est
+     *                  NOT_SELLABLE pour le public (lot FICHES-HORS-LIGNE) ; la caisse et les autres appelants ne changent pas
+     */
+    public function quote(CartQuoteInputDto $input, bool $web = false): array
     {
         $em = $this->emProvider->getEntityManager();
         $lines = [];
@@ -86,6 +91,12 @@ final class CartQuoteCalculator
             $product = $variant?->getProduct();
             if ($variant === null || $product === null) {
                 throw new CartQuoteException(404, "$path.productVariantId : variante introuvable", [CartQuoteException::error("$path.productVariantId", 'VARIANT_NOT_FOUND', 'variante introuvable')]);
+            }
+            // lot FICHES-HORS-LIGNE : un article hors ligne ne se vend pas au web (sauf à l'équipe) ; contrôlé AVANT les autres refus, qui
+            // diraient sa nature (location seule, abonnement)
+            if ($web && $product->isWeb() !== true && !($this->visibility?->viewerIsTeam() ?? true)) {
+                $errors[] = CartQuoteException::error($path, 'NOT_SELLABLE', 'ce produit ne se vend pas');
+                continue;
             }
             $booking = $item['booking'] ?? $item['rental'] ?? null;
             $isRental = RentalLineResolver::isRental($product, $item);

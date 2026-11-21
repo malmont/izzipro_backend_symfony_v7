@@ -45,8 +45,9 @@ class BoutiqueCacheInvalidationTest extends WebTestCase
     /** @return iterable<string, array{class-string, string, string, bool}> entité écrite, route, clé, connexion admin */
     public static function components(): iterable
     {
+        // isWeb : true pour le public, quel que soit le paramètre (lot FICHES-HORS-LIGNE, 21/11/2026) ; la clé de cache le suit
         $byCategory = 'products_by_category_' . md5(json_encode([
-            'categories' => null, 'keyword' => null, 'page' => 1, 'pageSize' => 12, 'barcode' => null, 'isWeb' => null, 'isPos' => null, 'locale' => 'fr',
+            'categories' => null, 'keyword' => null, 'page' => 1, 'pageSize' => 12, 'barcode' => null, 'isWeb' => true, 'isPos' => null, 'locale' => 'fr',
         ]));
         yield 'products by category' => [Product::class, '/api/products/by-category?locale=fr', $byCategory, false];
         yield 'category read through the product lists' => [Categories::class, '/api/products/by-category?locale=fr', $byCategory, false];
@@ -93,8 +94,9 @@ class BoutiqueCacheInvalidationTest extends WebTestCase
     public function testAProductSheetIsClearedAloneByItsVariantsAndByTheReferentials(): void
     {
         $suffix = bin2hex(random_bytes(3));
-        $a = $this->create(Product::class, ['slug' => 'cache-a-' . $suffix]);
-        $b = $this->create(Product::class, ['slug' => 'cache-b-' . $suffix]);
+        // en ligne : un article hors ligne n'est pas servi au public (lot FICHES-HORS-LIGNE)
+        $a = $this->create(Product::class, ['slug' => 'cache-a-' . $suffix, 'isWeb' => true]);
+        $b = $this->create(Product::class, ['slug' => 'cache-b-' . $suffix, 'isWeb' => true]);
         $this->endOfWrite();
         $this->get('/api/products/' . $a->getId() . '?locale=fr');
         $this->get('/api/products/by-slug/cache-b-' . $suffix . '?locale=fr');

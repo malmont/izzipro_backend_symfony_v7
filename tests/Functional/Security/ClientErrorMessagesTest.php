@@ -17,7 +17,6 @@ use App\UseCase\Booking\CheckAvailabilityUseCase;
 use App\UseCase\Booking\GetCalendarAvailabilityUseCase;
 use App\UseCase\ProductUseCase\CreateProductByCommandeUseCase;
 use App\UseCase\ProductUseCase\GetProductByIdUseCase;
-use App\UseCase\ProductUseCase\GetProductBySlugUseCase;
 use App\UseCase\ShippingUseCase\PurchaseShippingForCart;
 use Doctrine\ORM\EntityManagerInterface;
 use Psr\Log\AbstractLogger;
@@ -51,8 +50,8 @@ class ClientErrorMessagesTest extends WebTestCase
 
         $this->fresh();
         $slug = 'erreurs-' . bin2hex(random_bytes(3));
-        $this->em()->getConnection()->executeStatement("INSERT INTO product (id, name, price, isbestseller, quantity, created_at, slug, product_type) VALUES (nextval('product_id_seq'), 'Article ERREURS', 1000, false, 1, NOW(), ?, 'standard')", [$slug]);
-        $this->replace(GetProductBySlugUseCase::class);
+        $this->em()->getConnection()->executeStatement("INSERT INTO product (id, name, price, isbestseller, quantity, created_at, slug, product_type, is_web) VALUES (nextval('product_id_seq'), 'Article ERREURS', 1000, false, 1, NOW(), ?, 'standard', true)", [$slug]);
+        $this->replace(GetProductByIdUseCase::class); // by-slug lit la fiche par l'identifiant contrôlé (lot FICHES-HORS-LIGNE)
         $this->assertNeutral($this->call('GET', "/api/products/by-slug/$slug"), 404, 'GET /api/products/by-slug/{slug}');
 
         // Refus métier inchangés : article inconnu

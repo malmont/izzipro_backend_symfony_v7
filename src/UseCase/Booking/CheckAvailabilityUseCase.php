@@ -12,7 +12,8 @@ class CheckAvailabilityUseCase
 {
     public function __construct(
         private BookingAvailabilityService $availabilityService,
-        private TenantEntityManagerProvider $emProvider
+        private TenantEntityManagerProvider $emProvider,
+        private ?\App\Services\Storefront\PublicProductVisibility $visibility = null, // lot FICHES-HORS-LIGNE (21/11/2026)
     ) {}
 
     public function execute(AvailabilityCheckDto $dto): array
@@ -20,7 +21,7 @@ class CheckAvailabilityUseCase
         $tenantEm = $this->emProvider->getEntityManager();
         $product = $tenantEm->getRepository(Product::class)->find($dto->productId);
 
-        if (!$product) {
+        if (!$product || $this->visibility?->hidden((int) $product->getId())) { // lot FICHES-HORS-LIGNE : hors ligne = absent pour le public
             throw new NotFoundHttpException("Produit introuvable.");
         }
 
