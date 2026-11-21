@@ -234,11 +234,15 @@ class AboWaitlistTest extends WebTestCase
         $this->json('POST', '/api/subscriptions/' . $ap->getId() . '/rendez-vous', ['benefitId' => $pilates->getId(), 'slotId' => $p], 201, 'abo4-a@example.invalid');
         $we = $this->json('POST', $this->join($e, $p), null, 201, 'abo4-c@example.invalid')['wait']['waitId'];
         $carried = (int) $this->db->fetchOne('SELECT occurrence_id FROM benefit_waitlist WHERE id = ?', [$we]);
-        $other = (int) $this->db->fetchOne("SELECT id FROM benefit_occurrence WHERE subscription_id = ? AND status = 'available' AND id <> ?", [$e->getId(), $carried]);
-        $this->db->executeStatement("UPDATE benefit_occurrence SET valid_until = (SELECT starts_at FROM benefit_slot WHERE id = ?) + INTERVAL '1 day' WHERE id = ?", [$p, $other]);
+        // les autres droits de E expirent juste après le créneau P : seul le droit porté vaut encore pour une date plus lointaine
+        $others = array_map('intval', $this->db->fetchFirstColumn("SELECT id FROM benefit_occurrence WHERE subscription_id = ? AND status = 'available' AND id <> ? ORDER BY id", [$e->getId(), $carried]));
+        $this->assertNotEmpty($others);
+        $this->db->executeStatement("UPDATE benefit_occurrence SET valid_until = (SELECT starts_at FROM benefit_slot WHERE id = ?) + INTERVAL '1 day' WHERE subscription_id = ? AND status = 'available' AND id <> ?", [$p, $e->getId(), $carried]);
         $later = $this->slot($pilates, '+10 days', 1);
-        $this->json('POST', '/api/subscriptions/' . $e->getId() . '/rendez-vous', ['benefitId' => $pilates->getId(), 'slotId' => $later], 201, 'abo4-c@example.invalid');
-        $this->assertSame(['waiting', $other], [$this->db->fetchOne('SELECT status FROM benefit_waitlist WHERE id = ?', [$we]), (int) $this->db->fetchOne('SELECT occurrence_id FROM benefit_waitlist WHERE id = ?', [$we])]);
+        $taken = $this->json('POST', '/api/subscriptions/' . $e->getId() . '/rendez-vous', ['benefitId' => $pilates->getId(), 'slotId' => $later], 201, 'abo4-c@example.invalid')['appointment']['occurrenceId'];
+        $this->assertSame($carried, $taken, 'la date lointaine prend le droit que portait l\'attente');
+        $this->assertSame('waiting', $this->db->fetchOne('SELECT status FROM benefit_waitlist WHERE id = ?', [$we]), 'l\'attente reste ouverte');
+        $this->assertContains((int) $this->db->fetchOne('SELECT occurrence_id FROM benefit_waitlist WHERE id = ?', [$we]), $others, 'sur un autre droit valable au début de P');
     }
 
     public function testNoAutomaticOfferUnderAnHourButTheTeamCanProposeUntilTheStart(): void

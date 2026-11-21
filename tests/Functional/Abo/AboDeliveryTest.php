@@ -199,7 +199,7 @@ class AboDeliveryTest extends WebTestCase
         // l'abonné coupe le courriel « fait » ; une valeur mal formée est refusée
         $client = '/api/subscriptions/' . $s->getId() . '/courriels';
         $this->assertSame('DONE_EMAILS_INVALID', $this->json('PATCH', $client, ['doneEmails' => 'non'], 422, 'client')['code']);
-        $this->assertSame(['doneEmails' => false], $this->json('PATCH', $client, ['doneEmails' => false], 200, 'client'));
+        $this->assertSame(['doneEmails' => false, 'reminders' => true], $this->json('PATCH', $client, ['doneEmails' => false], 200, 'client')); // lot ABO-4 : la réponse rend aussi `reminders`
         $this->assertSame(404, $this->api('PATCH', $client, ['doneEmails' => true], 'other')->getStatusCode());
         $this->json('POST', $team . $c . '/fait', [], 200);
         $this->assertEmailCount(0, null, 'courriel coupé par l\'abonné');

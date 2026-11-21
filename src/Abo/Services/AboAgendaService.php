@@ -449,7 +449,8 @@ class AboAgendaService
     public function move(Subscription $subscription, int $occurrenceId, ?int $slotId, ?string $startsAt, string $source, ?string $by): array
     {
         $freed = null;
-        $out = $this->queueFirst(fn () => $this->locked($subscription, function () use ($subscription, $occurrenceId, $slotId, $startsAt, $source, $by, &$freed) {
+        // une fermeture `function` (et non `fn`) : `fn` capture par valeur, `&$freed` ne remonterait jamais jusqu'ici
+        $out = $this->queueFirst(function () use ($subscription, $occurrenceId, $slotId, $startsAt, $source, $by, &$freed) { return $this->locked($subscription, function () use ($subscription, $occurrenceId, $slotId, $startsAt, $source, $by, &$freed) {
             return $this->conn()->transactional(function (Connection $conn) use ($subscription, $occurrenceId, $slotId, $startsAt, $source, $by, &$freed) {
                 $o = $this->scheduledRow($conn, $subscription, $occurrenceId);
                 $freed = $o['slot_id'] !== null && (int) $o['slot_id'] !== $slotId ? (int) $o['slot_id'] : null; // lot ABO-4
@@ -465,7 +466,7 @@ class AboAgendaService
 
                 return $view;
             });
-        }));
+        }); });
         $this->slotFreed($freed);
 
         return $out;

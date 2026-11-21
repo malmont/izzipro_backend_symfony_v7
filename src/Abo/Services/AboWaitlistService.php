@@ -54,7 +54,8 @@ class AboWaitlistService
     public function join(Subscription $subscription, int $slotId, string $host = ''): array
     {
         $offers = [];
-        $id = $this->agenda->withSubscriptionLock($subscription, fn () => $this->conn()->transactional(function (Connection $conn) use ($subscription, $slotId, &$offers) {
+        // `function` et non `fn` : `fn` capture par valeur, les offres faites ici ne remonteraient jamais (relecture du 21/11/2026)
+        $id = $this->agenda->withSubscriptionLock($subscription, function () use ($subscription, $slotId, &$offers) { return $this->conn()->transactional(function (Connection $conn) use ($subscription, $slotId, &$offers) {
             $slot = $this->agenda->clientSlotIn($conn, $subscription, $slotId);
             $subscriptionId = (int) $subscription->getId();
             if ($conn->fetchOne("SELECT 1 FROM benefit_occurrence WHERE subscription_id = ? AND slot_id = ? AND status = 'scheduled' LIMIT 1", [$subscriptionId, $slotId]) !== false) {
@@ -77,7 +78,7 @@ class AboWaitlistService
 
             return (int) $conn->fetchOne("INSERT INTO benefit_waitlist (slot_id, subscription_id, benefit_id, occurrence_id, status, created_at) VALUES (?, ?, ?, ?, 'waiting', ?) RETURNING id",
                 [$slotId, $subscriptionId, (int) $slot['benefit_id'], $occurrence, AboWaitlist::utc(new \DateTimeImmutable())]);
-        }));
+        }); });
         $this->sendOffers($offers, $host);
 
         return $this->view($this->row($id), false);
@@ -113,7 +114,7 @@ class AboWaitlistService
     {
         $offers = [];
         $expired = false;
-        $appointment = $this->agenda->withSubscriptionLock($subscription, fn () => $this->conn()->transactional(function (Connection $conn) use ($subscription, $waitId, &$offers, &$expired) {
+        $appointment = $this->agenda->withSubscriptionLock($subscription, function () use ($subscription, $waitId, &$offers, &$expired) { return $this->conn()->transactional(function (Connection $conn) use ($subscription, $waitId, &$offers, &$expired) {
             $slotId = $conn->fetchOne('SELECT slot_id FROM benefit_waitlist WHERE id = ? AND subscription_id = ?', [$waitId, $subscription->getId()]);
             if ($slotId === false || $slotId === null) {
                 throw new AboException(404, 'WAITLIST_NOT_FOUND', 'Attente introuvable.', 'waitId');
@@ -136,7 +137,7 @@ class AboWaitlistService
             $this->agenda->clientSlotIn($conn, $subscription, (int) $slotId);
 
             return $this->agenda->bookAcceptedIn($conn, $subscription, (int) $w['benefit_id'], $carried, (int) $slotId);
-        }));
+        }); });
         $this->sendOffers($offers, $host);
         if ($expired) {
             throw new AboException(409, 'OFFER_EXPIRED', 'Le délai pour confirmer cette place est passé : elle a été proposée à la personne suivante.', 'waitId');
