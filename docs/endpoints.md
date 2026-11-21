@@ -261,7 +261,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (765)
+## Boutique et commun (767)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -643,6 +643,8 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | PATCH | `/api/gestion/voyages/{id}` | ROLE_ADMIN | `Gestion\Controller\GestionTripController::update` |
 | GET | `/api/gestion/voyages` | ROLE_ADMIN | `Gestion\Controller\GestionTripController::list` |
 | POST | `/api/gestion/voyages` | ROLE_ADMIN | `Gestion\Controller\GestionTripController::create` |
+| DELETE | `/api/group/invitations/{id}` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\SiteFeaturesController\GroupController::cancelInvitation` |
+| GET | `/api/group/invitations` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\SiteFeaturesController\GroupController::invitations` |
 | POST | `/api/group/invitations` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\SiteFeaturesController\GroupController::invite` |
 | POST | `/api/group/leave` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\SiteFeaturesController\GroupController::leave` |
 | DELETE | `/api/group/shops/{code}/same-company` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\SiteFeaturesController\GroupController::removeSameCompany` |

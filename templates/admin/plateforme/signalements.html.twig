@@ -33,7 +33,7 @@
             <label class="form-label small mb-0">État</label>
             <select name="status" class="form-select form-select-sm">
                 <option value="">tous</option>
-                {% for s in statuses %}<option value="{{ s }}" {{ filters.status == s ? 'selected' }}>{{ s }}</option>{% endfor %}
+                {% for s in statuses %}<option value="{{ s }}" {{ filters.status == s ? 'selected' }}>{{ statusLabels[s] ?? s }}</option>{% endfor %}
             </select>
         </div>
         <div class="col-auto"><label class="form-label small mb-0">Site</label><input name="tenant" value="{{ filters.tenant }}" class="form-control form-control-sm" maxlength="50"></div>
@@ -57,12 +57,12 @@
                         {% if r.context %}<details class="small"><summary>contexte</summary><pre class="mb-0">{{ r.context|json_encode(constant('JSON_PRETTY_PRINT') b-or constant('JSON_UNESCAPED_UNICODE') b-or constant('JSON_UNESCAPED_SLASHES')) }}</pre></details>{% endif %}
                         {% if r.answer %}<div class="small">Réponse : {{ r.answer }}</div>{% endif %}
                         {% if r.note %}<div class="small text-muted">Note interne : {{ r.note }}</div>{% endif %}</td>
-                    <td>{% if r.status == 'received' %}<span class="badge bg-warning text-dark">reçu</span>{% else %}{{ r.status }}{% endif %}{% if r.incidentId %}<div class="small text-muted">incident n° {{ r.incidentId }}</div>{% endif %}</td>
+                    <td data-status="{{ r.status }}"><span class="badge {{ statusBadges[r.status] ?? 'bg-secondary' }}">{{ statusLabels[r.status] ?? r.status }}</span>{% if r.incidentId %}<div class="small text-muted">incident n° {{ r.incidentId }}</div>{% endif %}</td>
                     <td>
                         <form method="post" action="{{ path('admin_plateforme_bug_report', {id: r.id}) }}" class="d-flex flex-column gap-1">
                             <input type="hidden" name="_token" value="{{ csrf_token(csrf_id) }}">
                             <select name="status" class="form-select form-select-sm">
-                                {% for s in statuses %}<option value="{{ s }}" {{ r.status == s ? 'selected' }}>{{ {received: 'reçu', in_progress: 'en cours', fixed: 'corrigé', wont_fix: 'ne sera pas corrigé'}[s] }}</option>{% endfor %}
+                                {% for s in statuses %}<option value="{{ s }}" {{ r.status == s ? 'selected' }}>{{ statusLabels[s] ?? s }}</option>{% endfor %}
                             </select>
                             <textarea name="answer" placeholder="réponse au signaleur (envoyée par courriel)" class="form-control form-control-sm" maxlength="4000" rows="2">{{ r.answer }}</textarea>
                             <input name="note" value="{{ r.note }}" placeholder="note interne" class="form-control form-control-sm" maxlength="4000">

@@ -20,7 +20,7 @@ use Psr\Log\LoggerInterface;
  */
 class GroupCompanyService
 {
-    public const CONSENT_VERSION = 'g1d-v1';
+    public const CONSENT_VERSION = 'g1d-v2';
     public const REQUEST_DAYS = 14;
     public const JOURNAL_ACTION = 'same_company';
 
@@ -36,12 +36,16 @@ class GroupCompanyService
     ) {
     }
 
-    /** Le texte de consentement, dit en clair à l'acceptation et à la confirmation */
+    /**
+     * Le texte de consentement, dit en clair à l'acceptation et à la confirmation. Lot G-CONSENT (21/11/2026, texte validé par le chef) :
+     * g1d-v2 dit les transferts dans les deux sens et l'annulation des transferts seulement demandés au retrait du lien. Un lien posé avec
+     * g1d-v1 garde sa version (`same_company_consent_version`) ; toute nouvelle pose exige g1d-v2.
+     */
     public static function consent(string $groupName, string $language = 'fr'): string
     {
         return $language === 'en'
-            ? sprintf('This shop belongs to the same company as the head of the group %s. The director will be able to transfer stock to it and copy the purchase cost into it. You can remove this link at any time, on your own and immediately.', $groupName)
-            : sprintf('Cette boutique appartient à la même entreprise que le siège du groupe %s. Le directeur pourra y transférer du stock et y copier le coût d\'achat. Vous pouvez retirer ce lien à tout moment, seul et tout de suite.', $groupName);
+            ? sprintf('This shop belongs to the same company as the head of the group %s. This link opens stock transfers between this shop and the group\'s other shops of the same company, in both directions: the director may request them, and you send any stock that leaves your shop. The purchase cost may be copied from one shop to another. You can remove this link at any time, on your own and immediately; transfers that are only requested are then cancelled.', $groupName)
+            : sprintf('Cette boutique appartient à la même entreprise que le siège du groupe %s. Ce lien ouvre les transferts de stock entre cette boutique et les autres boutiques de la même entreprise du groupe, dans les deux sens : le directeur pourra en demander, et c\'est vous qui enverrez le stock qui part de chez vous. Le coût d\'achat pourra être recopié d\'une boutique à l\'autre. Vous pouvez retirer ce lien à tout moment, seul et tout de suite ; les transferts encore seulement demandés seront alors annulés.', $groupName);
     }
 
     /** LA règle : le siège et les boutiques créées le sont toujours ; une boutique associée seulement avec le lien confirmé ; hors groupe : non */

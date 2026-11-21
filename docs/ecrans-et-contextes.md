@@ -523,6 +523,25 @@ Plan : `docs/plan-entree-et-groupe.md` § 4. G-1b (entrée du directeur dans une
     siège, soit déjà dans un groupe ou déjà invité : le tri se fait en file (`SendGroupInvitationMessage`, file `email`), la raison d'un refus
     reste au journal du groupe (`invitation_skipped`). Limiteur : 10 demandes par jour et par groupe, 429 `GROUP_INVITE_LIMIT` ; 403
     `GROUP_HEAD_ONLY`, `MODULE_INACTIVE` ;
+  - **lot G-INVITES (21/11/2026, contrat validé par le chef)** : la demande est écrite TOUT DE SUITE, dans la requête du siège et avant la
+    file, à `shop_group_events` (`invitation_requested` : le code tapé, en minuscules, 50 caractères au plus ; l'heure ; son identifiant est
+    le NUMÉRO DE LA DEMANDE). C'est la SEULE source de la liste du siège. La file garde son tri et ses motifs, et note ce numéro sur la vraie
+    invitation qu'elle crée (`shop_group_invitations.request_id`, `ops/sql/group_invites_master.sql`). Avant ce lot, l'événement s'appelait
+    `invitation_asked` : la limite compte les deux ;
+  - `GET /api/group/invitations` (siège seul, module actif ; 403 `GROUP_HEAD_ONLY`, `MODULE_INACTIVE`, `GROUP_FORBIDDEN` pour le compte de la
+    plateforme et toute personne entrée, directeur comme agence) → `{ invitations: [{ id, code, sentAt, expiresAt, state }] }`, la plus
+    récente d'abord. `expiresAt` = `sentAt` + 14 jours. `state` vaut `pending` jusqu'à l'échéance, que le code existe ou non, que
+    l'invitation soit refusée ou sans réponse ; `expired` ensuite ; la demande reste listée 30 jours après l'échéance, puis elle est cachée.
+    Une demande dont l'invitation est ACCEPTÉE disparaît (la boutique est alors dans `GET /api/group`), une demande annulée aussi. Aucune
+    lecture d'une base de site : le journal et les invitations de la base maître seulement (le temps de réponse ne dit rien du site) ;
+  - `DELETE /api/group/invitations/{id}` (siège seul) → 204 sans corps, que le code existe ou non : écrit `invitation_cancelled` (qui,
+    quand, `{ request }`) et ferme la vraie invitation née de cette demande, s'il y en a une (`refused_at`, « annulée par le siège ») ; elle
+    ne s'accepte plus (404 `GROUP_INVITATION_NOT_FOUND` pour la boutique). 404 `GROUP_INVITATION_NOT_FOUND` pour une demande inconnue, d'un
+    autre groupe, déjà annulée, acceptée ou plus listée. Courses : l'annulation et l'acceptation prennent le même verrou du groupe (l'invitation
+    est relue ouverte et marquée acceptée dans la transaction de `addShop`) ; la file crée l'invitation d'une demande SOUS CE MÊME VERROU,
+    après avoir relu l'annulation (`inviteForRequest`, motif `cancelled`) : l'annulation voit l'invitation et la ferme, ou la file voit
+    l'annulation et ne crée rien ni n'envoie de courriel (relecture neuve). L'échéance de l'invitation part de l'heure de la demande (comme
+    la liste). Un message en file d'avant le lot (sans `requestId`) suit l'ancien chemin. Aucun nouvel outil d'IA ;
   - `POST /api/group/leave` `{ shop? }` : la boutique quitte, ou le siège retire une boutique ; le siège seul dissout (409 `GROUP_NOT_EMPTY`
     tant qu'il reste une autre boutique) ;
   - `GET /api/site/group-invitations` → `{ invitations: [{ id, group, head, expiresAt, consent, consentVersion }] }` ;
@@ -536,7 +555,10 @@ Plan : `docs/plan-entree-et-groupe.md` § 4. G-1b (entrée du directeur dans une
   la plateforme ; sans lien : la réponse se donne dans l'espace d'administration.
 - Écran du registre `groupe` (famille vente) ; l'agence ne voit jamais le groupe (lien séparé, décision du propriétaire du 18/11).
 
-Essai : `tests/Functional/Group/GroupApiTest.php`.
+Essai : `tests/Functional/Group/GroupApiTest.php` (lot G-INVITES : un code inconnu et un vrai site en attente se lisent exactement pareil
+avant et après la file et après un refus ; à l'échéance, refusée, inconnue et sans réponse donnent `expired`, puis cachées ; acceptée :
+disparue ; annuler rend 204 sans corps pour les deux, l'invitation réelle ne s'accepte plus, annulée avant la file : aucune invitation ;
+demande d'un autre groupe : 404 ; 403 hors du siège, pour une boutique, le directeur entré, l'agence entrée et la plateforme).
 
 ### 12.1 Lot G-1b : l'entrée du directeur dans une boutique du groupe
 
@@ -881,7 +903,9 @@ les écritures d'UN site et ses marques, `GroupTransferMailer`, `GroupTransferLi
 - **Réception** : jamais écrite par R1 ; lue par la fiche et la liste du directeur (commande toute reçue → `received`).
 - **Annulation après l'envoi** : la commande de destination est fermée, ses lignes remises à zéro, son nom préfixé « [annulé] » ; puis le
   stock revient chez la source (marques `back`).
-- **Lien « même entreprise » retiré** (G-1d) : `GroupTransferLinkGuard` annule les transferts seulement demandés avec cette boutique.
+- **Lien « même entreprise » retiré** (G-1d, lot G-CONSENT) : `GroupTransferLinkGuard` annule les transferts seulement demandés (`requested`)
+  et ferme ceux en échec d'envoi (`send_failed` : stock déjà rendu à la source, aucune écriture dans les sites) avec cette boutique, dans
+  les deux sens ; `sending` et `sent` restent intacts. Passage conditionnel à l'état lu (un envoi relancé entre-temps n'est pas touché).
 - **Outils de l'IA** : `get_group_transfers` (directeur), `get_transfers_to_send` (administrateur d'une boutique : quantités, sans coût),
   `propose_group_transfer` (directeur, confirmé par lui, `GroupTransferService::request`). Refusés et dits (`refusedToAssistant`) :
   envoyer, recevoir.
@@ -901,6 +925,10 @@ l'autre. Règle unique (`GroupCompanyService::same` / `sameFromRow`) : une bouti
   demande faite AVANT l'entrée actuelle de la boutique (course avec une sortie) n'est ni montrée ni confirmable, et elle est close à la demande
   suivante). La case cochée à l'acceptation naît avec le lien de la boutique (un seul INSERT, `GroupRepository::addShop`).
 - **Consentement** `g1d-v1` (`GroupCompanyService::consent`, fr et en), exigé à l'identique : sinon 422 `GROUP_CONSENT_REQUIRED`.
+  **Lot G-CONSENT (21/11/2026, texte validé par le chef)** : `g1d-v2`, qui dit les transferts dans les deux sens (le directeur en demande,
+  la boutique envoie ce qui part de chez elle), la copie du coût d'une boutique à l'autre et l'annulation des transferts seulement demandés
+  au retrait. Toute nouvelle pose (acceptation ou confirmation) exige `g1d-v2` ; `g1d-v1` est refusé (422). Un lien déjà posé garde sa
+  version (`same_company_consent_version`), rien ne la réécrit. Essai : `GroupSameCompanyTest` (une méthode : versions et un transfert par état).
 - **Poser** : à l'acceptation (`accept { consent, sameCompany: true, sameCompanyConsent }`, vérifié AVANT l'entrée dans le groupe ; la liste
   des invitations donne `sameCompanyConsent` et `sameCompanyConsentVersion`) ; ou `POST /api/group/shops/{code}/same-company` (directeur) →
   202, puis la boutique `GET /api/site/group-same-company`, `POST …/{id}/confirm { consent }` ou `…/{id}/refuse`. Refus : 409

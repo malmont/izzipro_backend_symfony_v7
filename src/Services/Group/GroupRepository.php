@@ -74,8 +74,13 @@ class GroupRepository
         }
     }
 
-    /** Ajoute une boutique sous verrou du groupe : `added`, `gone` (groupe dissous), `limit` (forfait plein) ou `taken` (déjà dans un groupe : index unique) */
-    public function addShop(int $groupId, string $code, string $origin, ?string $by, ?string $sameCompanyConsent = null): string
+    /**
+     * Ajoute une boutique sous verrou du groupe : `added`, `gone` (groupe dissous, ou invitation close entre-temps), `limit` (forfait plein) ou
+     * `taken` (déjà dans un groupe : index unique). Lot G-INVITES : avec `$invitationId`, l'invitation est relue OUVERTE sous ce même verrou
+     * et marquée acceptée dans la même transaction ; l'annulation par le siège prend le même verrou : jamais une boutique entrée par une
+     * invitation que le siège vient d'annuler.
+     */
+    public function addShop(int $groupId, string $code, string $origin, ?string $by, ?string $sameCompanyConsent = null, ?int $invitationId = null): string
     {
         $pdo = $this->pdo();
         $pdo->beginTransaction();
@@ -87,6 +92,15 @@ class GroupRepository
                 $pdo->rollBack();
 
                 return 'gone';
+            }
+            if ($invitationId !== null) {
+                $open = $pdo->prepare('SELECT 1 FROM shop_group_invitations WHERE id = ? AND group_id = ? AND accepted_at IS NULL AND refused_at IS NULL AND expires_at > NOW()');
+                $open->execute([$invitationId, $groupId]);
+                if ($open->fetchColumn() === false) {
+                    $pdo->rollBack();
+
+                    return 'gone';
+                }
             }
             $max = (int) $group['max_shops'];
             $count = $pdo->prepare('SELECT COUNT(*) FROM shop_group_sites WHERE group_id = ? AND left_at IS NULL');
@@ -100,6 +114,9 @@ class GroupRepository
             $pdo->prepare('INSERT INTO shop_group_sites (group_id, tenant_code, origin, joined_by, same_company, same_company_since, same_company_consent_version)
                 VALUES (?, ?, ?, ?, ?::boolean, CASE WHEN ?::boolean THEN NOW() ELSE NULL END, ?)')
                 ->execute([$groupId, $code, $origin, $by, $sameCompanyConsent !== null ? 't' : 'f', $sameCompanyConsent !== null ? 't' : 'f', $sameCompanyConsent]);
+            if ($invitationId !== null) {
+                $pdo->prepare('UPDATE shop_group_invitations SET accepted_at = NOW(), answered_by = ? WHERE id = ?')->execute([$by, $invitationId]);
+            }
             $pdo->commit();
 
             return 'added';
@@ -152,9 +169,11 @@ class GroupRepository
 
     /**
      * Compte ET note une demande d'invitation SOUS VERROU du groupe (relecture neuve : des demandes simultanées ne dépassent plus la limite).
-     * Rend faux, sans rien noter, si la limite des 24 dernières heures est atteinte.
+     * Rend null, sans rien noter, si la limite des 24 dernières heures est atteinte. Lot G-INVITES : la demande est l'événement
+     * `invitation_requested` (le code tapé, l'heure) ; son identifiant est le NUMÉRO DE LA DEMANDE, rendu à l'appelant pour la file. Avant ce
+     * lot, l'événement s'appelait `invitation_asked` : la limite compte les deux.
      */
-    public function askInvitation(int $groupId, string $code, int $perDay, ?string $actor): bool
+    public function askInvitation(int $groupId, string $code, int $perDay, ?string $actor): ?int
     {
         $pdo = $this->pdo();
         $pdo->beginTransaction();
@@ -162,14 +181,68 @@ class GroupRepository
             $pdo->prepare('SELECT id FROM shop_groups WHERE id = ? FOR UPDATE')->execute([$groupId]);
             // relecture neuve, passe 2 : compté par SIÈGE (tous ses groupes, dissous compris) : dissoudre et recréer ne remet pas la limite à zéro
             $count = $pdo->prepare("SELECT COUNT(*) FROM shop_group_events e JOIN shop_groups g ON g.id = e.group_id WHERE g.head_tenant_code = (SELECT head_tenant_code FROM shop_groups WHERE id = ?)
-                AND e.event = 'invitation_asked' AND e.created_at > NOW() - INTERVAL '1 day'");
+                AND e.event IN ('invitation_asked', 'invitation_requested') AND e.created_at > NOW() - INTERVAL '1 day'");
             $count->execute([$groupId]);
             if ((int) $count->fetchColumn() >= $perDay) {
                 $pdo->rollBack();
 
+                return null;
+            }
+            $stmt = $pdo->prepare("INSERT INTO shop_group_events (group_id, event, tenant_code, payload, actor) VALUES (?, 'invitation_requested', ?, '{}', ?) RETURNING id");
+            $stmt->execute([$groupId, $code, $actor]);
+            $id = (int) $stmt->fetchColumn();
+            $pdo->commit();
+
+            return $id;
+        } catch (\Throwable $e) {
+            $pdo->inTransaction() && $pdo->rollBack();
+
+            throw $e;
+        }
+    }
+
+    /**
+     * Lot G-INVITES : les demandes d'invitation du groupe, lues dans le SEUL journal de la base maître (jamais une base de site : le temps de
+     * réponse ne dit rien de l'existence du site). Sans les demandes annulées ni celles dont l'invitation a été acceptée ; une demande échue
+     * reste lisible `$keepDays` jours après son échéance.
+     *
+     * @return list<array{id: int, code: string, created_at: string}>
+     */
+    public function invitationRequests(int $groupId, int $validDays, int $keepDays): array
+    {
+        $stmt = $this->pdo()->prepare("SELECT e.id, COALESCE(e.tenant_code, '') AS code, e.created_at FROM shop_group_events e
+            WHERE e.group_id = ? AND e.event = 'invitation_requested' AND e.created_at > NOW() - make_interval(days => ?)
+              AND NOT EXISTS (SELECT 1 FROM shop_group_events c WHERE c.group_id = e.group_id AND c.event = 'invitation_cancelled' AND c.payload::json->>'request' = e.id::text)
+              AND NOT EXISTS (SELECT 1 FROM shop_group_invitations i WHERE i.request_id = e.id AND i.accepted_at IS NOT NULL)
+            ORDER BY e.id DESC");
+        $stmt->execute([$groupId, $validDays + $keepDays]);
+
+        return array_map(static fn (array $r): array => ['id' => (int) $r['id'], 'code' => (string) $r['code'], 'created_at' => (string) $r['created_at']], $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: []);
+    }
+
+    /**
+     * Lot G-INVITES : annule une demande SOUS VERROU du groupe (celui de `addShop`) : l'événement `invitation_cancelled` (qui, quand), puis la
+     * vraie invitation née de cette demande, s'il y en a une, est close (elle ne s'accepte plus). Rend faux si la demande n'est pas une
+     * demande listée de ce groupe (inconnue, d'un autre groupe, déjà annulée, acceptée, ou plus gardée).
+     */
+    public function cancelInvitationRequest(int $groupId, int $requestId, int $validDays, int $keepDays, ?string $actor): bool
+    {
+        $pdo = $this->pdo();
+        $pdo->beginTransaction();
+        try {
+            $pdo->prepare('SELECT id FROM shop_groups WHERE id = ? FOR UPDATE')->execute([$groupId]);
+            $listed = false;
+            foreach ($this->invitationRequests($groupId, $validDays, $keepDays) as $request) {
+                $listed = $listed || $request['id'] === $requestId;
+            }
+            if (!$listed) {
+                $pdo->rollBack();
+
                 return false;
             }
-            $pdo->prepare("INSERT INTO shop_group_events (group_id, event, tenant_code, payload, actor) VALUES (?, 'invitation_asked', ?, '{}', ?)")->execute([$groupId, $code, $actor]);
+            $pdo->prepare("INSERT INTO shop_group_events (group_id, event, tenant_code, payload, actor) VALUES (?, 'invitation_cancelled', NULL, ?, ?)")
+                ->execute([$groupId, json_encode(['request' => $requestId]), $actor]);
+            $this->closeRequestInvitation($requestId, $pdo);
             $pdo->commit();
 
             return true;
@@ -180,18 +253,33 @@ class GroupRepository
         }
     }
 
+    /** Lot G-INVITES : la demande a-t-elle été annulée par le siège ? (relu par la file avant et après la création de l'invitation) */
+    public function isRequestCancelled(int $groupId, int $requestId): bool
+    {
+        return $this->one("SELECT 1 AS ok FROM shop_group_events WHERE group_id = ? AND event = 'invitation_cancelled' AND payload::json->>'request' = ?", [$groupId, (string) $requestId]) !== null;
+    }
+
+    /** Lot G-INVITES : close l'invitation encore ouverte née de cette demande (rend vrai si une invitation a été close) */
+    public function closeRequestInvitation(int $requestId, ?\PDO $pdo = null): bool
+    {
+        $stmt = ($pdo ?? $this->pdo())->prepare("UPDATE shop_group_invitations SET refused_at = NOW(), answered_by = 'annulée par le siège' WHERE request_id = ? AND accepted_at IS NULL AND refused_at IS NULL");
+        $stmt->execute([$requestId]);
+
+        return $stmt->rowCount() > 0;
+    }
+
     /**
      * Crée l'invitation ; null si une invitation ouverte de ce groupe attend déjà ce site (index unique partiel : deux messages simultanés
      * ne font jamais deux invitations). Une invitation échue encore ouverte est d'abord close (refusée par l'échéance).
      */
-    public function invite(int $groupId, string $code, string $tokenHash, ?string $by, \DateTimeImmutable $expires): ?int
+    public function invite(int $groupId, string $code, string $tokenHash, ?string $by, \DateTimeImmutable $expires, ?int $requestId = null): ?int
     {
         $pdo = $this->pdo();
         $pdo->prepare("UPDATE shop_group_invitations SET refused_at = expires_at, answered_by = 'échéance' WHERE group_id = ? AND tenant_code = ? AND accepted_at IS NULL AND refused_at IS NULL AND expires_at <= NOW()")
             ->execute([$groupId, $code]);
         try {
-            $stmt = $pdo->prepare('INSERT INTO shop_group_invitations (group_id, tenant_code, token_hash, invited_by, expires_at) VALUES (?, ?, ?, ?, ?) RETURNING id');
-            $stmt->execute([$groupId, $code, $tokenHash, $by, $expires->setTimezone(new \DateTimeZone('UTC'))->format('Y-m-d H:i:s')]);
+            $stmt = $pdo->prepare('INSERT INTO shop_group_invitations (group_id, tenant_code, token_hash, invited_by, expires_at, request_id) VALUES (?, ?, ?, ?, ?, ?) RETURNING id');
+            $stmt->execute([$groupId, $code, $tokenHash, $by, $expires->setTimezone(new \DateTimeZone('UTC'))->format('Y-m-d H:i:s'), $requestId]);
         } catch (\PDOException $e) {
             if ($e->getCode() === '23505') {
                 return null;
@@ -201,6 +289,53 @@ class GroupRepository
         }
 
         return (int) $stmt->fetchColumn();
+    }
+
+    /**
+     * Lot G-INVITES (relecture neuve) : crée l'invitation d'une DEMANDE numérotée SOUS LE VERROU DU GROUPE, celui que prend l'annulation
+     * (`cancelInvitationRequest`) : l'annulation est relue sous ce verrou, puis l'invitation est créée dans la même transaction. Aucun ordre
+     * ne laisse donc une invitation ouverte pour une demande annulée (l'annulation la voit et la ferme, ou la file voit l'annulation).
+     * L'échéance part de l'heure de la DEMANDE (+ `$days`), la même que la liste du siège, et non du passage de la file.
+     *
+     * @return int|'cancelled'|'pending' l'id de l'invitation créée ; `cancelled` si la demande est annulée (ou inconnue de ce groupe) ;
+     *                                   `pending` si une invitation ouverte de ce groupe attend déjà ce site
+     */
+    public function inviteForRequest(int $groupId, int $requestId, string $code, string $tokenHash, ?string $by, int $days): int|string
+    {
+        $pdo = $this->pdo();
+        $pdo->beginTransaction();
+        try {
+            $pdo->prepare('SELECT id FROM shop_groups WHERE id = ? FOR UPDATE')->execute([$groupId]);
+            $request = $pdo->prepare("SELECT created_at FROM shop_group_events WHERE id = ? AND group_id = ? AND event = 'invitation_requested'");
+            $request->execute([$requestId, $groupId]);
+            $requestedAt = $request->fetchColumn();
+            if ($requestedAt === false || $this->isRequestCancelled($groupId, $requestId)) {
+                $pdo->rollBack();
+
+                return 'cancelled';
+            }
+            // une invitation échue encore ouverte est d'abord close ; une invitation ouverte attend déjà ce site : rien de neuf (sous le verrou,
+            // aucune autre création pour ce groupe ne peut se glisser entre cette lecture et l'insertion)
+            $pdo->prepare("UPDATE shop_group_invitations SET refused_at = expires_at, answered_by = 'échéance' WHERE group_id = ? AND tenant_code = ? AND accepted_at IS NULL AND refused_at IS NULL AND expires_at <= NOW()")
+                ->execute([$groupId, $code]);
+            $open = $pdo->prepare('SELECT 1 FROM shop_group_invitations WHERE group_id = ? AND tenant_code = ? AND accepted_at IS NULL AND refused_at IS NULL');
+            $open->execute([$groupId, $code]);
+            if ($open->fetchColumn() !== false) {
+                $pdo->rollBack();
+
+                return 'pending';
+            }
+            $stmt = $pdo->prepare('INSERT INTO shop_group_invitations (group_id, tenant_code, token_hash, invited_by, expires_at, request_id) VALUES (?, ?, ?, ?, ?::timestamp + make_interval(days => ?), ?) RETURNING id');
+            $stmt->execute([$groupId, $code, $tokenHash, $by, (string) $requestedAt, $days, $requestId]);
+            $id = (int) $stmt->fetchColumn();
+            $pdo->commit();
+
+            return $id;
+        } catch (\Throwable $e) {
+            $pdo->inTransaction() && $pdo->rollBack();
+
+            throw $e;
+        }
     }
 
     /** @return array<string, mixed>|null */

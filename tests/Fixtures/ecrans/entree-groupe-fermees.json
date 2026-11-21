@@ -396,6 +396,7 @@
     "refund POST /api/pos/gift-cards/1/cash-out",
     "refund POST /api/pos/rentals/deposits/1/return",
     "refund POST /api/pos/returns",
+    "rights DELETE /api/group/invitations/1",
     "rights DELETE /api/group/shops/1/same-company",
     "rights DELETE /api/site/group-same-company",
     "rights GET /api/agency/assistance",

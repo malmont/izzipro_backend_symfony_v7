@@ -34,6 +34,8 @@ final class SendGroupInvitationHandler
         $site = $stmt->fetch(\PDO::FETCH_ASSOC) ?: null;
         $reason = match (true) {
             $group === null || $group['status'] !== 'active' => 'group',
+            // lot G-INVITES : le siège a annulé la demande avant le passage de la file
+            $message->requestId !== null && $this->groups->isRequestCancelled((int) $group['id'], $message->requestId) => 'cancelled',
             $site === null => 'unknown',
             $site['code'] === $group['head_tenant_code'] => 'head',
             $this->groups->ofSite((string) $site['code']) !== null => 'member',
@@ -45,10 +47,15 @@ final class SendGroupInvitationHandler
 
             return;
         }
-        $expires = new \DateTimeImmutable('+' . GroupService::INVITATION_DAYS . ' days', new \DateTimeZone('UTC'));
-        $id = $this->groups->invite((int) $group['id'], (string) $site['code'], hash('sha256', random_bytes(32)), $message->by, $expires);
-        if ($id === null) {
-            $this->groups->event((int) $group['id'], 'invitation_skipped', $message->siteCode, ['reason' => 'pending'], $message->by);
+        if ($message->requestId !== null) {
+            // lot G-INVITES (relecture neuve) : sous le verrou du groupe, celui de l'annulation ; échéance comptée depuis la demande
+            $id = $this->groups->inviteForRequest((int) $group['id'], $message->requestId, (string) $site['code'], hash('sha256', random_bytes(32)), $message->by, GroupService::INVITATION_DAYS);
+        } else {
+            // message d'avant le lot (en file à la bascule) : l'ancien chemin, sans numéro de demande
+            $id = $this->groups->invite((int) $group['id'], (string) $site['code'], hash('sha256', random_bytes(32)), $message->by, new \DateTimeImmutable('+' . GroupService::INVITATION_DAYS . ' days', new \DateTimeZone('UTC'))) ?? 'pending';
+        }
+        if (!is_int($id)) {
+            $this->groups->event((int) $group['id'], 'invitation_skipped', $message->siteCode, ['reason' => $id], $message->by);
 
             return;
         }

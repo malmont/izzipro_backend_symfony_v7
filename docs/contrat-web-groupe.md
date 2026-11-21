@@ -48,6 +48,20 @@ Refus :
 - 429 `GROUP_INVITE_LIMIT` (10 par jour et par groupe, `perDay`) ;
 - 403 `GROUP_HEAD_ONLY`, `MODULE_INACTIVE`, `GROUP_FORBIDDEN`.
 
+### 3.1 La liste des invitations envoyées (siège, lot G-INVITES, 21/11/2026)
+
+`GET /api/group/invitations` → `{ invitations: [{ id, code, sentAt, expiresAt, state }] }`, la plus récente d'abord.
+- `code` : le code tel que le siège l'a tapé (en minuscules). `sentAt` : la demande ; `expiresAt` : `sentAt` + 14 jours (dates ISO, UTC).
+- `state` : `pending` → afficher « En attente de réponse » ; `expired` → « Expirée ». Rien d'autre : la liste ne dit JAMAIS si le site
+  existe, s'il a refusé ou s'il est déjà dans un groupe (une invitation refusée reste « En attente de réponse » jusqu'à l'échéance). Une
+  invitation expirée reste listée 30 jours, puis elle disparaît.
+- Une invitation ACCEPTÉE disparaît de la liste : la boutique apparaît alors dans `GET /api/group` (`shops`).
+- Refus : 403 `GROUP_HEAD_ONLY` (pas le siège), `MODULE_INACTIVE`, `GROUP_FORBIDDEN` (directeur entré, agence, compte de la plateforme).
+
+`DELETE /api/group/invitations/{id}` (« Annuler ») → 204 sans corps, que la boutique existe ou non ; la ligne disparaît de la liste et
+l'invitation ne peut plus être acceptée. 404 `GROUP_INVITATION_NOT_FOUND` (inconnue, déjà annulée, acceptée, plus listée) ; mêmes 403.
+Après un 204 ou un 404, relire la liste.
+
 Boutique invitée, son administrateur :
 - `GET /api/site/group-invitations` → `{ invitations: [{ id, group, head, expiresAt, consent, consentVersion }] }`.
   - `consent` est le texte à afficher tel quel (fr ou en selon la langue du site) : « Le directeur du groupe X pourra entrer dans votre
@@ -219,15 +233,19 @@ avec le coût est relu à la confirmation : si le lien a disparu entre-temps, la
 
 ### 9.1 Poser le lien à l'acceptation de l'invitation (boutique)
 
-`POST /api/site/group-invitations/{id}/accept { consent: "g1-v1", sameCompany?: true, sameCompanyConsent?: "g1d-v1" }`
+`POST /api/site/group-invitations/{id}/accept { consent: "g1-v1", sameCompany?: true, sameCompanyConsent?: "g1d-v2" }`
+(lot G-CONSENT, 21/11/2026 : version `g1d-v2` ; `g1d-v1` est refusé, 422. Toujours renvoyer la version reçue, jamais une valeur écrite
+dans le code du front.)
 
 - Une seconde case FACULTATIVE sous celle de l'invitation : « Cette boutique appartient à la même entreprise que le siège ». Non cochée :
   ne rien envoyer de plus, rien ne change.
 - Cochée : envoyer `sameCompany: true` et `sameCompanyConsent` égal à la version reçue (`sameCompanyConsentVersion` dans la liste des
   invitations, avec son texte `sameCompanyConsent`). Version absente ou différente : 422 `GROUP_CONSENT_REQUIRED`.
-- Texte (fr ; en selon la langue du site), affiché tel que le serveur le donne : « Cette boutique appartient à la même entreprise que le
-  siège du groupe X. Le directeur pourra y transférer du stock et y copier le coût d'achat. Vous pouvez retirer ce lien à tout moment,
-  seul et tout de suite. »
+- Texte (fr ; en selon la langue du site), affiché tel que le serveur le donne (g1d-v2) : « Cette boutique appartient à la même entreprise
+  que le siège du groupe X. Ce lien ouvre les transferts de stock entre cette boutique et les autres boutiques de la même entreprise du
+  groupe, dans les deux sens : le directeur pourra en demander, et c'est vous qui enverrez le stock qui part de chez vous. Le coût d'achat
+  pourra être recopié d'une boutique à l'autre. Vous pouvez retirer ce lien à tout moment, seul et tout de suite ; les transferts encore
+  seulement demandés seront alors annulés. » Un lien posé avant le 21/11 garde sa version g1d-v1.
 
 ### 9.2 Le demander plus tard (directeur, au siège)
 
@@ -250,8 +268,9 @@ avec le coût est relu à la confirmation : si le lien a disparu entre-temps, la
 
 ### 9.4 Ce qui suit un retrait
 
-- Les nouveaux transferts entre cette boutique et le reste du groupe sont refusés ; un transfert déjà envoyé se termine normalement ; un
-  transfert seulement demandé est annulé, avec un avis aux deux (G-5).
+- Les nouveaux transferts entre cette boutique et le reste du groupe sont refusés ; un transfert déjà envoyé (ou en cours d'envoi) se
+  termine normalement ; un transfert seulement demandé, ou en échec d'envoi (son stock est déjà revenu à la source), est annulé (G-5,
+  lot G-CONSENT).
 - Les copies suivantes partent sans coût.
 - Quitter le groupe efface le lien : en revenant, la boutique repart de zéro.
 

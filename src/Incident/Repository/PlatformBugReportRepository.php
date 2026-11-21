@@ -11,6 +11,9 @@ use App\Services\TenantConnectionManager;
 class PlatformBugReportRepository
 {
     public const STATUSES = ['received', 'in_progress', 'fixed', 'wont_fix'];
+    /** Libellés de l'écran d'EasyAdmin (colonne, badge, filtre, choix) et couleur du badge ; la valeur brute ne s'affiche jamais (21/11/2026) */
+    public const STATUS_LABELS = ['received' => 'reçu', 'in_progress' => 'en cours', 'fixed' => 'corrigé', 'wont_fix' => 'ne sera pas corrigé'];
+    public const STATUS_BADGES = ['received' => 'bg-warning text-dark', 'in_progress' => 'bg-info text-dark', 'fixed' => 'bg-success', 'wont_fix' => 'bg-secondary'];
     public const OPEN = ['received', 'in_progress'];
     public const SETTING_SCREENSHOT_DAYS = 'bug_report_screenshot_days';
     private const COLUMNS = 'id, tenant_code, app, app_version, screen, description, context, screenshot_path, screenshot_deleted_at, reporter_kind, reporter_user_id, reporter_hash, status, incident_id, answer, note, support_ticket_id, created_at, updated_at, answered_at, status_changed_by';

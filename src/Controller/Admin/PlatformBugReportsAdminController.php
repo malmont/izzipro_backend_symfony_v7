@@ -46,7 +46,7 @@ class PlatformBugReportsAdminController extends AbstractController
         }
 
         return $this->render('admin/plateforme/signalements.html.twig', [
-            'result' => $result, 'filters' => $filters, 'statuses' => PlatformBugReportRepository::STATUSES, 'csrf_id' => self::CSRF_ID,
+            'result' => $result, 'filters' => $filters, 'statuses' => PlatformBugReportRepository::STATUSES, 'statusLabels' => PlatformBugReportRepository::STATUS_LABELS, 'statusBadges' => PlatformBugReportRepository::STATUS_BADGES, 'csrf_id' => self::CSRF_ID,
             'screenshotDays' => $this->reports->screenshotDays(), 'backUrl' => $this->url('admin_plateforme_incidents'),
         ]);
     }

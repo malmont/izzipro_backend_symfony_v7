@@ -273,6 +273,50 @@ class GroupSameCompanyTest extends WebTestCase
         return $body['actions'][0];
     }
 
+    /**
+     * Lot G-CONSENT (21/11/2026, contrat validé par le chef) : g1d-v2 exigé pour toute nouvelle pose (g1d-v1 refusé) ; un lien posé en g1d-v1
+     * le garde ; au retrait du lien, `requested` est annulé, `send_failed` fermé sans écriture dans les sites, `sending` et `sent` intacts.
+     */
+    public function testTheNewTextIsRequiredOldLinksKeepTheirsAndRemovalClosesOnlyRequestedAndFailedTransfers(): void
+    {
+        $this->assertSame('g1d-v2', GroupCompanyService::CONSENT_VERSION);
+        $this->assertStringContainsString('les transferts encore seulement demandés seront alors annulés', GroupCompanyService::consent('Groupe', 'fr'));
+        $this->assertStringContainsString('transfers that are only requested are then cancelled', GroupCompanyService::consent('Group', 'en'));
+        $id = $this->invited();
+        $this->assertSame([422, 'GROUP_CONSENT_REQUIRED'], $this->refusal('POST', "/api/site/group-invitations/$id/accept", ['consent' => GroupService::CONSENT_VERSION, 'sameCompany' => true, 'sameCompanyConsent' => 'g1d-v1'], 'boutique'), 'l\'ancienne version à l\'acceptation');
+        $this->call('POST', "/api/site/group-invitations/$id/accept", ['consent' => GroupService::CONSENT_VERSION], 'boutique', 200);
+        $this->call('POST', '/api/group/shops/' . MV_TEST_TENANT2_CODE . '/same-company', null, 'siege', 202);
+        $request = $this->call('GET', '/api/site/group-same-company', null, 'boutique', 200)['request'];
+        $this->assertSame('g1d-v2', $request['consentVersion']);
+        $this->assertSame([422, 'GROUP_CONSENT_REQUIRED'], $this->refusal('POST', "/api/site/group-same-company/{$request['id']}/confirm", ['consent' => 'g1d-v1'], 'boutique'), 'l\'ancienne version à la confirmation');
+        $this->call('POST', "/api/site/group-same-company/{$request['id']}/confirm", ['consent' => 'g1d-v2'], 'boutique', 200);
+        $site = "tenant_code = '" . MV_TEST_TENANT2_CODE . "' AND left_at IS NULL";
+        $this->assertSame('g1d-v2', $this->master->query("SELECT same_company_consent_version FROM shop_group_sites WHERE $site")->fetchColumn());
+
+        // un lien posé avant le lot garde sa version : rien ne la réécrit, il reste « confirmé »
+        $this->master->exec("UPDATE shop_group_sites SET same_company_consent_version = 'g1d-v1' WHERE $site");
+        $this->assertSame('confirmed', $this->call('GET', '/api/group', null, 'siege', 200)['shops'][1]['sameCompany']['state']);
+        $this->assertSame('g1d-v1', $this->master->query("SELECT same_company_consent_version FROM shop_group_sites WHERE $site")->fetchColumn());
+
+        // un transfert dans chaque état, dans les deux sens
+        $group = (int) $this->master->query('SELECT id FROM shop_groups')->fetchColumn();
+        $transfers = [];
+        foreach (['requested' => [MV_TEST_TENANT2_CODE, MV_TEST_TENANT_CODE, 0], 'send_failed' => [MV_TEST_TENANT_CODE, MV_TEST_TENANT2_CODE, 1],
+            'sending' => [MV_TEST_TENANT2_CODE, MV_TEST_TENANT_CODE, 1], 'sent' => [MV_TEST_TENANT_CODE, MV_TEST_TENANT2_CODE, 1]] as $state => [$source, $target, $attempt]) {
+            $stmt = $this->master->prepare('INSERT INTO shop_group_transfers (uid, group_id, source_tenant_code, target_tenant_code, state, attempt) VALUES (?, ?, ?, ?, ?, ?) RETURNING id');
+            $stmt->execute(["g1d-$state-{$this->tag}", $group, $source, $target, $state, $attempt]);
+            $transfers[$state] = (int) $stmt->fetchColumn();
+        }
+        $this->assertFalse($this->call('DELETE', '/api/site/group-same-company', null, 'boutique', 200)['sameCompany']);
+        $states = [];
+        foreach ($transfers as $before => $tid) {
+            $states[$before] = $this->master->query("SELECT state FROM shop_group_transfers WHERE id = $tid")->fetchColumn();
+        }
+        $this->assertSame(['requested' => 'cancelled', 'send_failed' => 'cancelled', 'sending' => 'sending', 'sent' => 'sent'], $states);
+        $this->assertSame(['requested', 'send_failed'], $this->master->query("SELECT payload::json->>'from' FROM shop_group_transfer_events WHERE event = 'cancelled' ORDER BY transfer_id")->fetchAll(\PDO::FETCH_COLUMN));
+        $this->assertSame('2', $this->master->query("SELECT payload::json->>'count' FROM shop_group_events WHERE event = 'transfers_cancelled'")->fetchColumn());
+    }
+
     private function invited(): int
     {
         $this->module(true);

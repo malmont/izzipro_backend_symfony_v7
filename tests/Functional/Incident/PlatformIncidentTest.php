@@ -213,6 +213,17 @@ class PlatformIncidentTest extends WebTestCase
         $this->client->request('POST', 'https://' . MV_TEST_TENANT_HOST . "/admin/plateforme/incidents/$id", ['_token' => html_entity_decode($m[1]), 'status' => 'acknowledged'], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST]);
         $this->assertTrue($this->client->getResponse()->isRedirection());
         $this->assertSame('acknowledged', $this->row($id)['status']);
+        // la colonne « État » montre le LIBELLÉ de la liste, jamais la valeur brute, pour chaque état, après l'enregistrement (21/11/2026)
+        $this->client->request('POST', 'https://' . MV_TEST_TENANT_HOST . "/admin/plateforme/incidents/$id", ['_token' => html_entity_decode($m[1]), 'status' => 'fixed', 'fixedIn' => 'abc1234'], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST]);
+        $this->assertSame('fixed', $this->row($id)['status']);
+        foreach (\App\Incident\Repository\PlatformIncidentRepository::STATUS_LABELS as $status => $label) {
+            $this->master->exec("UPDATE platform_incident SET status = '$status' WHERE id = $id");
+            $this->client->request('GET', 'https://' . MV_TEST_TENANT_HOST . '/admin/plateforme/incidents?app=livingmemory', [], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST]);
+            $cell = preg_match('#<td data-status="' . $status . '">(.*?)</td>#s', (string) $this->client->getResponse()->getContent(), $c) === 1 ? $c[1] : '';
+            $this->assertStringContainsString('>' . htmlspecialchars($label) . '</span>', $cell, "libellé de « $status »");
+            $this->assertStringNotContainsString('>' . $status . '<', $cell, "jamais la valeur brute « $status »");
+        }
+        $this->master->exec("UPDATE platform_incident SET status = 'acknowledged' WHERE id = $id");
         // courriel du jour : rien sans l'adresse de la plateforme ; envoyé avec elle ; puis la purge
         $old = (int) $this->master->query("INSERT INTO platform_incident (fingerprint, app, level, message, first_seen_at, last_seen_at, status, status_changed_at) VALUES ('" . hash('sha256', 'vieux' . $this->tag) . "', 'web', 'error', 'ancien', NOW() - INTERVAL '400 days', NOW() - INTERVAL '400 days', 'fixed', NOW() - INTERVAL '400 days') RETURNING id")->fetchColumn();
         $this->master->exec("INSERT INTO platform_incident_event (incident_id, occurred_at) VALUES ($id, NOW() - INTERVAL '100 days')");

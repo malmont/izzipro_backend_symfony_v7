@@ -24,7 +24,7 @@
                 <label class="form-label small mb-0">{{ {status: 'État', app: 'Application', level: 'Gravité'}[key] }}</label>
                 <select name="{{ key }}" class="form-select form-select-sm">
                     <option value="">tous</option>
-                    {% for c in choices %}<option value="{{ c }}" {{ filters[key] == c ? 'selected' }}>{{ c }}</option>{% endfor %}
+                    {% for c in choices %}<option value="{{ c }}" {{ filters[key] == c ? 'selected' }}>{{ key == 'status' ? (statusLabels[c] ?? c) : c }}</option>{% endfor %}
                 </select>
             </div>
         {% endfor %}
@@ -52,12 +52,12 @@
                         {% if i.note %}<div class="small">Note : {{ i.note }}</div>{% endif %}
                         {% if i.externalUrl %}<div class="small"><a href="{{ i.externalUrl }}" rel="noopener noreferrer" target="_blank">lien externe</a></div>{% endif %}</td>
                     <td>{{ i.count }}</td>
-                    <td>{% if i.status == 'new' %}<span class="badge bg-warning text-dark">nouveau</span>{% else %}{{ i.status }}{% endif %}{% if i.reopened %} <span class="badge bg-danger">revenu</span>{% endif %}{% if i.fixedIn %}<div class="small text-muted">{{ i.fixedIn }}</div>{% endif %}</td>
+                    <td data-status="{{ i.status }}"><span class="badge {{ statusBadges[i.status] ?? 'bg-secondary' }}">{{ statusLabels[i.status] ?? i.status }}</span>{% if i.reopened %} <span class="badge bg-danger">revenu</span>{% endif %}{% if i.fixedIn %}<div class="small text-muted">{{ i.fixedIn }}</div>{% endif %}</td>
                     <td>
                         <form method="post" action="{{ path('admin_plateforme_incident', {id: i.id}) }}" class="d-flex flex-column gap-1">
                             <input type="hidden" name="_token" value="{{ csrf_token(csrf_id) }}">
                             <select name="status" class="form-select form-select-sm">
-                                {% for s in statuses %}<option value="{{ s }}" {{ i.status == s ? 'selected' }}>{{ {new: 'nouveau', acknowledged: 'pris en charge', fixed: 'corrigé', ignored: 'ignoré'}[s] }}</option>{% endfor %}
+                                {% for s in statuses %}<option value="{{ s }}" {{ i.status == s ? 'selected' }}>{{ statusLabels[s] ?? s }}</option>{% endfor %}
                             </select>
                             <input name="fixedIn" value="{{ i.fixedIn }}" placeholder="corrigé dans (commit, version)" class="form-control form-control-sm" maxlength="80">
                             <input name="externalUrl" value="{{ i.externalUrl }}" placeholder="lien externe (https://…)" class="form-control form-control-sm" maxlength="500">

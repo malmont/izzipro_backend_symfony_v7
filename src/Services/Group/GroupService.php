@@ -23,6 +23,8 @@ class GroupService
     public const INVITATIONS_PER_DAY = 10;
     public const DEFAULT_MAX_SHOPS = 10;
     public const CONSENT_VERSION = 'g1-v1';
+    /** Lot G-INVITES : une demande échue reste dans la liste du siège ce nombre de jours après son échéance, puis elle est cachée */
+    public const REQUEST_KEPT_DAYS = 30;
 
     public function __construct(
         private readonly GroupRepository $groups,
@@ -95,13 +97,50 @@ class GroupService
         if (!$this->modules->isEnabled(ModuleAccessService::MULTI_SHOP)) {
             throw new GroupException('MODULE_INACTIVE', 403, 'Le module Multi-boutiques n\'est pas actif sur ce site.', ['module' => 'module.multi_shop']);
         }
-        $code = is_string($target) ? mb_strtolower(trim($target)) : '';
-        if (!$this->groups->askInvitation((int) $group['id'], mb_substr($code, 0, 50), self::INVITATIONS_PER_DAY, self::who($by))) {
+        $code = mb_substr(is_string($target) ? mb_strtolower(trim($target)) : '', 0, 50);
+        // lot G-INVITES : la demande est écrite TOUT DE SUITE au journal (seule source de la liste du siège), puis la file la traite
+        $requestId = $this->groups->askInvitation((int) $group['id'], $code, self::INVITATIONS_PER_DAY, self::who($by));
+        if ($requestId === null) {
             throw new GroupException('GROUP_INVITE_LIMIT', 429, 'Trop d\'invitations demandées aujourd\'hui pour ce groupe ; réessayez demain.', ['perDay' => self::INVITATIONS_PER_DAY]);
         }
-        $this->bus->dispatch(new SendGroupInvitationMessage((int) $group['id'], mb_substr($code, 0, 50), self::who($by), $locale === 'en' ? 'en' : 'fr'));
+        $this->bus->dispatch(new SendGroupInvitationMessage((int) $group['id'], $code, self::who($by), $locale === 'en' ? 'en' : 'fr', $requestId));
 
         return ['asked' => true, 'expiresInDays' => self::INVITATION_DAYS];
+    }
+
+    /**
+     * Lot G-INVITES : les invitations DEMANDÉES par le siège, telles qu'il les a tapées. Lues dans le seul journal du groupe (base maître) :
+     * un code inconnu, un site déjà dans un groupe, une invitation refusée et une invitation sans réponse se lisent pareil (`pending` jusqu'à
+     * l'échéance, `expired` ensuite, gardée 30 jours puis cachée). Une demande dont l'invitation a été acceptée, ou annulée, disparaît.
+     *
+     * @return array{invitations: list<array{id: int, code: string, sentAt: ?string, expiresAt: ?string, state: string}>}
+     * @throws GroupException
+     */
+    public function invitationRequests(string $site): array
+    {
+        $group = $this->headGroupWithModule($site);
+        $now = new \DateTimeImmutable('now', new \DateTimeZone('UTC'));
+
+        return ['invitations' => array_map(static function (array $r) use ($now): array {
+            $sent = new \DateTimeImmutable($r['created_at'], new \DateTimeZone('UTC'));
+            $expires = $sent->modify('+' . self::INVITATION_DAYS . ' days');
+
+            return ['id' => $r['id'], 'code' => $r['code'], 'sentAt' => $sent->format(\DATE_ATOM), 'expiresAt' => $expires->format(\DATE_ATOM), 'state' => $now < $expires ? 'pending' : 'expired'];
+        }, $this->groups->invitationRequests((int) $group['id'], self::INVITATION_DAYS, self::REQUEST_KEPT_DAYS))];
+    }
+
+    /**
+     * Lot G-INVITES : le siège annule une demande. La MÊME réponse que le code existe ou non (l'appelant rend 204) ; la vraie invitation née de
+     * cette demande, s'il y en a une, ne s'accepte plus. 404 pour une demande inconnue, d'un autre groupe ou qui n'est plus listée.
+     *
+     * @throws GroupException
+     */
+    public function cancelInvitationRequest(string $site, int $requestId, User $by): void
+    {
+        $group = $this->headGroupWithModule($site);
+        if (!$this->groups->cancelInvitationRequest((int) $group['id'], $requestId, self::INVITATION_DAYS, self::REQUEST_KEPT_DAYS, self::who($by))) {
+            throw new GroupException('GROUP_INVITATION_NOT_FOUND', 404, 'Demande d\'invitation inconnue.');
+        }
     }
 
     /** @return list<array<string, mixed>> les invitations en attente adressées au site courant, avec le texte de consentement */
@@ -134,7 +173,8 @@ class GroupService
         if ($linked && ($this->company === null || $sameCompanyConsent !== GroupCompanyService::CONSENT_VERSION)) {
             throw new GroupException('GROUP_CONSENT_REQUIRED', 422, 'Pour déclarer la boutique de la même entreprise, acceptez le texte qui vous est présenté.', ['sameCompanyConsentVersion' => GroupCompanyService::CONSENT_VERSION]);
         }
-        $outcome = $this->groups->addShop((int) $invitation['group_id'], $site, 'associated', self::who($by), $linked ? GroupCompanyService::CONSENT_VERSION : null);
+        // lot G-INVITES : l'invitation relue ouverte et marquée acceptée sous le verrou du groupe (celui de l'annulation par le siège)
+        $outcome = $this->groups->addShop((int) $invitation['group_id'], $site, 'associated', self::who($by), $linked ? GroupCompanyService::CONSENT_VERSION : null, $id);
         if ($outcome === 'gone') {
             throw new GroupException('GROUP_INVITATION_NOT_FOUND', 404, 'Invitation inconnue, échue ou déjà traitée.');
         }
@@ -144,7 +184,6 @@ class GroupService
         if ($outcome === 'limit') {
             throw new GroupException('GROUP_SHOP_LIMIT', 409, 'Le groupe a atteint son nombre de boutiques.');
         }
-        $this->groups->answer($id, true, self::who($by));
         $this->groups->event((int) $invitation['group_id'], 'joined', $site, ['invitation' => $id, 'consentVersion' => self::CONSENT_VERSION], self::who($by));
         if ($linked) {
             $this->company?->setAtAccept((int) $invitation['group_id'], $site, $by, $language);
@@ -204,6 +243,17 @@ class GroupService
         $group = $this->groups->ofSite($site);
         if ($group === null || $group['head_tenant_code'] !== $site) {
             throw new GroupException('GROUP_HEAD_ONLY', 403, 'Seul le siège d\'un groupe invite une boutique.');
+        }
+
+        return $group;
+    }
+
+    /** @return array<string, mixed> le groupe dont ce site est le SIÈGE, module actif @throws GroupException */
+    private function headGroupWithModule(string $site): array
+    {
+        $group = $this->headGroup($site);
+        if (!$this->modules->isEnabled(ModuleAccessService::MULTI_SHOP)) {
+            throw new GroupException('MODULE_INACTIVE', 403, 'Le module Multi-boutiques n\'est pas actif sur ce site.', ['module' => 'module.multi_shop']);
         }
 
         return $group;

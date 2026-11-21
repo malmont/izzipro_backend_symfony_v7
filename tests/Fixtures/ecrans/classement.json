@@ -804,6 +804,7 @@
         "POST /api/gestion/accueil/vignettes/{id}/ecarter"
     ],
     "groupe": [
+        "DELETE /api/group/invitations/{id}",
         "DELETE /api/group/shops/{code}/same-company",
         "DELETE /api/site/group-same-company",
         "GET /api/gestion/groupe/boutiques/{shop}/variantes",
@@ -813,6 +814,7 @@
         "GET /api/gestion/groupe/transferts",
         "GET /api/gestion/groupe/transferts/{id}",
         "GET /api/group",
+        "GET /api/group/invitations",
         "GET /api/site/group-invitations",
         "GET /api/site/group-same-company",
         "GET /api/site/group-transfers",

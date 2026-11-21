@@ -50,6 +50,8 @@ class PlatformIncidentsAdminController extends AbstractController
             'result' => $result,
             'filters' => $filters,
             'statuses' => PlatformIncidentRepository::STATUSES,
+            'statusLabels' => PlatformIncidentRepository::STATUS_LABELS,
+            'statusBadges' => PlatformIncidentRepository::STATUS_BADGES,
             'apps' => [...PlatformIncidentService::APPS, 'backend'],
             'levels' => PlatformIncidentRepository::LEVELS,
             'csrf_id' => self::CSRF_ID,

@@ -101,6 +101,7 @@
     "DELETE /api/gestion/tresorerie/mouvements/1": "permise",
     "DELETE /api/gestion/tresorerie/soldes/1": "permise",
     "DELETE /api/gestion/voyages/1": "permise",
+    "DELETE /api/group/invitations/1": "rights",
     "DELETE /api/group/shops/1/same-company": "rights",
     "DELETE /api/landingpage-ai/memory": "ai",
     "DELETE /api/marques/1": "permise",

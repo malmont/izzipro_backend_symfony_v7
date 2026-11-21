@@ -12,6 +12,9 @@ use App\Services\TenantConnectionManager;
 class PlatformIncidentRepository
 {
     public const STATUSES = ['new', 'acknowledged', 'fixed', 'ignored'];
+    /** Libellés de l'écran d'EasyAdmin (colonne, badge, filtre, choix) et couleur du badge ; la valeur brute ne s'affiche jamais (21/11/2026) */
+    public const STATUS_LABELS = ['new' => 'nouveau', 'acknowledged' => 'pris en charge', 'fixed' => 'corrigé', 'ignored' => 'ignoré'];
+    public const STATUS_BADGES = ['new' => 'bg-warning text-dark', 'acknowledged' => 'bg-info text-dark', 'fixed' => 'bg-success', 'ignored' => 'bg-secondary'];
     public const LEVELS = ['error', 'crash', 'warning'];
     /** Occurrences gardées au plus par incident */
     public const EVENTS_KEPT = 50;

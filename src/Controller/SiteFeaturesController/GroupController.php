@@ -21,6 +21,8 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
  * - POST `/api/group` « Passer en multi-boutiques » → 201 ; 403 `MODULE_INACTIVE` ; 409 `GROUP_ALREADY_MEMBER`
  * - POST `/api/group/invitations` `{ site }` → 202 `{ asked: true, expiresInDays }` TOUJOURS (que le site existe ou non) ; 403 `GROUP_HEAD_ONLY` ;
  *   429 `GROUP_INVITE_LIMIT` (10 demandes par jour et par groupe)
+ * - lot G-INVITES : GET `/api/group/invitations` → `{ invitations: [{ id, code, sentAt, expiresAt, state: pending | expired }] }` (siège, module
+ *   actif) ; DELETE `/api/group/invitations/{id}` → 204 (que le code existe ou non), 404 `GROUP_INVITATION_NOT_FOUND`
  * - POST `/api/group/leave` `{ shop? }` → 200 ; la boutique quitte, ou le siège retire une boutique ; le siège seul dissout ; 409 `GROUP_NOT_EMPTY`
  * - lot G-1d : POST `/api/group/shops/{code}/same-company` → 202 `{ asked, expiresInDays }` (le directeur DEMANDE le lien « même entreprise » ;
  *   409 `SAME_COMPANY_PENDING` | `SAME_COMPANY_ALREADY`, 422 `SAME_COMPANY_NOT_ASSOCIATED`, 404 `GROUP_SHOP_UNKNOWN`) ; DELETE → 200 (il retire
@@ -53,6 +55,24 @@ class GroupController extends AbstractController
         $body = json_decode((string) $request->getContent(), true);
 
         return $this->act(fn (User $user) => $this->json($this->groups->invite($this->site(), is_array($body) ? ($body['site'] ?? null) : null, $user, (string) $request->query->get('locale', 'fr')), 202));
+    }
+
+    /** Lot G-INVITES : la liste des invitations demandées par le siège (base maître seulement) ; refusée à toute personne entrée et à la plateforme */
+    #[Route('/invitations', name: 'api_group_invitations', methods: ['GET'])]
+    public function invitations(): JsonResponse
+    {
+        return $this->act(fn (User $user) => $this->json($this->groups->invitationRequests($this->site())));
+    }
+
+    /** Lot G-INVITES : le siège annule une demande ; 204 que le code existe ou non, 404 pour une demande inconnue ou d'un autre groupe */
+    #[Route('/invitations/{id}', name: 'api_group_invitation_cancel', methods: ['DELETE'], requirements: ['id' => '\d+'])]
+    public function cancelInvitation(int $id): JsonResponse
+    {
+        return $this->act(function (User $user) use ($id): JsonResponse {
+            $this->groups->cancelInvitationRequest($this->site(), $id, $user);
+
+            return new JsonResponse(null, 204);
+        });
     }
 
     #[Route('/leave', name: 'api_group_leave', methods: ['POST'])]

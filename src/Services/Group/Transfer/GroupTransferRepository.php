@@ -153,12 +153,18 @@ class GroupTransferRepository
     }
 
     /** Les transferts seulement DEMANDÉS entre ces deux boutiques (n'importe quel sens), pour l'annulation qui suit un lien retiré */
-    public function requestedFor(int $groupId, string $shop): array
+    /**
+     * Lot G-CONSENT : les transferts que le retrait du lien « même entreprise » annule, dans un sens ou l'autre : seulement demandés, ou en
+     * échec d'envoi (stock déjà rendu à la source).
+     *
+     * @return list<array{id: int, state: string}>
+     */
+    public function cancellableOnLinkRemoval(int $groupId, string $shop): array
     {
-        $stmt = $this->pdo()->prepare("SELECT id FROM shop_group_transfers WHERE group_id = ? AND state = 'requested' AND (source_tenant_code = ? OR target_tenant_code = ?)");
+        $stmt = $this->pdo()->prepare("SELECT id, state FROM shop_group_transfers WHERE group_id = ? AND state IN ('requested', 'send_failed') AND (source_tenant_code = ? OR target_tenant_code = ?) ORDER BY id");
         $stmt->execute([$groupId, $shop, $shop]);
 
-        return array_map('intval', $stmt->fetchAll(\PDO::FETCH_COLUMN) ?: []);
+        return array_map(static fn (array $r): array => ['id' => (int) $r['id'], 'state' => (string) $r['state']], $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: []);
     }
 
     /** @param array<string, mixed> $payload */
