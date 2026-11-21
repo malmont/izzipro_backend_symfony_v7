@@ -205,7 +205,7 @@ advice:
             text: "Your expected balance drops to %cash_low% on %cash_low_date%, below your %cash_threshold% threshold."
         AID_CONDITIONS_DUE:
             title: "Aid conditions to meet"
-            text: "%count% aid condition(s) have reached their due date: mark them met, or enter the repayment. Granted amount at stake: %effect%."
+            text: "{1}One aid condition has reached its due date: mark it met, or enter the repayment. Granted amount at stake: %effect%.|]1,Inf[%count% aid conditions have reached their due date: mark them met, or enter the repayment. Granted amount at stake: %effect%."
         PURCHASE_CAPACITY:
             title: "Postpone stock purchases"
             text: "%remaining_purchases% of planned stock purchases remain: your cash does not allow them before %date%."
@@ -1076,7 +1076,7 @@ console:
         aidsToReceive: 'Aids granted, not yet received'
         aidsConditionsDue: 'Overdue conditions to meet'
         aidsDocumentsMissing: 'Aids received without supporting document'
-        operatingAidsYear: 'Operating aids this year (estimate)'
+        operatingAidsYear: 'Operating aid this year (estimate)'
         revenue: 'Sales'
         orders: 'Orders'
         cogs: 'Cost of goods sold'
@@ -1230,6 +1230,7 @@ console:
         reglages: 'Settings'
     screens:
         prets: 'Loans'
+        aides: 'Aids'
         gestion_home: 'Management home'
         sequences: 'Where I stand: sequences'
         sequences_detail: 'A sequence and its steps'

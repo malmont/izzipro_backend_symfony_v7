@@ -127,8 +127,8 @@ class GestionNotificationsApiTest extends WebTestCase
         $this->assertSame('Articles qui vont manquer', $p['kinds'][0]['label']);
         $this->assertSame('Items about to run out', $this->get('/api/gestion/notifications/preferences?locale=en')['kinds'][0]['label']);
         $u = $this->send('PATCH', '/api/gestion/notifications/preferences', ['kinds' => ['low_stock' => false, 'trip_budget' => false]], 200);
-        $this->assertSame([false, true, true, false, true, true, true, true, true], array_column($u['kinds'], 'enabled'));
-        $this->assertSame([true, true, true, false, true, true, true, true, true], array_column($this->send('PATCH', '/api/gestion/notifications/preferences', ['kinds' => ['low_stock' => true, 'duplicate_invoice' => true]], 200)['kinds'], 'enabled'), 'rétabli ; les autres types gardent leur réglage');
+        $this->assertSame([false, true, true, false, true, true, true, true, true, true], array_column($u['kinds'], 'enabled'));
+        $this->assertSame([true, true, true, false, true, true, true, true, true, true], array_column($this->send('PATCH', '/api/gestion/notifications/preferences', ['kinds' => ['low_stock' => true, 'duplicate_invoice' => true]], 200)['kinds'], 'enabled'), 'rétabli ; les autres types gardent leur réglage');
         $this->request('PATCH', '/api/gestion/notifications/preferences', ['kinds' => ['pigeon' => true, 'low_stock' => 'non']]);
         $this->assertSame([422, ['kinds.pigeon' => 'UNKNOWN_KIND', 'kinds.low_stock' => 'MUST_BE_BOOLEAN']], [$this->status(), $this->body()['fields']]);
         $this->request('PATCH', '/api/gestion/notifications/preferences', ['kinds' => ['a', 'b']]);

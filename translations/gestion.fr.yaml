@@ -208,7 +208,7 @@ advice:
             text: "Le solde prévu descend à %cash_low% le %cash_low_date%, sous votre seuil de %cash_threshold%."
         AID_CONDITIONS_DUE:
             title: "Conditions d’aide à tenir"
-            text: "%count% condition(s) d’aide sont arrivées à échéance : marquez-les tenues, ou indiquez le remboursement. Montant accordé en jeu : %effect%."
+            text: "{1}Une condition d’aide est arrivée à échéance : marquez-la tenue, ou indiquez le remboursement. Montant accordé en jeu : %effect%.|]1,Inf[%count% conditions d’aide sont arrivées à échéance : marquez-les tenues, ou indiquez le remboursement. Montant accordé en jeu : %effect%."
         PURCHASE_CAPACITY:
             title: "Achats de stock à décaler"
             text: "Il reste %remaining_purchases% d’achats de stock prévus : la trésorerie ne le permet pas avant le %date%."
@@ -1080,7 +1080,7 @@ console:
         aidsToReceive: 'Aides accordées, pas encore reçues'
         aidsConditionsDue: 'Conditions échues à tenir'
         aidsDocumentsMissing: 'Aides reçues sans justificatif'
-        operatingAidsYear: 'Aides d''exploitation de l''année (estimation)'
+        operatingAidsYear: 'Aide d''exploitation de l''année (estimation)'
         revenue: 'Ventes'
         orders: 'Commandes'
         cogs: 'Coût des articles vendus'
@@ -1234,6 +1234,7 @@ console:
         reglages: 'Réglages'
     screens:
         prets: 'Prêts'
+        aides: 'Aides'
         gestion_home: 'Accueil de la gestion'
         sequences: 'Où j''en suis : les séquences'
         sequences_detail: 'Une séquence et ses étapes'
