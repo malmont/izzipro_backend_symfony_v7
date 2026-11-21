@@ -109,7 +109,14 @@ class AidApiTest extends WebTestCase
         $period = $this->period('2049-01-01', '2049-01-31');
         $r = $this->get("/api/periodes/$period/resultat");
         $this->assertSame(['received' => 5096, 'pending' => 5096, 'repaid' => 0, 'total' => 10192, 'aids' => 1, 'estimated' => true], $r['charges']['operatingAids']);
-        $this->assertSame([$r['result']['netAfterFixed'] + 10192, -10192], [$r['result']['netAfterCharges'], $r['charges']['total']]);
+        // `total` reste les charges : le même qu'avant l'aide (aucun prêt ici) ; `net` = total − aides, peut être négatif
+        $this->assertSame([$r['result']['netAfterFixed'] + 10192, 0, $r['charges']['financial']['total'], -10192], [$r['result']['netAfterCharges'], $r['charges']['total'], $r['charges']['total'], $r['charges']['net']]);
+        $conn->executeStatement('UPDATE gestion_aid SET status = ? WHERE id = ?', ['requested', $id]); // la même période sans aide comptée
+        $this->endOfWrite();
+        $without = $this->get("/api/periodes/$period/resultat")['charges'];
+        $this->assertSame([$without['total'], 0], [$r['charges']['total'], $without['net']], 'total identique avec ou sans aide');
+        $conn->executeStatement('UPDATE gestion_aid SET status = ? WHERE id = ?', ['granted', $id]);
+        $this->endOfWrite();
         // Une période figée après les prêts mais avant les aides garde son instantané
         $closed = $this->period('2049-02-01', '2049-02-28');
         $conn->executeStatement('UPDATE collections SET closed_at = NOW() WHERE id = ?', [$closed]);
@@ -121,6 +128,11 @@ class AidApiTest extends WebTestCase
         // Statistiques et année
         $stats = $this->get('/api/gestion/statistiques?from=2049-01-01&to=2049-12-31&sections=charges')['sections']['charges']['operatingAids'];
         $this->assertSame([120000, 60000, 0], [$stats['current']['total'], $stats['current']['received'], $stats['lastYear']['total']]);
+        $all = $this->get('/api/gestion/statistiques?from=2049-01-01&to=2049-12-31&sections=charges')['sections']['charges'];
+        $this->assertSame([0, -120000, 0], [$all['financial']['total'], $all['net']['current'], $all['net']['lastYear']], 'les charges seules restent dans financial');
+        $months = array_column($this->get('/api/gestion/statistiques/annee?year=2049')['periods'] ?? [], null, 'id');
+        $this->assertArrayHasKey($period, $months, 'la période de janvier 2049 dans l\'année 2049');
+        $this->assertSame([0, 10192, -10192], [$months[$period]['financialCharges'], $months[$period]['operatingAids'], $months[$period]['netCharges']]);
 
         // Conditions : état par rang ; une condition inconnue, un état inconnu
         $this->assertSame('kept', $this->send('PATCH', "/api/gestion/aides/$id/conditions/0", ['state' => 'kept'], 200)['conditions'][0]['state']);

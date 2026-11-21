@@ -110,7 +110,10 @@ class GestionStatisticsSections
         $aids = fn (array $r) => $this->aids?->productBetween($r[0], $r[1]) ?? ['received' => 0, 'pending' => 0, 'repaid' => 0, 'total' => 0, 'aids' => 0];
 
         return ['financial' => $of($cur), 'previous' => $prev === null ? null : $of($prev), 'lastYear' => $of($ly), 'capitalRepaid' => $this->loans?->capitalRepaidBetween($cur[0], $cur[1]) ?? 0,
-            'operatingAids' => ['current' => $aids($cur), 'previous' => $prev === null ? null : $aids($prev), 'lastYear' => $aids($ly)]];
+            'operatingAids' => ['current' => $aids($cur), 'previous' => $prev === null ? null : $aids($prev), 'lastYear' => $aids($ly)],
+            // charges moins aides d'exploitation, sur les trois plages ; `financial.total` (et previous, lastYear) restent les charges seules
+            'net' => ['current' => $of($cur)['total'] - $aids($cur)['total'], 'previous' => $prev === null ? null : $of($prev)['total'] - $aids($prev)['total'],
+                'lastYear' => $of($ly)['total'] - $aids($ly)['total']]];
     }
 
     // ------------------------------------------------------------------ paiements

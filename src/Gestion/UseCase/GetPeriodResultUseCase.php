@@ -48,6 +48,7 @@ class GetPeriodResultUseCase
                 // lot FIS-2 : figée après les prêts mais avant les aides : l'instantané reste tel quel, ses aides ne sont pas connues
                 if (is_array($payload['charges']) && !array_key_exists('operatingAids', $payload['charges'])) {
                     $payload['charges']['operatingAids'] = null;
+                    $payload['charges']['net'] = $payload['charges']['total'] ?? null; // l'instantané a compté netAfterCharges = netAfterFixed − total
                 }
 
                 return $payload;

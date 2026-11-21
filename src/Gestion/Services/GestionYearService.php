@@ -517,6 +517,7 @@ class GestionYearService
                 'netAfterCharges' => isset($payload['result']['netAfterCharges']) ? (int) $payload['result']['netAfterCharges'] : null,
                 // lot FIS-2 : aides d'exploitation en produit (null pour une période figée avant le lot)
                 'operatingAids' => isset($payload['charges']['operatingAids']['total']) ? (int) $payload['charges']['operatingAids']['total'] : null,
+                'netCharges' => isset($payload['charges']['net']) ? (int) $payload['charges']['net'] : null, // charges − aides (lot FIS-2)
                 'otherRevenue' => (int) ($payload['otherRevenue']['total'] ?? 0), 'frozen' => $frozen,
                 // exercice non aligné sur les périodes (EX2) : une période à cheval garde son résultat P2 entier
                 'partial' => $ps < $jan || $pe > $dec, 'overlapDays' => $len(max($ps, $jan), min($pe, $dec)), 'days' => $len($ps, $pe),

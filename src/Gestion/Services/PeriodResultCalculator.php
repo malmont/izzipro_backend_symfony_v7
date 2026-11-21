@@ -118,8 +118,10 @@ class PeriodResultCalculator
             'fixedCosts' => $fixed,
             // lot FIS-1 ; FIS-2 à FIS-5 y ajouteront aides, salaires, impôts. Remarque de double comptage : un mouvement prévu « prêt » saisi à la
             // main (éventuellement compté en frais fixe) à côté d'un prêt : rien n'est retiré, le gérant choisit lequel garder
-            // lot FIS-2 : `total` est le solde des charges, aides d'exploitation déduites (netAfterCharges = netAfterFixed − total)
-            'charges' => ['financial' => $financial, 'operatingAids' => $operatingAids + ['estimated' => $operatingAids['pending'] > 0], 'total' => $financial['total'] - $operatingAids['total'],
+            // lot FIS-2 (décision du chef) : `total` reste les CHARGES, comme avant (la gestion web le lit) ; `net` = total − aides
+            // d'exploitation, peut être négatif ; netAfterCharges = netAfterFixed − net
+            'charges' => ['financial' => $financial, 'operatingAids' => $operatingAids + ['estimated' => $operatingAids['pending'] > 0], 'total' => $financial['total'],
+                'net' => $financial['total'] - $operatingAids['total'],
                 'caveats' => array_values(array_filter([($this->loans?->mayOverlapMovements() ?? false) ? ['code' => 'LOAN_MAY_OVERLAP_MOVEMENTS'] : null,
                     ($this->aids?->mayOverlapMovements() ?? false) ? ['code' => 'AID_MAY_OVERLAP_MOVEMENTS'] : null]))],
             'investment' => ['purchases' => $investmentPurchases, 'shipping' => $shipping, 'total' => $investmentPurchases + $shipping],
