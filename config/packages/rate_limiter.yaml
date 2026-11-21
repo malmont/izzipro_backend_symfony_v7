@@ -108,6 +108,18 @@ framework:
             interval: '1 minute'
             lock_factory: null
 
+        # Lot ABO-4 (21/11/2026) : lien d'agenda .ics (lu sans JWT par les agendas, qui le relisent souvent) : par jeton et par adresse IP
+        calendar_feed_token:
+            policy: sliding_window
+            limit: 60
+            interval: '1 hour'
+            lock_factory: null
+        calendar_feed_ip:
+            policy: sliding_window
+            limit: 300
+            interval: '1 hour'
+            lock_factory: null
+
         # Assistant IA des landing pages : 5 demandes par minute et par tenant
         landing_ai_tenant:
             policy: sliding_window

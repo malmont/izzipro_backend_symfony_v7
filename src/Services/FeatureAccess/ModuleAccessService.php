@@ -95,6 +95,7 @@ class ModuleAccessService
         '#^/api/account/support/requests(/|$)#' => self::SUPPORT, // lot AIDE-APP : les demandes du client (la disponibilité, elle, répond toujours)
         '#^/api/site/abonnements(/|$)#' => self::BOUTIQUE, // lot ABO-0 : suivi des abonnements (les abonnements relèvent de la boutique)
         '#^/api/staff/abonnements(/|$)#' => self::BOUTIQUE, // lot ABO-3b : l'intervenant
+        '#^/api/calendrier(/|$)#' => self::BOUTIQUE, // lot ABO-4 : les liens d'agenda des abonnés et des intervenants
     ];
 
     /**

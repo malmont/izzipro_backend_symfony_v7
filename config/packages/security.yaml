@@ -143,6 +143,9 @@ security:
         - { path: ^/api/site/abonnements(/|$), roles: ROLE_ADMIN }
         # lot ABO-3b (20/11/2026) : l'intervenant des abonnements, SES dates seulement (l'administrateur suit tout par /api/site/abonnements)
         - { path: '^/api/staff/abonnements(/|\z)', roles: ROLE_STAFF_PROVIDER }
+        # Lot ABO-4 (21/11/2026) : lien d'agenda .ics d'un abonné ou d'un intervenant, lu par Google, Apple… sans JWT : le jeton de
+        # l'adresse (32 octets, gardé haché) est la seule clé ; lecture seule, débit limité par jeton et par adresse IP
+        - { path: '^/api/calendrier/[a-f0-9]{64}\.ics$', methods: [GET], roles: PUBLIC_ACCESS }
         # lot CMD-WEB-1 (20/11/2026) : commandes (lecture seule) et rendez-vous de la boutique, gestion web ; l'agent d'Assistance y entre aussi
         # (SupportScopeSubscriber::OPEN ; seules ces routes-là). `\z` et non `$` (saut de ligne final, lot COST-1)
         - { path: '^/api/site/commandes(/|\z)', methods: [GET], roles: [ROLE_SUPPORT, ROLE_ADMIN] }

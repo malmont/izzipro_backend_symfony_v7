@@ -27,7 +27,7 @@ final class Version20270202400000 extends AbstractMigration
         'CREATE INDEX IF NOT EXISTS idx_benefit_waitlist_subscription ON benefit_waitlist (subscription_id, status)',
         'ALTER TABLE benefit_occurrence ADD COLUMN IF NOT EXISTS reminded_at TIMESTAMP(0) WITHOUT TIME ZONE DEFAULT NULL',
         'ALTER TABLE subscription ADD COLUMN IF NOT EXISTS reminder_emails BOOLEAN NOT NULL DEFAULT true',
-        'CREATE TABLE IF NOT EXISTS calendar_feed (id SERIAL PRIMARY KEY, owner_type VARCHAR(12) NOT NULL, owner_id INT NOT NULL, token_hash VARCHAR(64) NOT NULL, created_at TIMESTAMP(0) WITHOUT TIME ZONE NOT NULL, last_read_at TIMESTAMP(0) WITHOUT TIME ZONE DEFAULT NULL)',
+        'CREATE TABLE IF NOT EXISTS calendar_feed (id SERIAL PRIMARY KEY, owner_type VARCHAR(12) NOT NULL, owner_id INT NOT NULL, token_hash VARCHAR(64) NOT NULL, created_at TIMESTAMP(0) WITHOUT TIME ZONE NOT NULL)',
         'CREATE UNIQUE INDEX IF NOT EXISTS uniq_calendar_feed_token ON calendar_feed (token_hash)',
         'CREATE UNIQUE INDEX IF NOT EXISTS uniq_calendar_feed_owner ON calendar_feed (owner_type, owner_id)',
     ];

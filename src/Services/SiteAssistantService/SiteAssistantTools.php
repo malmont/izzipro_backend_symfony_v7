@@ -58,6 +58,8 @@ final class SiteAssistantTools
         'get_today' => ['boutique'], 'get_contestations' => ['boutique'], 'propose_mark_done' => ['boutique'], 'propose_mark_session_done' => ['boutique'],
         // lot ABO-3b : le fil de l'abonné
         'get_subscription_thread' => ['boutique'], 'propose_reply' => ['boutique'],
+        // lot ABO-4 : la liste d'attente
+        'get_waitlist' => ['boutique'], 'propose_promote_waitlist' => ['boutique'],
     ];
     /** Lot IA-A : nombre d'articles au plus par action (aperçu nommé), et codes-barres au plus par action (décision du chef) */
     public const MAX_VARIANTS = 50;
@@ -74,6 +76,7 @@ final class SiteAssistantTools
         'get_subscription_plans', 'get_benefits', 'get_plan_subscribers', 'get_subscription', 'get_expiring_rights', 'get_slots', 'get_to_schedule',
         'get_today', 'get_contestations', // lot ABO-3a
         'get_subscription_thread', // lot ABO-3b
+        'get_waitlist', // lot ABO-4
         // lot IA-G : lectures du groupe (directeur seulement)
         'get_group', 'get_group_view', 'get_group_transfers',
         // lot G-5 : les transferts que la boutique doit ENVOYER (son administrateur ; vide hors d'un groupe)
@@ -88,6 +91,7 @@ final class SiteAssistantTools
         'propose_slot_rule', 'propose_assign_date', 'propose_move_occurrence', // lot ABO-2
         'propose_mark_done', 'propose_mark_session_done', // lot ABO-3a
         'propose_reply', // lot ABO-3b
+        'propose_promote_waitlist', // lot ABO-4
         'propose_group_invitation', 'propose_group_copy', 'propose_group_same_company', 'propose_group_transfer']; // lot IA-G, G-1d, G-5
 
     /** Champs de la fiche Entreprise que l'assistant peut proposer de remplir (cheminement complet, 07/11/2026) ; les textes légaux peuvent être rédigés par l'IA */

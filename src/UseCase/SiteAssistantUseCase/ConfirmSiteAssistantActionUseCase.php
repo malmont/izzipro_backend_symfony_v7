@@ -287,6 +287,7 @@ class ConfirmSiteAssistantActionUseCase
                 case 'propose_mark_done': // lot ABO-3a (jamais le directeur entré : l'assistant lui est fermé)
                 case 'propose_mark_session_done':
                 case 'propose_reply': // lot ABO-3b : la réponse lue et confirmée par l'administrateur
+                case 'propose_promote_waitlist': // lot ABO-4 : l'offre d'une place libre, relue à l'application
                     // lot ABO-0 : par le service de l'écran, tout relu (formule, produit porteur, prestations actives) ; un refus garde son message
                     return ($this->abo ?? throw new \OutOfBoundsException('Outil indisponible'))->apply($tool, $input, $host);
             }

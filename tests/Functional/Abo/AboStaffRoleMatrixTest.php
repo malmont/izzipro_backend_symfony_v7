@@ -36,6 +36,7 @@ class AboStaffRoleMatrixTest extends WebTestCase
     {
         $db = $this->db();
         $db->executeStatement('DELETE FROM user_app_membership WHERE user_id IN (SELECT id FROM "user" WHERE email LIKE ?)', [self::PREFIX . '%']);
+        $db->executeStatement("DELETE FROM calendar_feed WHERE owner_type = 'staff' AND owner_id IN (SELECT id FROM \"user\" WHERE email LIKE ?)", [self::PREFIX . '%']); // lot ABO-4
         $db->executeStatement('DELETE FROM refresh_tokens WHERE username LIKE ?', [self::PREFIX . '%']);
         $db->executeStatement("DELETE FROM content_audit_log WHERE resource = 'user_team' AND resource_id IN (SELECT id::text FROM \"user\" WHERE email LIKE ?)", [self::PREFIX . '%']);
         $db->executeStatement('DELETE FROM "user" WHERE email LIKE ?', [self::PREFIX . '%']);
@@ -87,7 +88,7 @@ class AboStaffRoleMatrixTest extends WebTestCase
             }
         }
         $this->assertSame([], $violations, 'hors de /api/staff/abonnements, l\'intervenant n\'a rien de plus qu\'un client');
-        $this->assertSame(6, $own, 'les 6 routes de l\'intervenant (aujourd\'hui, semaine, fait, absent, preuve, séance entière)');
+        $this->assertSame(8, $own, 'les 8 routes de l\'intervenant (aujourd\'hui, semaine, fait, absent, preuve, séance entière ; lot ABO-4 : son lien d\'agenda, lu et changé)');
         foreach ($customerSpace as $route) {
             $this->assertDoesNotMatchRegularExpression('#^\S+ /api/(gestion|site|platform|pos|support|agency|pertes|commandes|memoires/admin)(/|$)#', $route, 'jamais d\'écran d\'équipe dans l\'espace du client');
         }

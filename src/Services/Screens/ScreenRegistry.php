@@ -185,6 +185,7 @@ final class ScreenRegistry
         ['#^/api/me/contexts(/enter)?$#', '@compte'],
         ['#^/api/(login|logout|token|otp-verify|register|resend-verification|validate-token|password-reset|import-invitation)(/|$)#', '@compte'],
         ['#^/api/(profile|account|adresses|ordersuser|notifications|subscriptions|reviews|payment)(/|$)#', '@compte'],
+        ['#^/api/calendrier(/|$)#', '@compte'], // lot ABO-4 : le lien d'agenda d'un abonné ou d'un intervenant, lu par son agenda
         // (les commandes, les paiements, l'achat d'une étiquette, l'annulation : un administrateur y agit sur TOUT le site : ventes)
         ['#^/api/orders$#', 'ventes.commandes'],
         ['#^/api/order/cancel(/|$)#', 'ventes.commandes'],

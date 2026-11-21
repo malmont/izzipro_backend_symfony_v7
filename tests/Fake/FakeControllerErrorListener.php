@@ -23,6 +23,11 @@ class FakeControllerErrorListener
             $event->setController(static fn () => throw new \TypeError(self::MESSAGE));
         } elseif ($raise === 'exception') {
             $event->setController(static fn () => throw new \RuntimeException(self::MESSAGE));
+        } elseif ($raise === 'exception-uri') {
+            // lot ABO-4 : une erreur dont le message porte l'adresse demandée (comme un client HTTP qui échoue) : le jeton d'un lien d'agenda
+            // ne doit jamais en sortir dans une anomalie ni dans un journal
+            $uri = $event->getRequest()->getUri();
+            $event->setController(static fn () => throw new \RuntimeException('Échec en lisant ' . $uri));
         }
     }
 }
