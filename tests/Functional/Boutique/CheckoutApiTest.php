@@ -48,20 +48,20 @@ class CheckoutApiTest extends WebTestCase
         $pi = $first['paymentIntentId'];
         $this->assertFalse($first['reused']);
         $this->assertStringStartsWith($pi, $first['clientSecret']);
-        $two = $this->json($this->request('POST', '/api/stripe/create-intent', json_encode(['items' => [['productVariantId' => $variant, 'quantity' => 2]], 'carrierId' => 6, 'paymentIntentId' => $pi])));
+        $two = $this->json($this->request('POST', '/api/stripe/create-intent', json_encode(['items' => [['productVariantId' => $variant, 'quantity' => 2]], 'carrierId' => 6, 'paymentIntentId' => $pi, 'clientSecret' => $pi . '_secret_test'])));
         $this->assertSame([$pi, true], [$two['paymentIntentId'], $two['reused']], 'même panier : même intent');
         $this->assertSame($two['calculatedAmount'], FakeCheckoutPaymentGateway::$intents[$pi]['amount'], 'intent remis au nouveau montant');
-        $back = $this->json($this->request('POST', '/api/stripe/create-intent', json_encode(['items' => $order['items'], 'carrierId' => 6, 'paymentIntentId' => $pi])));
+        $back = $this->json($this->request('POST', '/api/stripe/create-intent', json_encode(['items' => $order['items'], 'carrierId' => 6, 'paymentIntentId' => $pi, 'clientSecret' => $pi . '_secret_test'])));
         $this->assertSame($first['calculatedAmount'], $back['calculatedAmount']);
 
-        $unpaid = $this->request('POST', '/api/order/create', json_encode($order + ['paymentIntentId' => $pi]));
+        $unpaid = $this->request('POST', '/api/order/create', json_encode($order + ['paymentIntentId' => $pi, 'clientSecret' => $pi . '_secret_test']));
         $this->assertSame(402, $unpaid->getStatusCode(), 'paiement pas encore autorisé');
 
         FakeCheckoutPaymentGateway::confirm($pi);
-        $created = $this->request('POST', '/api/order/create', json_encode($order + ['paymentIntentId' => $pi]));
+        $created = $this->request('POST', '/api/order/create', json_encode($order + ['paymentIntentId' => $pi, 'clientSecret' => $pi . '_secret_test']));
         $this->assertSame(201, $created->getStatusCode(), $created->getContent());
         $orderId = json_decode($created->getContent(), true)['orderId'];
-        $again = $this->request('POST', '/api/order/create', json_encode($order + ['paymentIntentId' => $pi]));
+        $again = $this->request('POST', '/api/order/create', json_encode($order + ['paymentIntentId' => $pi, 'clientSecret' => $pi . '_secret_test']));
         $this->assertSame(200, $again->getStatusCode(), $again->getContent());
         $this->assertSame([$orderId, true], [json_decode($again->getContent(), true)['orderId'], json_decode($again->getContent(), true)['alreadyCreated']]);
         $this->assertSame(1, (int) $this->db->fetchOne('SELECT COUNT(*) FROM payments WHERE stripe_payment_id = ?', [$pi]), 'une seule commande pour ce paiement');
@@ -71,9 +71,9 @@ class CheckoutApiTest extends WebTestCase
 
         $intruder = $this->session;
         $this->loginAs(['ROLE_USER_INTERNET']);
-        $stolen = $this->request('POST', '/api/order/create', json_encode(['addressId' => $this->address(), 'items' => $order['items'], 'paymentIntentId' => $pi]));
+        $stolen = $this->request('POST', '/api/order/create', json_encode(['addressId' => $this->address(), 'items' => $order['items'], 'paymentIntentId' => $pi, 'clientSecret' => $pi . '_secret_test']));
         $this->assertSame(409, $stolen->getStatusCode(), 'paiement d\'un autre client');
-        $other = $this->json($this->request('POST', '/api/stripe/create-intent', json_encode(['items' => $order['items'], 'paymentIntentId' => $pi])));
+        $other = $this->json($this->request('POST', '/api/stripe/create-intent', json_encode(['items' => $order['items'], 'paymentIntentId' => $pi, 'clientSecret' => $pi . '_secret_test'])));
         $this->assertNotSame($pi, $other['paymentIntentId'], 'l\'intent d\'un autre client n\'est jamais repris');
         $this->session = $intruder;
     }
@@ -86,15 +86,15 @@ class CheckoutApiTest extends WebTestCase
         $pi = $this->json($this->request('POST', '/api/stripe/create-intent', json_encode(['items' => $body['items'], 'carrierId' => 6, 'shippingAddress' => ['province' => 'QC']])))['paymentIntentId'];
         FakeCheckoutPaymentGateway::confirm($pi);
 
-        $created = $this->request('POST', '/api/order/create-guest', json_encode($body + ['paymentIntentId' => $pi]));
+        $created = $this->request('POST', '/api/order/create-guest', json_encode($body + ['paymentIntentId' => $pi, 'clientSecret' => $pi . '_secret_test']));
         $this->assertSame(201, $created->getStatusCode(), $created->getContent());
         $first = json_decode($created->getContent(), true);
         $this->assertNotEmpty($first['guestToken']);
-        $again = json_decode($this->request('POST', '/api/order/create-guest', json_encode($body + ['paymentIntentId' => $pi]))->getContent(), true);
+        $again = json_decode($this->request('POST', '/api/order/create-guest', json_encode($body + ['paymentIntentId' => $pi, 'clientSecret' => $pi . '_secret_test']))->getContent(), true);
         $this->assertSame([$first['orderId'], $first['guestToken'], true], [$again['orderId'], $again['guestToken'], $again['alreadyCreated']], 'même paiement, même e-mail : commande et jeton renvoyés');
         $other = $body;
         $other['guestInfo']['email'] = 'quelqu-un-d-autre@example.invalid';
-        $this->assertSame(409, $this->request('POST', '/api/order/create-guest', json_encode($other + ['paymentIntentId' => $pi]))->getStatusCode());
+        $this->assertSame(409, $this->request('POST', '/api/order/create-guest', json_encode($other + ['paymentIntentId' => $pi, 'clientSecret' => $pi . '_secret_test']))->getStatusCode());
 
         $row = $this->db->fetchAssociative('SELECT a.country, o.total_tax FROM "order" o JOIN adress a ON a.id = o.shipping_adress_id WHERE o.id = ?', [$first['orderId']]);
         $this->assertSame('CA', $row['country'], 'pays absent : Canada déduit de la province');
@@ -117,7 +117,7 @@ class CheckoutApiTest extends WebTestCase
         $this->assertSame($email, $this->db->fetchOne('SELECT u.email FROM "order" o JOIN "user" u ON u.id = o.user_id_id WHERE o.id = ?', [$orderId]));
         $this->assertSame('succeeded', FakeCheckoutPaymentGateway::$intents[$pi]['status']);
         $this->assertSame('ignored', $this->webhook('payment_intent.amount_capturable_updated', $pi)['status'], 'évènement rejoué');
-        $late = json_decode($this->request('POST', '/api/order/create-guest', json_encode($body + ['paymentIntentId' => $pi]))->getContent(), true);
+        $late = json_decode($this->request('POST', '/api/order/create-guest', json_encode($body + ['paymentIntentId' => $pi, 'clientSecret' => $pi . '_secret_test']))->getContent(), true);
         $this->assertSame([$orderId, true], [$late['orderId'], $late['alreadyCreated']], 'le navigateur revenu plus tard reçoit la commande du webhook');
         $this->assertNotEmpty($late['guestToken']);
 
@@ -138,13 +138,13 @@ class CheckoutApiTest extends WebTestCase
         $stock = (int) $this->db->fetchOne('SELECT stock_quantity FROM product_variant WHERE id = ?', [$variant]);
         $this->db->executeStatement('UPDATE product_variant SET stock_quantity = 0 WHERE id = ?', [$variant]);
         try {
-            $refused = $this->request('POST', '/api/order/create', json_encode($order + ['paymentIntentId' => $pi]));
+            $refused = $this->request('POST', '/api/order/create', json_encode($order + ['paymentIntentId' => $pi, 'clientSecret' => $pi . '_secret_test']));
             $this->assertSame(400, $refused->getStatusCode(), $refused->getContent());
             $this->assertSame('canceled', FakeCheckoutPaymentGateway::$intents[$pi]['status'], 'autorisation libérée : le client n\'est pas débité');
             $this->assertTrue(json_decode($refused->getContent(), true)['authorizationCanceled'], 'authorizationCanceled vrai : annulée pendant cet appel (01/11/2026)');
             $this->assertSame('failed', $this->db->fetchOne('SELECT status FROM checkout_session WHERE payment_intent_id = ?', [$pi]));
             // Second appel après l'échec : l'intent annulé n'est plus payable (402), et la réponse dit qu'il est déjà annulé
-            $again = $this->request('POST', '/api/order/create', json_encode($order + ['paymentIntentId' => $pi]));
+            $again = $this->request('POST', '/api/order/create', json_encode($order + ['paymentIntentId' => $pi, 'clientSecret' => $pi . '_secret_test']));
             $this->assertSame(402, $again->getStatusCode(), $again->getContent());
             $this->assertTrue(json_decode($again->getContent(), true)['authorizationCanceled'], 'déjà annulée : vrai');
         } finally {
@@ -160,12 +160,12 @@ class CheckoutApiTest extends WebTestCase
         // Données invalides (adresse absente) : l'autorisation reste
         $pi = $this->json($this->request('POST', '/api/stripe/create-intent', json_encode(['items' => $items])))['paymentIntentId'];
         FakeCheckoutPaymentGateway::confirm($pi);
-        $invalid = $this->request('POST', '/api/order/create', json_encode(['items' => $items, 'paymentIntentId' => $pi]));
+        $invalid = $this->request('POST', '/api/order/create', json_encode(['items' => $items, 'paymentIntentId' => $pi, 'clientSecret' => $pi . '_secret_test']));
         $this->assertSame(400, $invalid->getStatusCode(), $invalid->getContent());
         $this->assertFalse(json_decode($invalid->getContent(), true)['authorizationCanceled']);
         $this->assertSame('requires_capture', FakeCheckoutPaymentGateway::$intents[$pi]['status'], 'autorisation conservée');
         // Second appel après cet échec : même réponse, toujours faux
-        $again = $this->request('POST', '/api/order/create', json_encode(['items' => $items, 'paymentIntentId' => $pi]));
+        $again = $this->request('POST', '/api/order/create', json_encode(['items' => $items, 'paymentIntentId' => $pi, 'clientSecret' => $pi . '_secret_test']));
         $this->assertSame([400, false], [$again->getStatusCode(), json_decode($again->getContent(), true)['authorizationCanceled']]);
 
         // Commande refusée mais annulation en échec chez Stripe : faux, l'application sait que le client reste autorisé
@@ -175,7 +175,7 @@ class CheckoutApiTest extends WebTestCase
         $stock = (int) $this->db->fetchOne('SELECT stock_quantity FROM product_variant WHERE id = ?', [$variant]);
         $this->db->executeStatement('UPDATE product_variant SET stock_quantity = 0 WHERE id = ?', [$variant]);
         try {
-            $refused = $this->request('POST', '/api/order/create', json_encode(['addressId' => $this->address(), 'items' => $items, 'paymentIntentId' => $pi2]));
+            $refused = $this->request('POST', '/api/order/create', json_encode(['addressId' => $this->address(), 'items' => $items, 'paymentIntentId' => $pi2, 'clientSecret' => $pi2 . '_secret_test']));
             $this->assertSame(400, $refused->getStatusCode(), $refused->getContent());
             $this->assertFalse(json_decode($refused->getContent(), true)['authorizationCanceled'], 'annulation en échec : faux');
             $this->assertSame('requires_capture', FakeCheckoutPaymentGateway::$intents[$pi2]['status']);
@@ -207,11 +207,11 @@ class CheckoutApiTest extends WebTestCase
         $items = [['productVariantId' => $variant, 'quantity' => 1]];
         $pi = $this->json($this->request('POST', '/api/stripe/create-intent', json_encode(['items' => $items])))['paymentIntentId'];
         FakeCheckoutPaymentGateway::confirm($pi);
-        $missing = json_decode($this->request('POST', '/api/order/create', json_encode(['items' => $items, 'paymentIntentId' => $pi]))->getContent(), true);
+        $missing = json_decode($this->request('POST', '/api/order/create', json_encode(['items' => $items, 'paymentIntentId' => $pi, 'clientSecret' => $pi . '_secret_test']))->getContent(), true);
         $this->assertSame(['FIELDS_REQUIRED', 'Missing required fields (addressId, items)', false], [$missing['code'], $missing['error'], $missing['authorizationCanceled']]);
         // lot CHECKOUT-PANIER : un transporteur autre que celui du panier payé (ici aucun) est un écart de panier, refusé avant la
         // réservation du paiement (autorisation conservée) ; un transporteur inconnu est refusé dès le devis de l'intention
-        $carrier = $this->request('POST', '/api/order/create', json_encode(['addressId' => $this->address(), 'carrierId' => 999999, 'items' => $items, 'paymentIntentId' => $pi]));
+        $carrier = $this->request('POST', '/api/order/create', json_encode(['addressId' => $this->address(), 'carrierId' => 999999, 'items' => $items, 'paymentIntentId' => $pi, 'clientSecret' => $pi . '_secret_test']));
         $this->assertSame([409, 'CART_MISMATCH'], [$carrier->getStatusCode(), json_decode($carrier->getContent(), true)['code']], $carrier->getContent());
         $this->assertSame('requires_capture', FakeCheckoutPaymentGateway::$intents[$pi]['status'], 'autorisation conservée');
         $unknownCarrier = $this->request('POST', '/api/stripe/create-intent', json_encode(['items' => $items, 'carrierId' => 999999]));
@@ -221,7 +221,7 @@ class CheckoutApiTest extends WebTestCase
         $stock = (int) $this->db->fetchOne('SELECT stock_quantity FROM product_variant WHERE id = ?', [$variant]);
         $this->db->executeStatement('UPDATE product_variant SET stock_quantity = 0 WHERE id = ?', [$variant]);
         try {
-            $order = ['addressId' => $this->address(), 'items' => $items, 'paymentIntentId' => $pi];
+            $order = ['addressId' => $this->address(), 'items' => $items, 'paymentIntentId' => $pi, 'clientSecret' => $pi . '_secret_test'];
             $refused = json_decode($this->request('POST', '/api/order/create', json_encode($order))->getContent(), true);
             $this->assertSame(['QUOTE_INVALID', true], [$refused['code'], $refused['authorizationCanceled']], json_encode($refused));
             $this->assertSame(['path' => 'items[0].quantity', 'message' => 'stock insuffisant (0 disponible(s))', 'code' => 'STOCK_INSUFFICIENT', 'params' => ['available' => 0]], $refused['errors'][0]);
@@ -233,12 +233,14 @@ class CheckoutApiTest extends WebTestCase
         }
 
         // Invité : courriel absent (400 EMAIL_REQUIRED), permis absent pour une location (400 LICENSE_REQUIRED)
-        // (lot CHECKOUT-PANIER : chaque intention est cotée avec le panier que la commande envoie ensuite, transporteur compris)
+        // (lot CHECKOUT-PANIER : chaque intention est cotée avec le panier que la commande envoie ensuite, transporteur compris ;
+        // lot CHECKOUT-PROPRIETE : un invité, donc sans la session du client connecté plus haut, sinon le paiement serait le sien)
+        $this->session = [];
         $guest = $this->guestBody($variant, 'invite-codes@example.invalid');
         $pi2 = $this->json($this->request('POST', '/api/stripe/create-intent', json_encode(['items' => $guest['items'], 'carrierId' => $guest['carrierId']])))['paymentIntentId'];
         FakeCheckoutPaymentGateway::confirm($pi2);
         $guest['guestInfo']['email'] = '';
-        $noEmail = json_decode($this->request('POST', '/api/order/create-guest', json_encode($guest + ['paymentIntentId' => $pi2]))->getContent(), true);
+        $noEmail = json_decode($this->request('POST', '/api/order/create-guest', json_encode($guest + ['paymentIntentId' => $pi2, 'clientSecret' => $pi2 . '_secret_test']))->getContent(), true);
         $this->assertSame(['EMAIL_REQUIRED', 'Email is required'], [$noEmail['code'], $noEmail['error']]);
         // une vraie ligne de location (kayak à l'heure), payée telle quelle : le permis est exigé
         $rental = $this->guestBody($this->variant('DEMO-KAYAK'), 'invite-codes@example.invalid');
@@ -246,7 +248,7 @@ class CheckoutApiTest extends WebTestCase
         $intent3 = $this->request('POST', '/api/stripe/create-intent', json_encode(['items' => $rental['items'], 'carrierId' => $rental['carrierId']]));
         $pi3 = $this->json($intent3)['paymentIntentId'];
         FakeCheckoutPaymentGateway::confirm($pi3);
-        $noLicense = json_decode($this->request('POST', '/api/order/create-guest', json_encode($rental + ['paymentIntentId' => $pi3]))->getContent(), true);
+        $noLicense = json_decode($this->request('POST', '/api/order/create-guest', json_encode($rental + ['paymentIntentId' => $pi3, 'clientSecret' => $pi3 . '_secret_test']))->getContent(), true);
         $this->assertSame('LICENSE_REQUIRED', $noLicense['code'], json_encode($noLicense));
     }
 

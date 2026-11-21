@@ -43,6 +43,36 @@ final class StripeCheckoutPaymentGateway implements CheckoutPaymentGatewayInterf
         return $options === null ? null : $this->call(fn (StripeClient $c) => $c->paymentIntents->retrieve($id, ['expand' => ['latest_charge']], $options), 'lecture');
     }
 
+    public function retrieveStrict(string $id): ?array
+    {
+        $options = $this->stripe->accountOptions();
+        if ($options === null) {
+            throw self::unavailable();
+        }
+        try {
+            return self::normalize((new StripeClient($this->stripe->secretKey()))->paymentIntents->retrieve($id, ['expand' => ['latest_charge']], $options));
+        } catch (\Stripe\Exception\InvalidArgumentException) {
+            return null; // identifiant mal formé : une intention inconnue (403), jamais un 500
+        } catch (\Stripe\Exception\ApiErrorException $e) {
+            if (self::isUnknownIntent($e)) {
+                return null;
+            }
+            $this->logger->error(sprintf('[Checkout] Stripe (lecture stricte) : %s', $e->getMessage()));
+            throw self::unavailable();
+        }
+    }
+
+    /** Intention inconnue de Stripe (404, resource_missing) ; toute autre erreur (connexion, quota, 5xx, clé) est une panne : 503 */
+    public static function isUnknownIntent(\Stripe\Exception\ApiErrorException $e): bool
+    {
+        return $e instanceof \Stripe\Exception\InvalidRequestException && ($e->getHttpStatus() === 404 || $e->getStripeCode() === 'resource_missing');
+    }
+
+    private static function unavailable(): CheckoutException
+    {
+        return new CheckoutException(503, 'Le service de paiement ne répond pas : réessayez dans un instant.', [], 'PAYMENT_PROVIDER_UNAVAILABLE');
+    }
+
     public function updateAmount(string $id, int $amount): ?array
     {
         $current = $this->retrieve($id);

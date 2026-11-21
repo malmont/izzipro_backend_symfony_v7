@@ -217,7 +217,7 @@ class FichesHorsLigneTest extends WebTestCase
         // l'article passe hors ligne entre l'intention et la commande
         $this->em()->getConnection()->executeStatement('UPDATE product SET is_web = false WHERE id = ?', [$this->ids['online']]);
         $this->flush();
-        $created = $this->send('POST', '/api/order/create-guest', null, $body + ['paymentIntentId' => $intent['paymentIntentId']]);
+        $created = $this->send('POST', '/api/order/create-guest', null, $body + ['paymentIntentId' => $intent['paymentIntentId'], 'clientSecret' => $intent['paymentIntentId'] . '_secret_test']);
         $this->assertSame(201, $created->getStatusCode(), (string) $created->getContent());
         $order = (int) json_decode((string) $created->getContent(), true)['orderId'];
         $this->assertSame(200, $this->get("/api/site/commandes/$order", $admin)->getStatusCode(), 'l\'administrateur voit la commande payée');
@@ -232,7 +232,7 @@ class FichesHorsLigneTest extends WebTestCase
         $body = $this->guestBody($this->variants['online'], 'hl-invite2-' . $this->tag . '@example.invalid');
         $open = json_decode((string) $this->send('POST', '/api/stripe/create-intent', null, ['items' => $body['items'], 'carrierId' => 6, 'shippingAddress' => ['province' => 'QC']])->getContent(), true)['paymentIntentId'];
         $count = fn (): int => (int) $this->em()->getConnection()->fetchOne('SELECT COUNT(*) FROM "order" WHERE id > ?', [$this->ordersBefore]);
-        foreach (['sans intention' => [], 'intention inconnue' => ['paymentIntentId' => 'pi_inconnu_' . $this->tag], 'intention non confirmée' => ['paymentIntentId' => $open]] as $label => $payment) {
+        foreach (['sans intention' => [], 'intention inconnue' => ['paymentIntentId' => 'pi_inconnu_' . $this->tag], 'intention non confirmée' => ['paymentIntentId' => $open, 'clientSecret' => $open . '_secret_test']] as $label => $payment) {
             foreach (['invité' => ['/api/order/create-guest', null], 'client' => ['/api/order/create', $customer]] as $who => [$path, $as]) {
                 $refused = $this->send('POST', $path, $as, $body + $payment);
                 $this->assertGreaterThanOrEqual(400, $refused->getStatusCode(), "$who, $label : " . $refused->getContent());

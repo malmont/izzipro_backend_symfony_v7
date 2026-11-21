@@ -174,7 +174,7 @@ class OrderDeskApiTest extends WebTestCase
         $this->assertSame(200, $intent->getStatusCode(), $intent->getContent());
         $pi = json_decode((string) $intent->getContent(), true)['paymentIntentId'];
         FakeCheckoutPaymentGateway::confirm($pi);
-        $created = $this->request('POST', '/api/order/create', json_encode($order + ['paymentIntentId' => $pi]));
+        $created = $this->request('POST', '/api/order/create', json_encode($order + ['paymentIntentId' => $pi, 'clientSecret' => $pi . '_secret_test']));
         $this->assertSame(201, $created->getStatusCode(), $created->getContent());
         $this->client->getCookieJar()->clear();
 

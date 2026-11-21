@@ -138,7 +138,7 @@ class WebOrderDoubleCancelApiTest extends WebTestCase
         $order = ['addressId' => $this->address(), 'carrierId' => 6, 'items' => [['productVariantId' => $this->variant, 'quantity' => $quantity]]];
         $pi = $this->json($this->request('POST', '/api/stripe/create-intent', json_encode(['items' => $order['items'], 'carrierId' => 6, 'order' => $order])))['paymentIntentId'];
         FakeCheckoutPaymentGateway::confirm($pi);
-        $created = $this->request('POST', '/api/order/create', json_encode($order + ['paymentIntentId' => $pi]));
+        $created = $this->request('POST', '/api/order/create', json_encode($order + ['paymentIntentId' => $pi, 'clientSecret' => $pi . '_secret_test']));
         $this->assertSame(201, $created->getStatusCode(), $created->getContent());
 
         return (int) json_decode($created->getContent(), true)['orderId'];

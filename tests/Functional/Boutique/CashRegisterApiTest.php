@@ -253,7 +253,7 @@ class CashRegisterApiTest extends WebTestCase
         $order = ['addressId' => $this->address(), 'carrierId' => 6, 'items' => [['productVariantId' => $variant, 'quantity' => 1]]];
         $intent = $this->json($this->request('POST', '/api/stripe/create-intent', json_encode(['items' => $order['items'], 'carrierId' => 6, 'order' => $order])));
         FakeCheckoutPaymentGateway::confirm($intent['paymentIntentId']);
-        $created = $this->request('POST', '/api/order/create', json_encode($order + ['paymentIntentId' => $intent['paymentIntentId']]));
+        $created = $this->request('POST', '/api/order/create', json_encode($order + ['paymentIntentId' => $intent['paymentIntentId'], 'clientSecret' => $intent['paymentIntentId'] . '_secret_test']));
         $this->assertSame(201, $created->getStatusCode(), $created->getContent());
         $orderId = json_decode($created->getContent(), true)['orderId'];
         $this->assertSame(1, (int) $this->db->fetchOne('SELECT order_source_id FROM "order" WHERE id = ?', [$orderId]), 'source e-commerce');
