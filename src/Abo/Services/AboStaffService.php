@@ -52,6 +52,7 @@ class AboStaffService
         private readonly LoggerInterface $logger,
         private readonly SiteName $siteName,
         private readonly AboStaffEligibility $eligibility,
+        private readonly ?\App\Services\CaisseService\StoreClock $clock = null, // lot ABO-LANG : les échéances d'invitation à l'heure du magasin (ABO-DATES)
     ) {
     }
 
@@ -241,7 +242,7 @@ class AboStaffService
         $pending = $this->isPending($user);
 
         return ['userId' => (int) $user->getId(), 'firstname' => $user->getFirstname(), 'lastname' => $user->getLastname(), 'email' => $user->getEmail(), 'pending' => $pending,
-            'invitationExpiresAt' => $pending ? $user->getResetTokenExpiresAt()?->format(\DATE_ATOM) : null];
+            'invitationExpiresAt' => $pending ? $this->at($user->getResetTokenExpiresAt()) : null];
     }
 
     /** Pose un jeton neuf (l'ancien ne vaut plus), envoie le lien et rend l'état de l'invitation, jamais le jeton */
@@ -272,7 +273,12 @@ class AboStaffService
             $this->logger->warning('Abonnements : invitation d\'un intervenant sans lien (aucune adresse d\'espace d\'administration connue pour ce site).');
         }
 
-        return ['emailSent' => $sent, 'expiresAt' => $expires->format(\DATE_ATOM), 'validHours' => self::INVITATION_HOURS];
+        return ['emailSent' => $sent, 'expiresAt' => $this->at($expires), 'validHours' => self::INVITATION_HOURS];
+    }
+
+    private function at(?\DateTimeInterface $at): ?string
+    {
+        return $this->clock !== null ? $this->clock->atom($at) : $at?->format(\DATE_ATOM);
     }
 
     private function conn(): Connection

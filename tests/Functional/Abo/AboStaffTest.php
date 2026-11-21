@@ -109,6 +109,11 @@ class AboStaffTest extends WebTestCase
         $team = '/api/site/abonnements/intervenants';
         $invited = $this->json('POST', $team, ['email' => 'abo3b-nouveau@example.invalid', 'firstName' => 'Nina', 'lastName' => 'Nouvelle'], 200);
         $this->assertSame([true, true, 168], [$invited['changed'], $invited['staff']['pending'], $invited['invitation']['validHours']]);
+        // lot ABO-LANG : les échéances d'invitation à l'heure du magasin, comme les autres dates (ABO-DATES)
+        $offset = (new \DateTimeImmutable($invited['invitation']['expiresAt']))->setTimezone(new \DateTimeZone(self::TZ))->format('P');
+        $this->assertStringEndsWith($offset, $invited['invitation']['expiresAt']);
+        $listed = array_column(static::getContainer()->get(\App\Abo\Services\AboStaffService::class)->list(), 'invitationExpiresAt', 'email'); // sans requête : les courriels comptés plus bas sont ceux de l'invitation
+        $this->assertStringEndsWith($offset, (string) $listed['abo3b-nouveau@example.invalid']);
         // le courriel du droit d'IA ouvert par setUp part aussi : seuls ceux de l'invitée comptent
         $toInvitee = static fn (array $ms): int => count(array_filter($ms, static fn ($m): bool => in_array('abo3b-nouveau@example.invalid', array_map(static fn ($a): string => $a->getAddress(), $m->getTo()), true)));
         $this->assertSame(1, $toInvitee($this->getMailerMessages()), 'le lien de 7 jours');
