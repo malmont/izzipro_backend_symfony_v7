@@ -154,7 +154,7 @@ class AidApiTest extends WebTestCase
         $repaid = $this->send('PATCH', "/api/gestion/aides/$near", ['status' => 'to_repay', 'repayment' => ['amount' => 20000, 'dueOn' => $d(20)]], 200);
         $this->assertSame(['amount' => 20000, 'dueOn' => $d(20), 'decidedOn' => $d(0)], $repaid['repayment'], 'décidé aujourd\'hui (jour du magasin)');
         $this->endOfWrite();
-        $this->assertSame($without + 70000 - 20000, $this->get('/api/gestion/tresorerie?days=90')['projection']['end']['amount'] ?? null);
+        $this->assertSame($without + 70000 + 70000 - 20000, $this->get('/api/gestion/tresorerie?days=90')['projection']['end']['amount'] ?? null, 'le versement, le mouvement saisi (gardé : rien n\'est supprimé), moins le remboursement');
 
         // Suppression, puis 404 ; jamais sans connexion
         $this->send('DELETE', "/api/gestion/aides/$near", [], 204);
