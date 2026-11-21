@@ -1,0 +1,360 @@
+{
+    "_lisezmoi": "Réponses des routes du lot FIS-2 (aides de la gestion), capturées le 21/11/2026 sur la base de test (données fictives, dates en 2049 sauf la trésorerie, relative à aujourd'hui). Pour le résultat, les statistiques et la trésorerie, seules les clés que le lot touche sont gardées (le reste de ces réponses est inchangé). Contrat : docs/aides-gestion.md.",
+    "POST /api/gestion/aides (aide d'exploitation, 201)": {
+        "id": 1,
+        "label": "Aide au démarrage",
+        "organism": "Organisme Témoin",
+        "kind": "operating",
+        "amount": 120000,
+        "currency": "CAD",
+        "status": "granted",
+        "coveredFrom": "2049-01-01",
+        "coveredTo": "2049-12-31",
+        "payments": [
+            {
+                "date": "2049-02-10",
+                "amount": 60000,
+                "received": true
+            },
+            {
+                "date": "2049-09-10",
+                "amount": 60000,
+                "received": false
+            }
+        ],
+        "conditions": [
+            {
+                "label": "Garder deux emplois",
+                "dueOn": "2049-12-31",
+                "state": "todo"
+            }
+        ],
+        "documents": [
+            1
+        ],
+        "repayment": null,
+        "advance": null,
+        "notes": null,
+        "loanId": null,
+        "loan": null,
+        "receivedTotal": 60000,
+        "toReceive": 60000,
+        "conditionsDue": 0,
+        "documentsMissing": false,
+        "inCalculations": true
+    },
+    "POST /api/gestion/aides (avance remboursable, 201 : son prêt à 0 % est né)": {
+        "id": 2,
+        "label": "Prêt d'honneur",
+        "organism": "Réseau Témoin",
+        "kind": "refundable_advance",
+        "amount": 1200000,
+        "currency": "CAD",
+        "status": "granted",
+        "coveredFrom": null,
+        "coveredTo": null,
+        "payments": [
+            {
+                "date": "2049-03-01",
+                "amount": 1200000,
+                "received": true
+            }
+        ],
+        "conditions": [],
+        "documents": [],
+        "repayment": null,
+        "advance": {
+            "durationMonths": 12,
+            "frequencyMonths": 1,
+            "firstDueOn": "2049-04-01",
+            "deferralMonths": 0
+        },
+        "notes": null,
+        "loanId": 1,
+        "loan": {
+            "id": 1,
+            "label": "Prêt d'honneur"
+        },
+        "receivedTotal": 1200000,
+        "toReceive": 0,
+        "conditionsDue": 0,
+        "documentsMissing": true,
+        "inCalculations": true
+    },
+    "GET /api/gestion/aides": {
+        "aids": [
+            {
+                "id": 2,
+                "label": "Prêt d'honneur",
+                "organism": "Réseau Témoin",
+                "kind": "refundable_advance",
+                "amount": 1200000,
+                "currency": "CAD",
+                "status": "granted",
+                "coveredFrom": null,
+                "coveredTo": null,
+                "payments": [
+                    {
+                        "date": "2049-03-01",
+                        "amount": 1200000,
+                        "received": true
+                    }
+                ],
+                "conditions": [],
+                "documents": [],
+                "repayment": null,
+                "advance": {
+                    "durationMonths": 12,
+                    "frequencyMonths": 1,
+                    "firstDueOn": "2049-04-01",
+                    "deferralMonths": 0
+                },
+                "notes": null,
+                "loanId": 1,
+                "loan": {
+                    "id": 1,
+                    "label": "Prêt d'honneur"
+                },
+                "receivedTotal": 1200000,
+                "toReceive": 0,
+                "conditionsDue": 0,
+                "documentsMissing": true,
+                "inCalculations": true
+            },
+            {
+                "id": 1,
+                "label": "Aide au démarrage",
+                "organism": "Organisme Témoin",
+                "kind": "operating",
+                "amount": 120000,
+                "currency": "CAD",
+                "status": "granted",
+                "coveredFrom": "2049-01-01",
+                "coveredTo": "2049-12-31",
+                "payments": [
+                    {
+                        "date": "2049-02-10",
+                        "amount": 60000,
+                        "received": true
+                    },
+                    {
+                        "date": "2049-09-10",
+                        "amount": 60000,
+                        "received": false
+                    }
+                ],
+                "conditions": [
+                    {
+                        "label": "Garder deux emplois",
+                        "dueOn": "2049-12-31",
+                        "state": "todo"
+                    }
+                ],
+                "documents": [
+                    1
+                ],
+                "repayment": null,
+                "advance": null,
+                "notes": null,
+                "loanId": null,
+                "loan": null,
+                "receivedTotal": 60000,
+                "toReceive": 60000,
+                "conditionsDue": 0,
+                "documentsMissing": false,
+                "inCalculations": true
+            }
+        ]
+    },
+    "DELETE /api/gestion/aides/{id} (avance, prêt lié : 409)": {
+        "error": "AID_LINKED_LOAN",
+        "code": "AID_LINKED_LOAN",
+        "message": "Cette aide a un prêt lié : supprimez d'abord le prêt, ou fermez l'aide.",
+        "aidId": 2,
+        "loanId": 1
+    },
+    "POST /api/gestion/aides (refus, 422)": {
+        "error": "VALIDATION_FAILED",
+        "code": "VALIDATION_FAILED",
+        "message": "Aide invalide : label (AID_LABEL_INVALID), amount (AID_AMOUNT_INVALID), coveredFrom (AID_PERIOD_REQUIRED)",
+        "fields": {
+            "label": "AID_LABEL_INVALID",
+            "amount": "AID_AMOUNT_INVALID",
+            "coveredFrom": "AID_PERIOD_REQUIRED"
+        }
+    },
+    "PATCH /api/gestion/aides/{id}/conditions/0 { state: kept }": {
+        "id": 1,
+        "label": "Aide au démarrage",
+        "organism": "Organisme Témoin",
+        "kind": "operating",
+        "amount": 120000,
+        "currency": "CAD",
+        "status": "granted",
+        "coveredFrom": "2049-01-01",
+        "coveredTo": "2049-12-31",
+        "payments": [
+            {
+                "date": "2049-02-10",
+                "amount": 60000,
+                "received": true
+            },
+            {
+                "date": "2049-09-10",
+                "amount": 60000,
+                "received": false
+            }
+        ],
+        "conditions": [
+            {
+                "label": "Garder deux emplois",
+                "dueOn": "2049-12-31",
+                "state": "kept"
+            }
+        ],
+        "documents": [
+            1
+        ],
+        "repayment": null,
+        "advance": null,
+        "notes": null,
+        "loanId": null,
+        "loan": null,
+        "receivedTotal": 60000,
+        "toReceive": 60000,
+        "conditionsDue": 0,
+        "documentsMissing": false,
+        "inCalculations": true
+    },
+    "GET /api/periodes/{id}/resultat (janvier 2049 : clés charges et result)": {
+        "charges": {
+            "financial": {
+                "interest": 0,
+                "insurance": 0,
+                "fees": 0,
+                "total": 0,
+                "loans": 0
+            },
+            "operatingAids": {
+                "received": 5096,
+                "pending": 5096,
+                "repaid": 0,
+                "total": 10192,
+                "aids": 1,
+                "estimated": true
+            },
+            "total": 0,
+            "net": -10192,
+            "caveats": []
+        },
+        "result": {
+            "gross": 0,
+            "net": 0,
+            "tauxMarge": null,
+            "tauxMarque": null,
+            "netRate": null,
+            "netAfterFixed": 0,
+            "netAfterFixedRate": null,
+            "netAfterCharges": 10192,
+            "netAfterChargesRate": null
+        }
+    },
+    "GET /api/gestion/statistiques?from=2049-01-01&to=2049-12-31&sections=charges (section charges)": {
+        "financial": {
+            "interest": 0,
+            "insurance": 0,
+            "fees": 0,
+            "total": 0,
+            "loans": 0
+        },
+        "previous": {
+            "interest": 0,
+            "insurance": 0,
+            "fees": 0,
+            "total": 0,
+            "loans": 0
+        },
+        "lastYear": {
+            "interest": 0,
+            "insurance": 0,
+            "fees": 0,
+            "total": 0,
+            "loans": 0
+        },
+        "capitalRepaid": 900000,
+        "operatingAids": {
+            "current": {
+                "received": 60000,
+                "pending": 60000,
+                "repaid": 0,
+                "total": 120000,
+                "aids": 1
+            },
+            "previous": {
+                "received": 0,
+                "pending": 0,
+                "repaid": 0,
+                "total": 0,
+                "aids": 0
+            },
+            "lastYear": {
+                "received": 0,
+                "pending": 0,
+                "repaid": 0,
+                "total": 0,
+                "aids": 0
+            }
+        },
+        "net": {
+            "current": -120000,
+            "previous": 0,
+            "lastYear": 0
+        }
+    },
+    "GET /api/gestion/tresorerie?days=90 (clés byCategory et caveats)": {
+        "byCategory": [
+            {
+                "category": "other",
+                "label": "Autres",
+                "in": 70000,
+                "out": 0
+            },
+            {
+                "category": "aid",
+                "label": "Aide",
+                "in": 70000,
+                "out": 20000
+            },
+            {
+                "category": "recorded",
+                "label": "Dépenses saisies",
+                "in": 0,
+                "out": 0,
+                "details": {
+                    "purchases": 0,
+                    "shipping": 0,
+                    "notes": 0,
+                    "advertising": 0
+                }
+            }
+        ],
+        "caveats": [
+            {
+                "code": "RECORDED_EXPENSES_INCLUDED",
+                "text": "Les dépenses saisies dans l'application (commandes fournisseurs, frais de port, notes de frais, publicité) sont comptées à leur date, comme si elles étaient payées ce jour-là."
+            },
+            {
+                "code": "TAXES_INCLUDED",
+                "text": "Les encaissements comprennent les taxes perçues, qui seront reversées : prévoyez-les en mouvement « Taxes et impôts »."
+            },
+            {
+                "code": "AID_MAY_OVERLAP_MOVEMENTS",
+                "text": "Un mouvement prévu d'entrée saisi à la main a le même montant qu'un versement d'aide, le même mois : il risque d'être compté deux fois. Gardez l'un ou l'autre ; rien n'est supprimé sans vous."
+            },
+            {
+                "code": "NO_SALES_HISTORY",
+                "text": "Aucune vente sur les 30 derniers jours : pas de moyenne des encaissements."
+            }
+        ]
+    }
+}

@@ -13,6 +13,9 @@ Tables :
 
 Migration `Version20270202500000`, script `scripts/migrate_all_v2_gestion_aids.sh`. Essai : `tests/Functional/Gestion/AidApiTest.php`.
 
+Exemples de réponses capturés sur la base de test (aides, avance et son prêt, refus, résultat avec `operatingAids` et `net`, statistiques,
+trésorerie avec la catégorie `aid` et la remarque de double comptage) : `docs/fis-2-exemples-reponses.json`.
+
 Aucun écran EasyAdmin. L'écran est celui de l'application de gestion (web et mobile), code d'écran `aides`.
 
 ## 1. Le principe
