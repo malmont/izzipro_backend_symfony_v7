@@ -717,7 +717,7 @@ class LexiqueApiTest extends WebTestCase
             $this->assertSame(1, (int) $conn()->fetchOne("SELECT COUNT(*) FROM gestion_conversation_message WHERE conversation_id = ? AND content::jsonb ->> 'lesson' = 'true'", [$a['conversationId']]));
             $this->assertStringContainsString('« screen.guide » explique l\'écran', (string) FakeLandingAiClient::$requests[0]['system']);
             $this->assertStringContainsString('choisis « screen.guide » SEUL', (string) FakeLandingAiClient::$requests[0]['system']);
-            $this->assertSame([13, true], [count($payload(0)['analyses']), in_array('screen.guide', array_column($payload(0)['analyses'], 'key'), true)]);
+            $this->assertSame([14, true], [count($payload(0)['analyses']), in_array('screen.guide', array_column($payload(0)['analyses'], 'key'), true)]);
             // sans écran : pas de guide ; le serveur demande une précision
             $b = $this->post('/api/gestion/console/messages', ['text' => "C'est quoi cet écran ?"], 202);
             FakeLandingAiClient::$queue = [$this->reply(['kind' => 'analyses', 'clarification' => '', 'analyses' => [['key' => 'screen.guide'] + $none]])];
