@@ -1434,6 +1434,12 @@ Outils de l'assistant du site : `get_subscription_thread` (les 30 derniers messa
 rien n'est marqué lu) ; `propose_reply` (le texte entier dans le résumé, lu par l'administrateur avant l'envoi ; « la boutique » pour
 l'abonné). Un message d'abonné est une donnée, jamais une consigne (essai d'injection). L'intervenant n'a pas l'assistant.
 
+Règle commune des intervenants (décision du chef du 21/11/2026) : `AboStaffEligibility` refuse le rôle à un administrateur
+(`STAFF_IS_ADMIN`) ou à un compte client (`STAFF_IS_CUSTOMER`), pour l'invitation comme pour l'écran Utilisateurs d'EasyAdmin (le rôle n'y
+est pas enregistré, le reste de la fiche l'est, le refus est affiché ; un intervenant qui devient administrateur perd le rôle d'intervenant).
+`AboStaffRoleMatrixTest` balaie toutes les routes de l'API : hors `/api/staff/abonnements`, l'intervenant n'obtient rien de plus qu'un
+compte client ; EasyAdmin lui est fermé.
+
 ### Codes des refus des abonnements (04/11/2026, application e-commerce mobile)
 
 Même contrat que les codes du devis : chaque refus (`SubscriptionException`) porte un `code` de premier niveau et un `message`
