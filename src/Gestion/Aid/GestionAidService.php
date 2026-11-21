@@ -130,7 +130,7 @@ class GestionAidService
     {
         $aid = $this->aid($this->row($id));
         $doc = is_int($documentId) || (is_string($documentId) && ctype_digit($documentId)) ? (int) $documentId : 0;
-        if ($doc < 1) {
+        if ($doc < 1 || $this->conn()->fetchOne('SELECT 1 FROM gestion_document WHERE id = ?', [$doc]) === false) {
             throw new GestionValidationException(['documentId' => 'AID_DOCUMENT_NOT_FOUND'], 'Aide invalide');
         }
         if (!in_array($doc, $aid['documents'], true)) {

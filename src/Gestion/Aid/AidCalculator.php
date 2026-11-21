@@ -90,17 +90,19 @@ final class AidCalculator
         $granted = (int) $aid['amount'];
         if ($aid['coveredFrom'] !== null && $aid['coveredTo'] !== null) {
             $product = self::cumulative($granted, $aid['coveredFrom'], $aid['coveredTo'], $to) - self::cumulative($granted, $aid['coveredFrom'], $aid['coveredTo'], self::addDays($from, -1));
+            // la part reçue, dans la proportion de ce qui est déjà reçu de l'aide entière (arrondi au plus proche ; produit positif)
+            $receivedAll = min($granted, array_sum(array_map(static fn (array $p): int => $p['received'] ? $p['amount'] : 0, $aid['payments'])));
+            $received = min($product, $granted > 0 ? intdiv($product * $receivedAll * 2 + $granted, 2 * $granted) : 0);
         } else {
-            $product = 0; // sans période couverte : à la date de chaque versement accordé (reçu ou prévu)
+            // sans période couverte : à la date de chaque versement accordé ; reçu ou prévu, versement par versement
+            $product = $received = 0;
             foreach ($aid['payments'] as $p) {
                 if ($p['date'] >= $from && $p['date'] <= $to) {
                     $product += $p['amount'];
+                    $received += $p['received'] ? $p['amount'] : 0;
                 }
             }
         }
-        $receivedAll = min($granted, array_sum(array_map(static fn (array $p): int => $p['received'] ? $p['amount'] : 0, $aid['payments'])));
-        $received = $granted > 0 ? intdiv($product * $receivedAll * 2 + $granted, 2 * $granted) : 0; // arrondi au plus proche (produit positif)
-        $received = min($received, $product);
         $repaid = 0;
         $r = self::repayment($aid);
         if ($r !== null && $r['decidedOn'] >= $from && $r['decidedOn'] <= $to) {

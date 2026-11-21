@@ -182,7 +182,7 @@ class AidApiTest extends WebTestCase
         $period = $this->period('2049-03-01', '2049-03-31');
         $this->assertSame(0, $this->get("/api/periodes/$period/resultat")['charges']['operatingAids']['total']);
         // tant que le prêt existe : ses termes ne changent pas, l'aide ne se supprime pas ; le libellé, lui, se change
-        $this->assertSame('AID_LINKED_LOAN', $this->send('PATCH', "/api/gestion/aides/$id", ['amount' => 1000000], 409)['error']['code'] ?? $this->body()['code'] ?? null);
+        $this->assertSame('AID_LINKED_LOAN', $this->send('PATCH', "/api/gestion/aides/$id", ['amount' => 1300000], 409)['error']['code'] ?? $this->body()['code'] ?? null);
         $this->assertSame('AID_LINKED_LOAN', $this->send('DELETE', "/api/gestion/aides/$id", [], 409)['error']['code'] ?? $this->body()['code'] ?? null);
         $this->assertSame('Prêt d\'honneur 2049', $this->send('PATCH', "/api/gestion/aides/$id", ['label' => 'Prêt d\'honneur 2049', 'status' => 'received'], 200)['label']);
         $this->assertSame(1, (int) $conn->fetchOne('SELECT COUNT(*) FROM gestion_loan'), 'jamais un second prêt');
