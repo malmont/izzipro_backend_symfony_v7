@@ -89,19 +89,19 @@ class CheckoutPanierTest extends WebTestCase
             'autre province' => ['shippingAddress' => ['province' => 'ON', 'postalCode' => 'K1A 0B1'] + $paid['shippingAddress']] + $paid,
         ];
         foreach ($swaps as $label => $body) {
-            $refused = $this->send('POST', '/api/order/create-guest', $body + ['paymentIntentId' => $pi]);
+            $refused = $this->send('POST', '/api/order/create-guest', $body + ['paymentIntentId' => $pi, 'clientSecret' => $pi . '_secret_test']);
             $this->assertSame([409, 'CART_MISMATCH'], [$refused->getStatusCode(), json_decode((string) $refused->getContent(), true)['code'] ?? null], "$label : " . $refused->getContent());
             $this->assertSame(0, $this->orders(), "$label : aucune commande");
         }
         $this->assertSame('requires_capture', FakeCheckoutPaymentGateway::$intents[$pi]['status'], 'l\'autorisation reste entière après les refus');
         // le panier honnête passe, dans un autre ordre et avec des champs en plus (productId) : la commande du panier payé
         $honest = ['items' => [['productId' => 1, 'quantity' => 1, 'productVariantId' => $this->variants['paid']]]] + $paid;
-        $created = $this->send('POST', '/api/order/create-guest', $honest + ['paymentIntentId' => $pi]);
+        $created = $this->send('POST', '/api/order/create-guest', $honest + ['paymentIntentId' => $pi, 'clientSecret' => $pi . '_secret_test']);
         $this->assertSame(201, $created->getStatusCode(), (string) $created->getContent());
         $order = (int) json_decode((string) $created->getContent(), true)['orderId'];
         $this->assertSame([$this->variants['paid'] => 1], $this->lines($order), 'les lignes du panier payé');
         // l'intention est consommée : un autre corps ne crée pas de seconde commande
-        $again = $this->send('POST', '/api/order/create-guest', $this->guestBody('other', 'a') + ['paymentIntentId' => $pi]);
+        $again = $this->send('POST', '/api/order/create-guest', $this->guestBody('other', 'a') + ['paymentIntentId' => $pi, 'clientSecret' => $pi . '_secret_test']);
         $this->assertSame(200, $again->getStatusCode(), (string) $again->getContent());
         $this->assertSame([$order, true], [json_decode((string) $again->getContent(), true)['orderId'], json_decode((string) $again->getContent(), true)['alreadyCreated']]);
         $this->assertSame(1, $this->orders(), 'une seule commande pour ce paiement');
@@ -151,7 +151,7 @@ class CheckoutPanierTest extends WebTestCase
     {
         $paid = $this->guestBody('paid', 'd');
         $pi = $this->paidIntent('paid', $paid);
-        $refused = $this->send('POST', '/api/order/create-guest', $this->guestBody('other', 'd') + ['paymentIntentId' => $pi]);
+        $refused = $this->send('POST', '/api/order/create-guest', $this->guestBody('other', 'd') + ['paymentIntentId' => $pi, 'clientSecret' => $pi . '_secret_test']);
         $this->assertSame(409, $refused->getStatusCode(), (string) $refused->getContent());
         $this->assertSame(0, $this->orders());
         // le filet : le webhook crée la commande du panier payé, sans incident (le corps gardé est celui du panier)
@@ -181,9 +181,9 @@ class CheckoutPanierTest extends WebTestCase
         $this->assertSame(200, $intent->getStatusCode(), (string) $intent->getContent());
         $pi = (string) json_decode((string) $intent->getContent(), true)['paymentIntentId'];
         FakeCheckoutPaymentGateway::confirm($pi);
-        $swap = $this->send('POST', '/api/order/create', ['addressId' => $address->getId(), 'carrierId' => 6, 'items' => [['productVariantId' => $this->variants['offline'], 'quantity' => 1]], 'paymentIntentId' => $pi], $token);
+        $swap = $this->send('POST', '/api/order/create', ['addressId' => $address->getId(), 'carrierId' => 6, 'items' => [['productVariantId' => $this->variants['offline'], 'quantity' => 1]], 'paymentIntentId' => $pi, 'clientSecret' => $pi . '_secret_test'], $token);
         $this->assertSame([409, 'CART_MISMATCH'], [$swap->getStatusCode(), json_decode((string) $swap->getContent(), true)['code'] ?? null], (string) $swap->getContent());
-        $created = $this->send('POST', '/api/order/create', ['addressId' => $address->getId(), 'carrierId' => 6, 'items' => $items, 'paymentIntentId' => $pi], $token);
+        $created = $this->send('POST', '/api/order/create', ['addressId' => $address->getId(), 'carrierId' => 6, 'items' => $items, 'paymentIntentId' => $pi, 'clientSecret' => $pi . '_secret_test'], $token);
         $this->assertSame(201, $created->getStatusCode(), (string) $created->getContent());
         $this->assertSame([$this->variants['paid'] => 1], $this->lines((int) json_decode((string) $created->getContent(), true)['orderId']));
     }
@@ -195,7 +195,7 @@ class CheckoutPanierTest extends WebTestCase
         $intent = $this->send('POST', '/api/stripe/create-intent', ['items' => $paid['items'], 'carrierId' => 6, 'shippingAddress' => ['province' => 'QC']]);
         $quote = json_decode((string) $intent->getContent(), true);
         FakeCheckoutPaymentGateway::confirm($quote['paymentIntentId']);
-        $created = $this->send('POST', '/api/order/create-guest', ['priceShipping' => 0, 'shippingPrice' => 0, 'service' => 'x'] + $paid + ['paymentIntentId' => $quote['paymentIntentId']]);
+        $created = $this->send('POST', '/api/order/create-guest', ['priceShipping' => 0, 'shippingPrice' => 0, 'service' => 'x'] + $paid + ['paymentIntentId' => $quote['paymentIntentId'], 'clientSecret' => $quote['paymentIntentId'] . '_secret_test']);
         $this->assertSame(201, $created->getStatusCode(), (string) $created->getContent());
         $order = (int) json_decode((string) $created->getContent(), true)['orderId'];
         $this->assertSame((int) $quote['quote']['shipping'], (int) round((float) $this->db->fetchOne('SELECT shipping_cost FROM "order" WHERE id = ?', [$order])), 'les frais du devis payé, pas ceux du corps');
@@ -215,9 +215,9 @@ class CheckoutPanierTest extends WebTestCase
         $body['items'] = [['productVariantId' => $kayak, 'quantity' => 1, 'booking' => ['start' => '2030-01-02T15:00:00.000Z', 'end' => '2030-01-02T12:00:00-05:00', 'durationType' => 'hour']]];
         $moved = $body;
         $moved['items'][0]['booking']['start'] = '2030-01-02T11:00:00-05:00';
-        $refused = $this->send('POST', '/api/order/create-guest', $moved + ['paymentIntentId' => $pi]);
+        $refused = $this->send('POST', '/api/order/create-guest', $moved + ['paymentIntentId' => $pi, 'clientSecret' => $pi . '_secret_test']);
         $this->assertSame('CART_MISMATCH', json_decode((string) $refused->getContent(), true)['code'] ?? null, 'une autre heure : un écart');
-        $created = $this->send('POST', '/api/order/create-guest', $body + ['paymentIntentId' => $pi]);
+        $created = $this->send('POST', '/api/order/create-guest', $body + ['paymentIntentId' => $pi, 'clientSecret' => $pi . '_secret_test']);
         $this->assertSame(201, $created->getStatusCode(), 'même instant (heure du magasin, « Z », décalage) : la commande se crée : ' . $created->getContent());
         $this->assertSame([$kayak => 1], $this->lines((int) json_decode((string) $created->getContent(), true)['orderId']));
     }
@@ -233,7 +233,7 @@ class CheckoutPanierTest extends WebTestCase
         FakeCheckoutPaymentGateway::confirm($pi);
         $this->assertSame($rental, json_decode((string) $this->db->fetchOne('SELECT cart FROM checkout_session WHERE payment_intent_id = ?', [$pi]), true)['rental'] ?? null, 'gardée avec le panier');
         $body = ['items' => [['productVariantId' => $kayak, 'quantity' => 1]], 'rental' => $rental] + $this->rentalBody('g');
-        $created = $this->send('POST', '/api/order/create-guest', $body + ['paymentIntentId' => $pi]);
+        $created = $this->send('POST', '/api/order/create-guest', $body + ['paymentIntentId' => $pi, 'clientSecret' => $pi . '_secret_test']);
         $this->assertSame(201, $created->getStatusCode(), (string) $created->getContent());
         $order = (int) json_decode((string) $created->getContent(), true)['orderId'];
         $this->assertGreaterThan(0, (int) $this->db->fetchOne('SELECT COUNT(*) FROM booking b JOIN order_items i ON i.id = b.order_item_id WHERE i.order_associated_id = ?', [$order]), 'la location est réservée');
@@ -245,7 +245,7 @@ class CheckoutPanierTest extends WebTestCase
         $paid = $this->guestBody('paid', 'h');
         $pi = $this->paidIntent('paid');
         $partial = ['shippingAddress' => ['firstname' => 'Invité', 'lastname' => 'Panier', 'address' => '1 rue du Test', 'city' => 'Québec']] + $paid;
-        $refused = $this->send('POST', '/api/order/create-guest', $partial + ['paymentIntentId' => $pi]);
+        $refused = $this->send('POST', '/api/order/create-guest', $partial + ['paymentIntentId' => $pi, 'clientSecret' => $pi . '_secret_test']);
         $this->assertSame([409, 'CART_MISMATCH'], [$refused->getStatusCode(), json_decode((string) $refused->getContent(), true)['code'] ?? null], (string) $refused->getContent());
         $this->assertSame(0, $this->orders());
     }
@@ -261,8 +261,10 @@ class CheckoutPanierTest extends WebTestCase
         $first = $this->send('POST', '/api/stripe/create-intent', ['items' => $paid['items'], 'carrierId' => 6, 'shippingAddress' => ['province' => 'QC'], 'order' => $paid]);
         $pi = (string) json_decode((string) $first->getContent(), true)['paymentIntentId'];
         $this->assertNotNull($this->db->fetchOne('SELECT order_data FROM checkout_session WHERE payment_intent_id = ?', [$pi]));
-        $again = $this->send('POST', '/api/stripe/create-intent', ['items' => $paid['items'], 'carrierId' => 6, 'shippingAddress' => ['province' => 'ON', 'postalCode' => 'K1A 0B1'], 'paymentIntentId' => $pi]);
+        $again = $this->send('POST', '/api/stripe/create-intent', ['items' => $paid['items'], 'carrierId' => 6, 'shippingAddress' => ['province' => 'ON', 'postalCode' => 'K1A 0B1'], 'paymentIntentId' => $pi, 'clientSecret' => $pi . '_secret_test']);
         $this->assertSame(200, $again->getStatusCode(), (string) $again->getContent());
+        // avec sa preuve (CHECKOUT-PROPRIETE), l'invité reprend SON intention ; l'autre adresse abandonne le corps gardé
+        $this->assertSame([$pi, true], [json_decode((string) $again->getContent(), true)['paymentIntentId'], json_decode((string) $again->getContent(), true)['reused']]);
         $this->assertNull($this->db->fetchOne('SELECT order_data FROM checkout_session WHERE payment_intent_id = ?', [$pi]), 'le corps à l\'ancienne adresse est abandonné');
         FakeCheckoutPaymentGateway::confirm($pi);
         $this->assertSame('ignored', $this->webhook($pi)['status'], 'aucune commande à l\'ancienne adresse');

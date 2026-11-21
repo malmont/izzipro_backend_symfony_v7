@@ -109,20 +109,20 @@ class CustomerAccountApiTest extends WebTestCase
         $pi = $this->json($this->request('POST', '/api/stripe/create-intent', json_encode(['items' => $order['items'], 'carrierId' => 6, 'order' => $order])))['paymentIntentId'];
 
         // Session de paiement à son nom, pas encore payée : propriétaire reconnu, réponse Stripe « pas abouti » comme avant
-        $pending = $this->request('POST', '/api/payment', json_encode(['paymentIntentId' => $pi]));
+        $pending = $this->request('POST', '/api/payment', json_encode(['paymentIntentId' => $pi, 'clientSecret' => $pi . '_secret_test']));
         $this->assertSame(500, $pending->getStatusCode());
         $this->assertStringContainsString('pas abouti', json_decode($pending->getContent(), true)['errors'][0]);
 
         \App\Tests\Fake\FakeCheckoutPaymentGateway::confirm($pi);
-        $created = $this->request('POST', '/api/order/create', json_encode($order + ['paymentIntentId' => $pi]));
+        $created = $this->request('POST', '/api/order/create', json_encode($order + ['paymentIntentId' => $pi, 'clientSecret' => $pi . '_secret_test']));
         $this->assertSame(201, $created->getStatusCode(), $created->getContent());
         $orderId = (int) json_decode($created->getContent(), true)['orderId'];
-        $mine = $this->json($this->request('POST', '/api/payment', json_encode(['paymentIntentId' => $pi])));
+        $mine = $this->json($this->request('POST', '/api/payment', json_encode(['paymentIntentId' => $pi, 'clientSecret' => $pi . '_secret_test'])));
         $this->assertSame([true, $pi, 'succeeded', '4242'], [$mine['success'], $mine['payment']['stripePaymentId'], $mine['payment']['status'], $mine['payment']['last4']], 'réponse inchangée pour le propriétaire');
 
         // Autre client : 404, même réponse qu'un identifiant inconnu
         $this->loginAs(['ROLE_USER_INTERNET']);
-        $other = $this->request('POST', '/api/payment', json_encode(['paymentIntentId' => $pi]));
+        $other = $this->request('POST', '/api/payment', json_encode(['paymentIntentId' => $pi, 'clientSecret' => $pi . '_secret_test']));
         $this->assertSame([404, 'PAYMENT_NOT_FOUND'], [$other->getStatusCode(), json_decode($other->getContent(), true)['error']]);
         $unknown = $this->request('POST', '/api/payment', json_encode(['paymentIntentId' => 'pi_inconnu']));
         $this->assertSame([404, 'PAYMENT_NOT_FOUND'], [$unknown->getStatusCode(), json_decode($unknown->getContent(), true)['error']]);
@@ -130,12 +130,12 @@ class CustomerAccountApiTest extends WebTestCase
 
         // Invité : jeton de la commande exigé
         $this->db->executeStatement('UPDATE "order" SET guest_token = ? WHERE id = ?', ['jeton-s7-0123456789abcdef', $orderId]);
-        $this->assertSame(404, $this->request('POST', '/api/payment', json_encode(['paymentIntentId' => $pi, 'guestToken' => 'faux']))->getStatusCode());
-        $this->assertTrue($this->json($this->request('POST', '/api/payment', json_encode(['paymentIntentId' => $pi, 'guestToken' => 'jeton-s7-0123456789abcdef'])))['success'], 'invité avec son jeton');
+        $this->assertSame(404, $this->request('POST', '/api/payment', json_encode(['paymentIntentId' => $pi, 'clientSecret' => $pi . '_secret_test', 'guestToken' => 'faux']))->getStatusCode());
+        $this->assertTrue($this->json($this->request('POST', '/api/payment', json_encode(['paymentIntentId' => $pi, 'clientSecret' => $pi . '_secret_test', 'guestToken' => 'jeton-s7-0123456789abcdef'])))['success'], 'invité avec son jeton');
 
         // Administrateur : tout
         $this->loginAs(['ROLE_ADMIN', 'ROLE_USER_INTERNET']);
-        $this->assertTrue($this->json($this->request('POST', '/api/payment', json_encode(['paymentIntentId' => $pi])))['success']);
+        $this->assertTrue($this->json($this->request('POST', '/api/payment', json_encode(['paymentIntentId' => $pi, 'clientSecret' => $pi . '_secret_test'])))['success']);
     }
 
     /** S7 (31/10/2026) : le changement d'adresse courriel exige le mot de passe actuel (ou un code OTP pour les comptes sans mot de passe), seulement quand l'adresse change vraiment */

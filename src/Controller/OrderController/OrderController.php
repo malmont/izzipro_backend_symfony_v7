@@ -367,6 +367,11 @@ class OrderController extends AbstractController
             if ($terminalRef !== null && (!is_scalar($terminalRef) || (int) $method['type'] !== 1)) {
                 return $this->json(['error' => 'PAYMENT_METHODS_INVALID', 'message' => 'terminalPaymentId ne s\'applique qu\'à une part carte (type 1)'], JsonResponse::HTTP_BAD_REQUEST);
             }
+            // le pi_… d'un panier web n'arrive que par stripePaymentId (la caisse envoie terminalPaymentId, l'identifiant de sa propre
+            // table des paiements du terminal : chemin non touché, vérification à venir sous POS-PI-VERIF)
+            if (is_scalar($method['stripePaymentId'] ?? null) && $this->isWebCheckoutPayment((string) $method['stripePaymentId'])) {
+                return $this->webPaymentRefused();
+            }
             // Carte-cadeau (type 4) ou avoir (type 5), caisse seulement (F9) : code requis, vérifié et débité dans la transaction de la vente
             $giftCode = in_array((int) $method['type'], [PaymentMethodDTO::GIFT_CARD, PaymentMethodDTO::STORE_CREDIT], true) ? ($method['code'] ?? null) : null;
             if ($giftCode !== null && !is_string($giftCode)) {
@@ -406,6 +411,9 @@ class OrderController extends AbstractController
         $paymentData = is_array($data['payment'] ?? null) ? $data['payment'] : [];
         $paymentIntent = null;
         if (!empty($paymentData['stripePaymentId'])) {
+            if ($this->isWebCheckoutPayment((string) $paymentData['stripePaymentId'])) {
+                return $this->webPaymentRefused();
+            }
             $paymentIntent = $this->stripeService->verifyPaymentIntent((string) $paymentData['stripePaymentId']);
             if (!$paymentIntent) {
                 return $this->json(['error' => 'Payment verification failed or payment not completed', 'code' => 'PAYMENT_NOT_VERIFIED', 'message' => 'Payment verification failed or payment not completed'], JsonResponse::HTTP_PAYMENT_REQUIRED);
@@ -651,6 +659,21 @@ class OrderController extends AbstractController
 
         $orderData = array_map(fn($dto) => $dto->toArray(), $orderDTOs);
         return $this->json($orderData);
+    }
+
+    /**
+     * Lot CHECKOUT-PROPRIETE : le paiement d'un panier WEB (une session de paiement de la boutique) n'appartient pas à la caisse.
+     * Sur create-multi-payment, il serait compté au montant que déclare le caissier, jamais capturé, et le client web n'aurait plus
+     * sa commande (le webhook l'ignorerait) : refusé, sans dire à qui il est.
+     */
+    private function isWebCheckoutPayment(string $paymentIntentId): bool
+    {
+        return $this->emProvider->getEntityManager()->getRepository(\App\Entity\CheckoutSession::class)->count(['paymentIntentId' => $paymentIntentId]) > 0;
+    }
+
+    private function webPaymentRefused(): JsonResponse
+    {
+        return $this->json(['error' => 'Ce paiement est déjà associé à une commande.', 'code' => 'PAYMENT_ALREADY_USED', 'message' => 'Ce paiement est déjà associé à une commande.'], JsonResponse::HTTP_CONFLICT);
     }
 
     /** Un PaymentIntent ne peut valider qu'une seule commande */

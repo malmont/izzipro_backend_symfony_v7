@@ -391,7 +391,7 @@ class AppMembershipApiTest extends WebTestCase
         $pi = $this->json('POST', '/api/stripe/create-intent', ['items' => $body['items'], 'carrierId' => 6, 'shippingAddress' => ['province' => 'QC']])['paymentIntentId'];
         FakeCheckoutPaymentGateway::confirm($pi);
 
-        return (int) $this->json('POST', '/api/order/create-guest', $body + ['paymentIntentId' => $pi] + $extra, null, [201])['orderId'];
+        return (int) $this->json('POST', '/api/order/create-guest', $body + ['paymentIntentId' => $pi, 'clientSecret' => $pi . '_secret_test'] + $extra, null, [201])['orderId'];
     }
 
     /** @return array<string, mixed> champs du jeton d'accès */

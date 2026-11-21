@@ -450,6 +450,26 @@ intent Stripe) et la commande naît **une seule fois par paiement**, du navigate
     la plateforme (`checkout/panier`, avertissement, sans donnée du client) et la commande se crée sur le panier payé.
   - Le tunnel de la boutique envoie les mêmes lignes à `create-intent` et à la commande (vérifié par le chef) : il ne voit jamais
     le refus. Essai : `tests/Functional/Boutique/CheckoutPanierTest.php`.
+- **Le paiement appartient à celui qui l'a ouvert** (lot CHECKOUT-PROPRIETE, 21/11/2026) : la PREUVE est le **`clientSecret`**
+  de l'intention (`pi_…_secret_…`), rendu par `create-intent` au seul navigateur qui l'a ouverte. Le `pi_…` et le courriel ne sont pas
+  des secrets.
+  - `order/create` et `create-guest` exigent `clientSecret` (relu chez Stripe, comparé à temps constant), vérifié AVANT tout le
+    reste (commande déjà créée, statut du paiement) : absent ou faux → **403 `PAYMENT_PROOF_REQUIRED`**, la même réponse, qui ne
+    dit rien du paiement ni de son propriétaire. Stripe muet → **503 `PAYMENT_PROVIDER_UNAVAILABLE`**, jamais d'acceptation par
+    défaut (le webhook reste le filet).
+  - Preuve faite : une session de CLIENT ne sert qu'à ce client (sinon **409 `PAYMENT_ALREADY_USED`**) ; une session d'INVITÉ sert
+    à l'invité, et au client qui s'est connecté entre-temps (jeton expiré à `create-intent`) : la commande est à son compte.
+  - Invité : le courriel et les adresses gardés à `create-intent` l'emportent (un autre courriel → 409 `CART_MISMATCH`) ; le reste
+    (nom, téléphone, permis) vient du corps.
+  - Reprise à `create-intent` (`paymentIntentId` + `clientSecret`) : seulement avec la preuve, et pour une session de client par ce
+    client ; intention encore modifiable chez Stripe ; sinon une NOUVELLE intention (`reused: false`), sans le `clientSecret` ni le
+    corps gardé d'un autre. Avec la preuve, un panier modifié sans renvoyer `order` garde le corps du premier appel.
+  - Le `clientSecret` ne s'écrit nulle part (journal, incident, session gardée : retiré du corps gardé).
+  - Les fronts renvoient le `clientSecret` reçu de `create-intent` à la commande et à la reprise (boutique et application mobile, à
+    leur reprise ; d'ici là, une commande web sans lui est refusée).
+  - Caisse : `create-multi-payment` refuse le `pi_…` d'un panier web (`payment.stripePaymentId`, `paymentMethods[].stripePaymentId`)
+    : **409 `PAYMENT_ALREADY_USED`** ; le chemin `terminalPaymentId` (paiements du terminal de la caisse) ne change pas.
+  - Essai : `tests/Functional/Boutique/CheckoutProprieteTest.php`.
 - **Pays absent** (commandes invité 9 et 10 de demo, hors taxes) : une province canadienne (code ou nom) ou un code
   postal canadien suffit à reconnaître le Canada (`TaxEngine::normalizeAddress`, adresse de l'invité).
 - **Abonnement en double** (`POST /api/subscriptions`) : un abonnement encore `incomplete` à la même formule et quantité
@@ -560,6 +580,8 @@ obligatoires (ajouter une validation refuserait des adresses acceptées aujourd'
 | `PAYMENT_REQUIRED` | 402 | Un paiement en ligne est requis pour cette commande. |
 | `PAYMENT_ALREADY_USED` | 409 | Ce paiement est déjà associé à une commande. |
 | `ORDER_IN_PROGRESS` | 409 | La commande de ce paiement est en cours de création : réessayez dans un instant. |
+| `PAYMENT_PROOF_REQUIRED` | 403 | La preuve de ce paiement est absente ou invalide (`clientSecret` de l'intention, à renvoyer à la commande ; lot CHECKOUT-PROPRIETE) |
+| `PAYMENT_PROVIDER_UNAVAILABLE` | 503 | Le service de paiement ne répond pas : réessayez dans un instant. |
 | `CART_MISMATCH` | 409 | La commande ne correspond pas au panier payé (ou à payer, à `create-intent`) : corps différent du panier coté (articles, quantités, réservation, transporteur, livraison, adresse) ; lot CHECKOUT-PANIER |
 | `QUOTE_INVALID`, `VARIANT_NOT_FOUND`, `CARRIER_NOT_FOUND`, `BAD_REQUEST` | 400 | commande refusée après le paiement (autorisation annulée) : code, message et `errors[]` du devis repris tels quels |
 | `ORDER_REFUSED` | 400 | Commande refusée. / dernier message d'échec gardé sur la trace du paiement (`checkout_session.last_error`) |
