@@ -113,10 +113,12 @@ class AidApiTest extends WebTestCase
         $this->assertSame([$r['result']['netAfterFixed'] + 10192, 0, $r['charges']['financial']['total'], -10192], [$r['result']['netAfterCharges'], $r['charges']['total'], $r['charges']['total'], $r['charges']['net']]);
         $conn->executeStatement('UPDATE gestion_aid SET status = ? WHERE id = ?', ['requested', $id]); // la même période sans aide comptée
         $this->endOfWrite();
+        static::getContainer()->get(\App\Services\TenantCacheService::class)->invalidateTenant(); // une écriture SQL directe ne vide pas le cache du site
         $without = $this->get("/api/periodes/$period/resultat")['charges'];
         $this->assertSame([$without['total'], 0], [$r['charges']['total'], $without['net']], 'total identique avec ou sans aide');
         $conn->executeStatement('UPDATE gestion_aid SET status = ? WHERE id = ?', ['granted', $id]);
         $this->endOfWrite();
+        static::getContainer()->get(\App\Services\TenantCacheService::class)->invalidateTenant(); // une écriture SQL directe ne vide pas le cache du site
         // Une période figée après les prêts mais avant les aides garde son instantané
         $closed = $this->period('2049-02-01', '2049-02-28');
         $conn->executeStatement('UPDATE collections SET closed_at = NOW() WHERE id = ?', [$closed]);
