@@ -160,6 +160,37 @@ class AboWaitlistTest extends WebTestCase
         $this->assertNotNull($this->mailTo('abo4-c@example.invalid'));
     }
 
+    /**
+     * Correctif 74e580b4 (captures par valeur sous `fn`) : l'offre faite PENDANT une inscription part bien par courriel, et la place
+     * libérée par un DÉPLACEMENT est bien proposée au premier de la file (l'acceptation tardive est couverte juste au-dessus).
+     */
+    public function testAnOfferMadeDuringAJoinIsEmailedAndAPlaceFreedByAMoveIsOffered(): void
+    {
+        $yoga = $this->benefit('Yoga inscription');
+        [$a, $b, $c] = $this->subscriptions($yoga, ['abo4-a@example.invalid', 'abo4-b@example.invalid', 'abo4-c@example.invalid']);
+        [$a2] = $this->subscriptions($yoga, ['abo4-a@example.invalid']); // un second abonnement de A, qui n'a pas de place sur le créneau
+        $slot = $this->slot($yoga, '+3 days', 1);
+        $booked = $this->json('POST', '/api/subscriptions/' . $a->getId() . '/rendez-vous', ['benefitId' => $yoga->getId(), 'slotId' => $slot], 201, 'abo4-a@example.invalid')['appointment'];
+        $wb = $this->json('POST', $this->join($b, $slot), null, 201, 'abo4-b@example.invalid')['wait']['waitId'];
+        $wc = $this->json('POST', $this->join($c, $slot), null, 201, 'abo4-c@example.invalid')['wait']['waitId'];
+        $this->json('DELETE', '/api/subscriptions/' . $a->getId() . '/rendez-vous/' . $booked['occurrenceId'], null, 200, 'abo4-a@example.invalid');
+        $this->db->executeStatement("UPDATE benefit_waitlist SET offer_expires_at = NOW() AT TIME ZONE 'UTC' - INTERVAL '1 minute' WHERE id = ?", [$wb]);
+        // l'inscription de A est un geste d'écriture : l'offre échue de B passe à C, et le courriel de C part dans CETTE requête
+        $this->json('POST', $this->join($a2, $slot), null, 201, 'abo4-a@example.invalid');
+        $this->assertSame(['expired', 'offered'], $this->db->fetchFirstColumn('SELECT status FROM benefit_waitlist WHERE id IN (?, ?) ORDER BY id', [$wb, $wc]));
+        $this->assertNotNull($this->mailTo('abo4-c@example.invalid'), 'l\'offre faite pendant l\'inscription part par courriel');
+
+        // A déplace son rendez-vous vers un créneau libre : la place qu'il quitte est offerte à B, avec son courriel
+        $full = $this->slot($yoga, '+4 days', 1);
+        $free = $this->slot($yoga, '+5 days', 1);
+        $first = $this->json('POST', '/api/subscriptions/' . $a->getId() . '/rendez-vous', ['benefitId' => $yoga->getId(), 'slotId' => $full], 201, 'abo4-a@example.invalid')['appointment'];
+        $wb2 = $this->json('POST', $this->join($b, $full), null, 201, 'abo4-b@example.invalid')['wait']['waitId'];
+        $moved = $this->json('PATCH', '/api/subscriptions/' . $a->getId() . '/rendez-vous/' . $first['occurrenceId'], ['slotId' => $free], 200, 'abo4-a@example.invalid')['appointment'];
+        $this->assertSame($free, $moved['slotId']);
+        $this->assertSame('offered', $this->db->fetchOne('SELECT status FROM benefit_waitlist WHERE id = ?', [$wb2]), 'la place libérée par le déplacement est proposée');
+        $this->assertNotNull($this->mailTo('abo4-b@example.invalid'), 'avec son courriel');
+    }
+
     public function testAWaitClosesItselfInTheFourCasesOfTheChef(): void
     {
         $yoga = $this->benefit('Yoga fermetures');
