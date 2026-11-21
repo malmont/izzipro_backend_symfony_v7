@@ -209,9 +209,13 @@ class CheckoutApiTest extends WebTestCase
         FakeCheckoutPaymentGateway::confirm($pi);
         $missing = json_decode($this->request('POST', '/api/order/create', json_encode(['items' => $items, 'paymentIntentId' => $pi]))->getContent(), true);
         $this->assertSame(['FIELDS_REQUIRED', 'Missing required fields (addressId, items)', false], [$missing['code'], $missing['error'], $missing['authorizationCanceled']]);
+        // lot CHECKOUT-PANIER : un transporteur autre que celui du panier payé (ici aucun) est un écart de panier, refusé avant la
+        // réservation du paiement (autorisation conservée) ; un transporteur inconnu est refusé dès le devis de l'intention
         $carrier = $this->request('POST', '/api/order/create', json_encode(['addressId' => $this->address(), 'carrierId' => 999999, 'items' => $items, 'paymentIntentId' => $pi]));
-        $this->assertSame(404, $carrier->getStatusCode(), $carrier->getContent());
-        $this->assertSame('CARRIER_NOT_FOUND', json_decode($carrier->getContent(), true)['code']);
+        $this->assertSame([409, 'CART_MISMATCH'], [$carrier->getStatusCode(), json_decode($carrier->getContent(), true)['code']], $carrier->getContent());
+        $this->assertSame('requires_capture', FakeCheckoutPaymentGateway::$intents[$pi]['status'], 'autorisation conservée');
+        $unknownCarrier = $this->request('POST', '/api/stripe/create-intent', json_encode(['items' => $items, 'carrierId' => 999999]));
+        $this->assertSame('CARRIER_NOT_FOUND', json_decode($unknownCarrier->getContent(), true)['code'] ?? null, $unknownCarrier->getContent());
 
         // Commande refusée après le paiement : code et errors[] codées du devis, autorisation annulée ; second appel 402 PAYMENT_NOT_VERIFIED
         $stock = (int) $this->db->fetchOne('SELECT stock_quantity FROM product_variant WHERE id = ?', [$variant]);
@@ -229,16 +233,21 @@ class CheckoutApiTest extends WebTestCase
         }
 
         // Invité : courriel absent (400 EMAIL_REQUIRED), permis absent pour une location (400 LICENSE_REQUIRED)
-        $pi2 = $this->json($this->request('POST', '/api/stripe/create-intent', json_encode(['items' => $items])))['paymentIntentId'];
-        FakeCheckoutPaymentGateway::confirm($pi2);
+        // (lot CHECKOUT-PANIER : chaque intention est cotée avec le panier que la commande envoie ensuite, transporteur compris)
         $guest = $this->guestBody($variant, 'invite-codes@example.invalid');
+        $pi2 = $this->json($this->request('POST', '/api/stripe/create-intent', json_encode(['items' => $guest['items'], 'carrierId' => $guest['carrierId']])))['paymentIntentId'];
+        FakeCheckoutPaymentGateway::confirm($pi2);
         $guest['guestInfo']['email'] = '';
         $noEmail = json_decode($this->request('POST', '/api/order/create-guest', json_encode($guest + ['paymentIntentId' => $pi2]))->getContent(), true);
         $this->assertSame(['EMAIL_REQUIRED', 'Email is required'], [$noEmail['code'], $noEmail['error']]);
-        $rental = $this->guestBody($variant, 'invite-codes@example.invalid');
-        $rental['items'][0]['booking'] = ['start' => '2030-01-01T10:00:00', 'end' => '2030-01-01T12:00:00'];
-        $noLicense = json_decode($this->request('POST', '/api/order/create-guest', json_encode($rental + ['paymentIntentId' => $pi2]))->getContent(), true);
-        $this->assertSame('LICENSE_REQUIRED', $noLicense['code']);
+        // une vraie ligne de location (kayak à l'heure), payée telle quelle : le permis est exigé
+        $rental = $this->guestBody($this->variant('DEMO-KAYAK'), 'invite-codes@example.invalid');
+        $rental['items'][0]['booking'] = ['start' => '2030-01-02T10:00:00', 'end' => '2030-01-02T12:00:00', 'durationType' => 'hour'];
+        $intent3 = $this->request('POST', '/api/stripe/create-intent', json_encode(['items' => $rental['items'], 'carrierId' => $rental['carrierId']]));
+        $pi3 = $this->json($intent3)['paymentIntentId'];
+        FakeCheckoutPaymentGateway::confirm($pi3);
+        $noLicense = json_decode($this->request('POST', '/api/order/create-guest', json_encode($rental + ['paymentIntentId' => $pi3]))->getContent(), true);
+        $this->assertSame('LICENSE_REQUIRED', $noLicense['code'], json_encode($noLicense));
     }
 
     public function testDuplicateSubscriptionsAreReusedOrRefused(): void

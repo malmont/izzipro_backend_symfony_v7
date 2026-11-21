@@ -30,14 +30,15 @@ final class CheckoutSessionService
      * @return array{intent: array, session: CheckoutSession, reused: bool}
      * @throws CheckoutException 502 Stripe
      */
-    public function open(array $cart, int $amount, string $currency, ?User $user, ?array $orderData, string $locale, ?string $host, ?string $reuseIntentId): array
+    public function open(array $cart, int $amount, string $currency, ?User $user, ?array $orderData, string $locale, ?string $host, ?string $reuseIntentId, bool $dropKeptOrderData = false): array
     {
         $em = $this->emProvider->getEntityManager();
         $session = $reuseIntentId ? $this->repository()->findOneByPaymentIntent($reuseIntentId) : null;
         if ($session !== null && $session->getStatus() === CheckoutSession::STATUS_OPEN && $session->getUser()?->getId() === $user?->getId()) {
             $intent = $this->payments->updateAmount($session->getPaymentIntentId(), $amount);
             if ($intent !== null) {
-                $session->setCart($cart)->setAmount($amount)->setOrderData($orderData ?? $session->getOrderData())->setLocale($locale)->setHost($host);
+                // $dropKeptOrderData : le corps gardé ne correspond plus au panier (adresse changée), il est abandonné (CHECKOUT-PANIER)
+                $session->setCart($cart)->setAmount($amount)->setOrderData($orderData ?? ($dropKeptOrderData ? null : $session->getOrderData()))->setLocale($locale)->setHost($host);
                 $em->flush();
 
                 return ['intent' => $intent, 'session' => $session, 'reused' => true];
