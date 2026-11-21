@@ -187,7 +187,9 @@ class GroupApiTest extends WebTestCase
         // AVANT la file : les deux demandes écrites comme la requête du siège les écrit (code normalisé par le service)
         $fake = $repository->askInvitation($group, mb_strtolower($unknown), 10, 'Hélène');
         $real = $repository->askInvitation($group, MV_TEST_TENANT2_CODE, 10, 'Hélène');
-        $before = $this->call('GET', '/api/group/invitations', null, 'siege', 200)['invitations'];
+        // demandes vieillies de 3 jours : l'échéance de l'invitation se compte depuis la demande, jamais depuis le passage de la file
+        $this->master->exec("UPDATE shop_group_events SET created_at = created_at - INTERVAL '3 days' WHERE id IN ($fake, $real)");
+        $before =$this->call('GET', '/api/group/invitations', null, 'siege', 200)['invitations'];
         $this->assertSame([[$real, MV_TEST_TENANT2_CODE], [$fake, mb_strtolower($unknown)]], array_map(static fn (array $i): array => [$i['id'], $i['code']], $before), 'le code tapé, le plus récent d\'abord');
         $shape = static fn (array $i): array => [array_keys($i), $i['state'], strtotime($i['expiresAt']) - strtotime($i['sentAt'])];
         $this->assertSame($shape($before[0]), $shape($before[1]));
