@@ -6,6 +6,7 @@ use App\Dto\CreateOrderDTO;
 use App\Entity\CheckoutSession;
 use App\Entity\Order;
 use App\Entity\User;
+use App\Services\CheckoutService\CheckoutCartGuard;
 use App\Services\CheckoutService\CheckoutCustomerService;
 use App\Services\CheckoutService\CheckoutException;
 use App\Services\CheckoutService\CheckoutPaymentGatewayInterface;
@@ -45,7 +46,10 @@ final class FinalizeCheckoutOrderUseCase
         private readonly MediaUrlResolver $media,
         private readonly TenantEntityManagerProvider $emProvider,
         private readonly LoggerInterface $logger,
-        private readonly ?\App\Services\AppMembershipService\AppMembershipService $memberships = null // familles d'applications (APPS-MEMBRES M1, 14/11/2026)
+        private readonly ?\App\Services\AppMembershipService\AppMembershipService $memberships = null, // familles d'applications (APPS-MEMBRES M1, 14/11/2026)
+        private readonly ?\App\Incident\Services\PlatformIncidentService $incidents = null, // lot CHECKOUT-PANIER : écart vu au webhook
+        private readonly ?\App\Services\TenantConnectionProvider $tenant = null,
+        private readonly ?\App\Services\Booking\BookingClock $clock = null, // dates sans fuseau = heure du magasin
     ) {
     }
 
@@ -87,7 +91,8 @@ final class FinalizeCheckoutOrderUseCase
         }
         $mode = $session->getUser() !== null && (isset($data['addressId']) || !isset($data['guestInfo'])) ? self::MODE_CUSTOMER : self::MODE_GUEST; // client connecté sans adresse = retrait (B20 bis)
         try {
-            $result = $this->finalize($mode, $paymentIntentId, $data + $session->getCart(), $session->getUser(), $session->getLocale(), (string) $session->getHost());
+            // lot CHECKOUT-PANIER : la commande prend son panier du panier coté et payé (dans create), jamais du corps gardé
+            $result = $this->finalize($mode, $paymentIntentId, $data, $session->getUser(), $session->getLocale(), (string) $session->getHost(), true);
         } catch (CheckoutException $e) {
             return ['status' => 'failed', 'detail' => $e->getMessage()];
         }
@@ -96,14 +101,14 @@ final class FinalizeCheckoutOrderUseCase
     }
 
     /** @return array{created: bool, order: Order, body: array<string, mixed>} */
-    private function finalize(string $mode, string $paymentIntentId, array $data, ?User $user, string $locale, string $host): array
+    private function finalize(string $mode, string $paymentIntentId, array $data, ?User $user, string $locale, string $host, bool $webhook = false): array
     {
         $existing = $this->sessions->existingOrder($paymentIntentId);
         if ($existing !== null) {
             return $this->existing($existing, $mode, $data, $user);
         }
         try {
-            return $this->create($mode, $paymentIntentId, $data, $user, $locale, $host);
+            return $this->create($mode, $paymentIntentId, $data, $user, $locale, $host, $webhook);
         } catch (CheckoutException $e) {
             // Tout 400 (et le 402 d'un intent devenu impayable) dit si l'autorisation est annulée (01/11/2026) : l'application n'a
             // plus à relire l'intent chez Stripe. Commande refusée : résultat de l'annulation ; données invalides ou second appel
@@ -117,7 +122,7 @@ final class FinalizeCheckoutOrderUseCase
     }
 
     /** @return array{created: bool, order: Order, body: array<string, mixed>} */
-    private function create(string $mode, string $paymentIntentId, array $data, ?User $user, string $locale, string $host): array
+    private function create(string $mode, string $paymentIntentId, array $data, ?User $user, string $locale, string $host, bool $webhook = false): array
     {
         $intent = $this->payments->retrieve($paymentIntentId);
         if ($intent === null || !in_array($intent['status'], self::PAID, true)) {
@@ -125,6 +130,7 @@ final class FinalizeCheckoutOrderUseCase
         }
 
         $session = $this->sessions->find($paymentIntentId);
+        $data = $this->paidCart($session, $data, $user, $webhook);
         if ($session !== null && !$this->sessions->claim($session)) {
             // Un autre appel (navigateur ou webhook) crée la commande : on l'attend, puis on la renvoie
             $order = $this->sessions->waitForOrder($session);
@@ -255,6 +261,41 @@ final class FinalizeCheckoutOrderUseCase
         } catch (\Throwable $e) {
             $this->logger->error('[Checkout] Courriels de la commande non envoyés : ' . $e->getMessage(), ['orderId' => $order->getId()]);
         }
+    }
+
+    /**
+     * Lot CHECKOUT-PANIER : la commande se crée TOUJOURS depuis le panier coté et payé, gardé avec l'intention (articles,
+     * transporteur, livraison, réservation) ; le corps n'est plus qu'un contrôle. Navigateur : un corps différent est refusé
+     * (409 CART_MISMATCH) AVANT la réservation du paiement, l'autorisation reste entière (le webhook crée la commande du
+     * panier payé si le corps a été gardé à create-intent ; sinon elle expire sans débit). Webhook : jamais de refus (l'argent
+     * est pris) ; un écart est noté en incident, sans donnée du client, et la commande se crée sur le panier payé.
+     *
+     * @return array<string, mixed> le corps, ses clés de panier remplacées par celles du panier payé
+     * @throws CheckoutException
+     */
+    private function paidCart(?CheckoutSession $session, array $data, ?User $user, bool $webhook): array
+    {
+        $cart = $session?->getCart() ?? [];
+        if (!is_array($cart['items'] ?? null) || $cart['items'] === []) {
+            if ($webhook) {
+                return $data; // fromWebhook n'arrive ici qu'avec un panier gardé
+            }
+            throw new CheckoutException(409, 'Aucun panier n\'est gardé avec ce paiement.', [], 'CART_MISMATCH');
+        }
+        $orderAddress = CheckoutCartGuard::orderAddress($data, $user, $this->emProvider->getEntityManager()->getRepository(\App\Entity\Adress::class));
+        $mismatch = (array_key_exists('items', $data) && !CheckoutCartGuard::sameCart($data, $cart, $this->clock?->timezone()))
+            || !CheckoutCartGuard::sameAddress(is_array($cart['shippingAddress'] ?? null) ? $cart['shippingAddress'] : null, $orderAddress, $user !== null && is_numeric($data['addressId'] ?? null));
+        if ($mismatch) {
+            if (!$webhook) {
+                throw new CheckoutException(409, 'La commande ne correspond pas au panier payé.', [], 'CART_MISMATCH');
+            }
+            // l'identifiant de l'intention n'est pas une donnée du client : il permet l'enquête
+            // un incident PAR intention (l'identifiant entre dans l'empreinte) : chacun garde de quoi enquêter
+            $this->incidents?->recordPlatformIssue($this->tenant?->getTenantCode(), 'checkout/panier', 'warning',
+                'Commande créée sur le panier payé (' . $session?->getPaymentIntentId() . ') : le corps de commande gardé différait du panier (CHECKOUT-PANIER)', ['paymentIntent' => $session?->getPaymentIntentId()]);
+        }
+
+        return CheckoutCartGuard::withPaidCart($cart, $data);
     }
 
     private function paymentIntentId(array $data): string
