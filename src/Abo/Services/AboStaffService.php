@@ -51,6 +51,7 @@ class AboStaffService
         private readonly ContentAuditRecorder $audit,
         private readonly LoggerInterface $logger,
         private readonly SiteName $siteName,
+        private readonly AboStaffEligibility $eligibility,
     ) {
     }
 
@@ -90,11 +91,9 @@ class AboStaffService
         $em = $this->emProvider->getEntityManager();
         $user = $em->getRepository(User::class)->findOneByEmailCaseless($email);
         if ($user !== null) {
-            if (array_intersect(['ROLE_ADMIN', 'ROLE_SUPER_ADMIN'], $user->getRoles()) !== []) {
-                throw new AboException(409, 'STAFF_IS_ADMIN', 'Ce compte administre le site : il a déjà accès à toutes les dates.', 'email');
-            }
-            if ($this->isCustomer((int) $user->getId())) {
-                throw new AboException(409, 'STAFF_IS_CUSTOMER', 'Ce compte est celui d\'un client (abonnement ou commande) : un intervenant a un compte à lui.', 'email');
+            // la règle commune à toutes les entrées (EasyAdmin compris) : AboStaffEligibility
+            if (($refusal = $this->eligibility->refusal((int) $user->getId(), $user->getRoles())) !== null) {
+                throw $refusal;
             }
             if (in_array(self::ROLE, $user->getRoles(), true)) {
                 // déjà intervenant : une invitation en attente est renvoyée (l'ancien lien ne vaut plus), sinon rien ne change
@@ -227,18 +226,6 @@ class AboStaffService
     }
 
     // ---- interne ----------------------------------------------------------------------------------------------------------------------------
-
-    /**
-     * Un client : un compte qui a souscrit, commandé sur la boutique web ou mobile (jamais une vente en caisse, où le compte est le
-     * caissier), ou qui appartient à une application de clients (boutique, Living Memory). Relecture neuve : le rôle ROLE_USER_INTERNET ne
-     * le dit pas (tout intervenant le porte).
-     */
-    private function isCustomer(int $userId): bool
-    {
-        return $this->conn()->fetchOne('SELECT 1 FROM subscription WHERE user_id = ?
-            UNION ALL SELECT 1 FROM "order" o JOIN order_source s ON s.id = o.order_source_id WHERE o.user_id_id = ? AND s.name IN (\'Ecommerce\', \'Mobile_app\')
-            UNION ALL SELECT 1 FROM user_app_membership WHERE user_id = ? AND app IN (\'boutique\', \'livingmemory\') LIMIT 1', [$userId, $userId, $userId]) !== false;
-    }
 
     private function isPending(User $user): bool
     {

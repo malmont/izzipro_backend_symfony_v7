@@ -37,7 +37,8 @@ class UserCrudController extends BaseTenantCrudController
         private readonly AppMembershipDirectory $memberships,
         private readonly ?\App\Services\PosAuditService\PosPinService $posPins = null,
         private readonly ?\App\Services\PosAuditService\PosAuditService $posAudit = null,
-        private readonly ?\App\Services\AccountService\SessionIdentityService $sessions = null // jetons après un changement de courriel
+        private readonly ?\App\Services\AccountService\SessionIdentityService $sessions = null, // jetons après un changement de courriel
+        private readonly ?\App\Abo\Services\AboStaffEligibility $staffEligibility = null // lot ABO-3b : qui peut être intervenant
     ) {
         parent::__construct($emProvider);
         $this->userPasswordHasher = $userPasswordHasher;
@@ -229,6 +230,15 @@ class UserCrudController extends BaseTenantCrudController
                 $previousRoles,
                 $this->isGranted(RoleAssignmentPolicy::SUPER_ADMIN)
             ));
+            // Lot ABO-3b (décision du chef, 21/11/2026) : la règle de l'invitation vaut ici aussi ; un administrateur ou un compte client ne
+            // devient pas intervenant. Le rôle d'intervenant n'est pas enregistré, le reste de la fiche l'est, et le refus est affiché.
+            if ($this->staffEligibility !== null) {
+                [$roles, $refusal] = $this->staffEligibility->filterRoles($entityInstance->getId(), $entityInstance->getRoles(), $previousRoles);
+                if ($refusal !== null) {
+                    $entityInstance->setRoles($roles);
+                    $this->addFlash('danger', 'Rôle « Intervenant (abonnements) » non donné : ' . $refusal->getMessage());
+                }
+            }
             // Rôles d'équipe par application (13/11/2026) : chaque gain ou perte est journalisé (content_audit_log, user_team)
             $this->pendingTeamDiff = [$entityInstance, array_values(array_diff($previousRoles, ['ROLE_USER'])), array_values(array_diff($entityInstance->getRoles(), ['ROLE_USER']))];
         }
