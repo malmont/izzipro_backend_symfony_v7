@@ -64,14 +64,20 @@ class AboReminderService
         return $sent;
     }
 
-    /** L'identifiant stable d'une date dans les agendas (le flux, le rappel et l'annulation parlent du même événement) */
-    public function uid(int $occurrenceId): string
+    /**
+     * L'identifiant stable d'une DATE dans les agendas (le flux, le rappel et l'annulation parlent du même événement). Relecture du
+     * 21/11/2026 : le droit et son heure de début, car un droit rendu (date annulée) se redate sous le même numéro ; une nouvelle date est
+     * un nouvel événement, jamais un « périmé » que l'agenda ignorerait.
+     */
+    public function uid(int $occurrenceId, \DateTimeInterface $startsAt): string
     {
-        return sprintf('abo-%s-%d@izzipro', (string) $this->tenant->getTenantCode(), $occurrenceId);
+        return sprintf('abo-%s-%d-%s@izzipro', (string) $this->tenant->getTenantCode(), $occurrenceId,
+            \DateTimeImmutable::createFromInterface($startsAt)->setTimezone(new \DateTimeZone('UTC'))->format('Ymd\THis\Z'));
     }
 
     /**
-     * La pièce `.ics` d'une ou plusieurs dates (rappel : REQUEST ; séance annulée par la boutique : CANCEL).
+     * La pièce `.ics` d'une ou plusieurs dates, en `METHOD:PUBLISH` (relecture du 21/11/2026 : `REQUEST` et `CANCEL` exigent un ORGANIZER,
+     * RFC 5546, que nous n'avons pas à donner) ; une séance annulée par la boutique : `STATUS:CANCELLED`, `SEQUENCE:1`, même identifiant.
      *
      * @param list<int> $occurrenceIds
      */
@@ -90,11 +96,11 @@ class AboReminderService
             }
             $benefit = $this->emProvider->getEntityManager()->getRepository(\App\Abo\Entity\Benefit::class)->find((int) $r['benefit_id']);
             $start = new \DateTimeImmutable((string) $r['starts_at'], new \DateTimeZone('UTC'));
-            $events[] = ['uid' => $this->uid((int) $r['id']), 'start' => $start, 'end' => $r['ends_at'] !== null ? new \DateTimeImmutable((string) $r['ends_at'], new \DateTimeZone('UTC')) : $start->modify('+1 hour'),
+            $events[] = ['uid' => $this->uid((int) $r['id'], $start), 'start' => $start, 'end' => $r['ends_at'] !== null ? new \DateTimeImmutable((string) $r['ends_at'], new \DateTimeZone('UTC')) : $start->modify('+1 hour'),
                 'summary' => (string) ($benefit?->getName($language) ?? ''), 'location' => $r['location'] !== null ? (string) $r['location'] : null, 'cancelled' => $cancelled, 'sequence' => $cancelled ? 1 : 0];
         }
 
-        return $events !== [] ? IcsBuilder::calendar($events, (string) ($events[0]['summary'] ?? ''), $cancelled ? IcsBuilder::METHOD_CANCEL : IcsBuilder::METHOD_REQUEST) : null;
+        return $events !== [] ? IcsBuilder::calendar($events, (string) ($events[0]['summary'] ?? '')) : null;
     }
 
     private function send(Connection $conn, int $occurrenceId, int $subscriptionId): bool

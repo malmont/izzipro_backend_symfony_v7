@@ -42,9 +42,9 @@ final class SubscriptionMailer
 
     /**
      * @param value-of<self::KINDS> $kind
-     * @param array{rows?: array<string, string>, payUrl?: ?string, ics?: ?string, icsMethod?: string} $details lignes ajoutées au récapitulatif
+     * @param array{rows?: array<string, string>, payUrl?: ?string, ics?: ?string} $details lignes ajoutées au récapitulatif
      *        (libellé : une clé `subscription_notice.row.*`, traduite ici ; valeur déjà dans la langue de `languageOf`), lien de paiement ;
-     *        lot ABO-4 : `ics`, la pièce d'agenda (méthode `icsMethod`, REQUEST par défaut, CANCEL pour une séance annulée)
+     *        lot ABO-4 : `ics`, la pièce d'agenda (`METHOD:PUBLISH`, une séance annulée en `STATUS:CANCELLED`)
      * @return bool parti (ou mis en file)
      */
     public function notify(Subscription $subscription, string $kind, string $host, array $details = []): bool
@@ -60,7 +60,7 @@ final class SubscriptionMailer
             $rows[$this->text((string) $label, $language)] = $value;
         }
         $attachments = ($details['ics'] ?? null) !== null
-            ? [['name' => 'seance.ics', 'body' => $details['ics'], 'contentType' => 'text/calendar; charset=utf-8; method=' . ($details['icsMethod'] ?? 'REQUEST')]] : [];
+            ? [['name' => 'seance.ics', 'body' => $details['ics'], 'contentType' => 'text/calendar; charset=utf-8; method=PUBLISH']] : [];
         try {
             return $this->mailer->sendTemplatedEmail($email, $subject, 'emails/subscription_notice.html.twig', [
                 'subscription' => $subscription, 'kind' => $kind, 'title' => $subject,

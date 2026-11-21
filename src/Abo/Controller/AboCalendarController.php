@@ -35,13 +35,15 @@ class AboCalendarController extends AbstractController
         private readonly \App\Services\EmailConfigurationService\EmailLocale $locale,
         #[Autowire(service: 'limiter.calendar_feed_token')] private readonly RateLimiterFactory $byToken,
         #[Autowire(service: 'limiter.calendar_feed_ip')] private readonly RateLimiterFactory $byIp,
+        private readonly \App\Services\TenantConnectionProvider $tenant,
     ) {
     }
 
     #[Route('/api/calendrier/{token}.ics', name: 'api_calendar_feed', requirements: ['token' => '[a-f0-9]{64}'], methods: ['GET'])]
     public function feed(Request $request, string $token): Response
     {
-        if (!$this->byToken->create(hash('sha256', $token))->consume()->isAccepted() || !$this->byIp->create((string) $request->getClientIp())->consume()->isAccepted()) {
+        // relecture du 21/11/2026 : l'adresse comptée par site (les agendas en ligne relisent tous les flux depuis quelques adresses communes)
+        if (!$this->byToken->create(hash('sha256', $token))->consume()->isAccepted() || !$this->byIp->create((string) $this->tenant->getTenantCode() . '|' . $request->getClientIp())->consume()->isAccepted()) {
             return new Response('', 429, ['Retry-After' => '3600']);
         }
         $ics = $this->feeds->feed($token);

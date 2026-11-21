@@ -1461,19 +1461,28 @@ dans la langue de l'écran de l'administrateur, et les avis d'abonnement étaien
 - L'abonné s'inscrit sur un créneau COMPLET (409 `SLOT_NOT_FULL` sinon : il réserve), avec un droit à planifier valable au début du
   créneau ; 3 attentes ouvertes au plus (`WAITLIST_LIMIT`), une par créneau (`ALREADY_WAITING`). L'attente porte un droit : de préférence
   un que ses autres attentes ne portent pas, celui qui expire le DERNIER (une date posée directement prend celui qui expire le premier).
+  Si ce droit est daté ou utilisé ailleurs, l'attente passe sur un autre droit valable au début du créneau, et ne se ferme que sans
+  autre droit (relecture du 21/11/2026).
 - Une place libérée est OFFERTE à la première personne : elle compte dans la capacité sous le verrou du créneau (personne d'autre ne la
   prend), et court 2 h, au plus tard 1 h avant la séance. L'abonné l'accepte : la date est posée comme un rendez-vous d'ABO-2. Échue, elle
   passe à la suivante (`OFFER_EXPIRED` à qui accepte trop tard). Plus d'offre automatique à moins d'1 h du début ; l'équipe peut encore
   proposer la place (jusqu'au début de la séance).
+- **La file passe d'abord** (relecture du 21/11/2026) : à plus d'1 h du début, chaque personne en attente garde une place. Une réservation
+  directe (abonné ou équipe) ou une place retenue à la souscription ne prend que ce qui reste au-delà de la file : sinon 409 `SLOT_FULL`
+  (« la place libérée va d'abord à la liste d'attente »), et la place est offerte aussitôt à la première personne. Une personne en attente
+  réserve directement si personne n'est devant elle. Seules l'acceptation d'une offre et la conversion de sa propre place retenue passent
+  outre. À moins d'1 h, la place est au premier qui la prend.
 - Ce qui déclenche une offre (décision du chef) : les gestes d'ÉCRITURE, sous le verrou du créneau (date annulée ou déplacée, place
   retenue rendue, pause, capacité changée, inscription, sortie, acceptation, proposition de l'équipe), après leur transaction
   (`SlotFreedEvent`), et le passage horaire `app:abo:periodes`. AUCUNE lecture : une offre échue se montre `expired` sans rien écrire ni
   envoyer. **Reste à faire** : à la livraison de TACHES-1, un passage `app:abo:attente` toutes les 10 minutes au planificateur (aujourd'hui,
   au pire une heure de retard quand personne ne touche le créneau).
-- Une attente se ferme d'elle-même (`left`, `closed_reason`) : droit utilisé ailleurs (`right_used`), abonnement en pause, résilié,
-  impayé ou fini avant le créneau (`subscription`), créneau supprimé ou annulé (`slot_gone`) ou commencé (`slot_past`), prestation retirée
-  de la formule (`benefit_removed`), compte effacé (`erased`) ; par l'agenda, les droits, l'écouteur Doctrine `WaitlistCloseListener` et
-  le passage horaire.
+- Une attente se ferme d'elle-même (`left`, `closed_reason`) : droit utilisé ailleurs sans autre droit valable (`right_used`), date déjà
+  posée sur ce créneau (`already_booked`), abonnement en pause, résilié, impayé ou fini avant le créneau (`subscription`), créneau supprimé
+  ou annulé (`slot_gone`, aussi quand la règle de créneaux est modifiée ; un créneau qui porte une offre en cours est gardé) ou commencé
+  (`slot_past`), prestation retirée de la formule (`benefit_removed`) ou plus au choix de l'abonné (`scheduling`), compte effacé
+  (`erased`) ; par l'agenda, les droits, l'écouteur Doctrine `WaitlistCloseListener` (avec son point de sauvegarde dans la transaction
+  d'un appelant) et le passage horaire. Une attente acceptée entre-temps n'est jamais réécrite.
 - Le courriel « une place s'est libérée » est INDISPENSABLE (décision du chef : les niveaux NOTIF sont ceux du commerçant), dans la langue
   de l'abonné, avec l'heure limite à l'heure du magasin.
 
@@ -1486,14 +1495,16 @@ dans la langue de l'écran de l'administrateur, et les avis d'abonnement étaien
 | équipe | `POST /api/site/abonnements/attente/{waitId}/proposer` | `{ wait }` ; 409 `SLOT_FULL` (fermée au directeur entré) |
 
 Outils de l'assistant : `get_waitlist` (sans nom, lecture seule) et `propose_promote_waitlist` (toujours confirmé, place libre exigée).
-Les places restantes d'un créneau (`remaining`) déduisent les places offertes.
+Les places restantes d'un créneau (`remaining`) déduisent les places offertes et celles que la file garde.
 
 **Rappel de la veille** (`AboReminderService`) : à partir de 18 h du magasin, dans le passage horaire, un courriel par date planifiée du
 lendemain (sorte `session_reminder` des avis d'abonnement, pièce `.ics`), une fois par date (`benefit_occurrence.reminded_at`, remis à
 vide quand la date change). INDISPENSABLE ; seul l'abonné le coupe : `PATCH /api/subscriptions/{id}/courriels { reminders: false }`
 (la réponse rend `{ doneEmails, reminders }` ; `reminders` dans la fiche de l'abonné et celle de l'équipe). Pas de notification au
-téléphone des abonnés (aucun appareil d'abonné enregistré). La séance annulée par la boutique porte une pièce `.ics` `METHOD:CANCEL`
-(même identifiant que le rappel et le flux). Les gestes « rendez-vous posé » et « déplacé » n'envoient pas de courriel aujourd'hui : pas
+téléphone des abonnés (aucun appareil d'abonné enregistré). La séance annulée par la boutique porte une pièce `.ics` en
+`STATUS:CANCELLED`, `SEQUENCE:1` (même identifiant que le rappel et le flux). Toutes les pièces et les flux sont en `METHOD:PUBLISH`
+(relecture du 21/11/2026 : `REQUEST` et `CANCEL` exigent un ORGANIZER, RFC 5546). L'identifiant d'un événement est celui de la DATE
+(`abo-{site}-{droit}-{début UTC}@izzipro`) : un droit rendu puis redaté est un nouvel événement. Les gestes « rendez-vous posé » et « déplacé » n'envoient pas de courriel aujourd'hui : pas
 de pièce jointe pour eux.
 
 **Liens d'agenda `.ics`** (`calendar_feed`, `AboCalendarFeedService`, `IcsBuilder` commun ; Mémoires Vivantes garde le sien) :
@@ -1503,9 +1514,11 @@ de pièce jointe pour eux.
   l'ancien inutilisable. Jeton de 32 octets au hasard, gardé haché ; `?tenant=` désigne le site (l'agenda n'envoie ni en-tête ni session).
 - Lecture `GET /api/calendrier/{jeton}.ics` sans JWT : ses dates (30 jours en arrière, 8 semaines devant), la prestation, le lieu ; pour
   l'intervenant, comme son écran (prénom et adresse de la visite, jamais le nom ni le téléphone). Le même 404 pour un jeton inconnu,
-  révoqué, un abonnement terminé, un intervenant sans rôle ou effacé. 60 lectures par heure et par jeton, 300 par adresse IP (429).
+  révoqué, un abonnement terminé, un intervenant sans rôle ou effacé. 60 lectures par heure et par jeton, 2 000 par site et par adresse
+  IP (429 ; les agendas en ligne relisent tous les flux depuis quelques adresses communes).
 - Le jeton n'apparaît jamais dans nos traces : `/api/calendrier/***` dans les journaux (`App\Logging\SensitivePathProcessor`, jeton
-  remplacé aussi dans les paramètres de la route) et dans les anomalies (`PersonalDataMask::calendarPaths`).
+  remplacé aussi dans les paramètres de la route et dans le message d'une exception journalisée, une 405 par exemple) et dans les
+  anomalies (`PersonalDataMask::calendarPaths`).
 - Toujours servi pendant la construction de la boutique (`StorefrontGateSubscriber::KEPT`), rangé `@compte`, module Boutique.
 
 ### Codes des refus des abonnements (04/11/2026, application e-commerce mobile)

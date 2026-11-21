@@ -9,10 +9,12 @@ use Doctrine\DBAL\Connection;
  * appelées par l'agenda, les droits, l'écouteur Doctrine et le passage horaire, dans la transaction de l'appelant.
  *
  * Une attente ouverte (`waiting`, `offered`) se ferme d'elle-même (`left`, décision du chef du 21/11/2026) quand :
- * - le droit qu'elle porte est utilisé ailleurs (une autre attente acceptée, une date posée directement, « Utiliser ») : `right_used` ;
+ * - le droit qu'elle porte est utilisé ailleurs (une autre attente acceptée, une date posée directement, « Utiliser ») ET aucun autre droit
+ *   à planifier de l'abonné ne vaut au début du créneau : `right_used` (relecture du 21/11/2026 : sinon l'attente passe sur cet autre droit) ;
+ * - l'abonné a déjà une date sur ce créneau (posée par l'équipe, ou réservée directement à moins d'1 h) : `already_booked` ;
  * - l'abonnement est en pause, résilié, impayé ou se termine avant le créneau : `subscription` ;
  * - le créneau est supprimé ou annulé : `slot_gone` ; ou commencé : `slot_past` ;
- * - la prestation est retirée de la formule : `benefit_removed`.
+ * - la prestation est retirée de la formule : `benefit_removed` ; ou ses dates ne sont plus au choix de l'abonné : `scheduling`.
  */
 final class AboWaitlist
 {
@@ -32,24 +34,49 @@ final class AboWaitlist
 
     /**
      * Ferme les attentes ouvertes qui n'ont plus lieu d'être, pour un abonnement, un créneau, ou tout le site. Rend le nombre fermé.
+     * D'abord, une attente dont le droit porté n'est plus à planifier passe sur un autre droit valable (`moveRights`).
      */
     public static function closeStale(Connection $conn, ?int $subscriptionId = null, ?int $slotId = null): int
     {
         $now = self::utc(new \DateTimeImmutable());
         $where = "w.status IN ('waiting', 'offered')" . ($subscriptionId !== null ? ' AND w.subscription_id = ' . $subscriptionId : '') . ($slotId !== null ? ' AND w.slot_id = ' . $slotId : '');
+        self::moveRights($conn, $where, $now);
 
-        return $conn->executeStatement("UPDATE benefit_waitlist w SET status = 'left', closed_at = :now, closed_reason = x.reason FROM (
+        // la ligne visée est relue sous son verrou (`t.status`) : une attente acceptée entre-temps n'est jamais réécrite
+        return $conn->executeStatement("UPDATE benefit_waitlist t SET status = 'left', closed_at = :now, closed_reason = x.reason FROM (
                 SELECT w.id, CASE
                     WHEN sl.id IS NULL OR sl.status <> 'open' THEN 'slot_gone'
                     WHEN s.status NOT IN ('active', 'trialing') OR (s.cancel_at IS NOT NULL AND s.cancel_at <= sl.starts_at)
                         OR (s.cancel_at_period_end AND s.current_period_end IS NOT NULL AND s.current_period_end <= sl.starts_at) THEN 'subscription'
-                    WHEN NOT EXISTS (SELECT 1 FROM plan_benefit pb WHERE pb.plan_id = s.plan_id AND pb.benefit_id = w.benefit_id) THEN 'benefit_removed'
+                    WHEN pb.id IS NULL THEN 'benefit_removed'
+                    WHEN NOT (pb.scheduling = 'client_at_subscription' OR (pb.scheduling = 'fixed_slots' AND pb.slot_choice = 'client')) THEN 'scheduling'
+                    WHEN EXISTS (SELECT 1 FROM benefit_occurrence b WHERE b.subscription_id = w.subscription_id AND b.slot_id = w.slot_id AND b.status = 'scheduled') THEN 'already_booked'
                     WHEN o.id IS NULL OR o.status <> 'available' THEN 'right_used'
                     WHEN sl.starts_at <= :now THEN 'slot_past'
                 END AS reason
                 FROM benefit_waitlist w JOIN subscription s ON s.id = w.subscription_id LEFT JOIN benefit_slot sl ON sl.id = w.slot_id
+                LEFT JOIN plan_benefit pb ON pb.plan_id = s.plan_id AND pb.benefit_id = w.benefit_id
                 LEFT JOIN benefit_occurrence o ON o.id = w.occurrence_id
-                WHERE $where) x WHERE w.id = x.id AND x.reason IS NOT NULL", ['now' => $now]);
+                WHERE $where) x WHERE t.id = x.id AND x.reason IS NOT NULL AND t.status IN ('waiting', 'offered')", ['now' => $now]);
+    }
+
+    /**
+     * Une attente dont le droit porté vient d'être daté ou utilisé passe sur un autre droit à planifier de l'abonné, valable au début du
+     * créneau et que ses autres attentes ouvertes ne portent pas (celui qui expire le dernier, comme à l'inscription). Sans autre droit,
+     * elle reste telle quelle et `closeStale` la ferme (`right_used`).
+     */
+    private static function moveRights(Connection $conn, string $where, string $now): void
+    {
+        $rows = $conn->fetchAllAssociative("SELECT w.id, w.subscription_id, w.benefit_id, sl.starts_at FROM benefit_waitlist w JOIN benefit_slot sl ON sl.id = w.slot_id
+            LEFT JOIN benefit_occurrence o ON o.id = w.occurrence_id WHERE $where AND (o.id IS NULL OR o.status <> 'available') ORDER BY w.id");
+        foreach ($rows as $r) {
+            $other = $conn->fetchOne("SELECT o.id FROM benefit_occurrence o WHERE o.subscription_id = ? AND o.benefit_id = ? AND o.status = 'available' AND o.valid_until > ? AND o.valid_until >= ?
+                AND NOT EXISTS (SELECT 1 FROM benefit_waitlist x WHERE x.occurrence_id = o.id AND x.id <> ? AND x.status IN ('waiting', 'offered'))
+                ORDER BY o.valid_until DESC, o.id DESC LIMIT 1", [(int) $r['subscription_id'], (int) $r['benefit_id'], $now, (string) $r['starts_at'], (int) $r['id']]);
+            if ($other !== false) {
+                $conn->executeStatement("UPDATE benefit_waitlist SET occurrence_id = ? WHERE id = ? AND status IN ('waiting', 'offered')", [(int) $other, (int) $r['id']]);
+            }
+        }
     }
 
     /** Les places offertes encore valables d'un créneau (elles comptent dans la capacité : personne ne les prend pendant l'offre) */
@@ -67,6 +94,36 @@ final class AboWaitlist
         $out = [];
         foreach ($conn->fetchAllAssociative("SELECT slot_id, COUNT(*) AS n FROM benefit_waitlist WHERE slot_id IN (?) AND status = 'offered' AND offer_expires_at > ? GROUP BY slot_id",
             [$ids, self::utc(new \DateTimeImmutable())], [\Doctrine\DBAL\ArrayParameterType::INTEGER, \PDO::PARAM_STR]) as $r) {
+            $out[(int) $r['slot_id']] = (int) $r['n'];
+        }
+
+        return $out;
+    }
+
+    /**
+     * Relecture du 21/11/2026 : les places que la file d'attente garde d'un créneau (une par personne en attente, à plus d'1 h du début) :
+     * une place libérée va d'abord à la file, jamais à une réservation directe qui passerait devant (offre échue, attente fermée ailleurs,
+     * place retenue rendue : la promotion suivante l'offre). À moins d'1 h, plus de promotion automatique : la place est au premier qui la prend.
+     * Pour un abonné lui-même en attente sur ce créneau (`$subscriptionId`), seules comptent les attentes AVANT la sienne.
+     */
+    public static function queued(Connection $conn, int $slotId, ?int $subscriptionId = null, ?\DateTimeImmutable $now = null): int
+    {
+        $now ??= new \DateTimeImmutable();
+        $own = $subscriptionId !== null ? $conn->fetchOne("SELECT MIN(id) FROM benefit_waitlist WHERE slot_id = ? AND subscription_id = ? AND status = 'waiting'", [$slotId, $subscriptionId]) : null;
+
+        return (int) $conn->fetchOne("SELECT COUNT(*) FROM benefit_waitlist w JOIN benefit_slot sl ON sl.id = w.slot_id WHERE w.slot_id = ? AND w.status = 'waiting' AND sl.starts_at > ?"
+            . ($own !== null && $own !== false ? ' AND w.id < ' . (int) $own : ''), [$slotId, self::utc($now->modify('+' . self::NO_AUTO_MINUTES . ' minutes'))]);
+    }
+
+    /** @param list<int> $ids @return array<int, int> les places gardées par la file, par créneau (`queued`) */
+    public static function queuedBySlot(Connection $conn, array $ids): array
+    {
+        if ($ids === []) {
+            return [];
+        }
+        $out = [];
+        foreach ($conn->fetchAllAssociative("SELECT w.slot_id, COUNT(*) AS n FROM benefit_waitlist w JOIN benefit_slot sl ON sl.id = w.slot_id WHERE w.slot_id IN (?) AND w.status = 'waiting' AND sl.starts_at > ? GROUP BY w.slot_id",
+            [$ids, self::utc((new \DateTimeImmutable())->modify('+' . self::NO_AUTO_MINUTES . ' minutes'))], [\Doctrine\DBAL\ArrayParameterType::INTEGER, \PDO::PARAM_STR]) as $r) {
             $out[(int) $r['slot_id']] = (int) $r['n'];
         }
 

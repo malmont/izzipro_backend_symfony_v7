@@ -3,8 +3,8 @@
 namespace App\Services\Calendar;
 
 /**
- * Petit service commun du format iCalendar (RFC 5545) (lot ABO-4, 21/11/2026) : un flux d'agenda (`PUBLISH`), une pièce jointe de
- * courriel (`REQUEST`, ou `CANCEL` pour une séance annulée). Heures en UTC (`Z`), textes échappés, lignes repliées à 75 octets.
+ * Petit service commun du format iCalendar (RFC 5545) (lot ABO-4, 21/11/2026) : un flux d'agenda et une pièce jointe de courriel,
+ * tous deux en `PUBLISH` (une séance annulée : `STATUS:CANCELLED`) ; `REQUEST` et `CANCEL` restent pour un appelant qui donne un ORGANIZER. Heures en UTC (`Z`), textes échappés, lignes repliées à 75 octets.
  * Mémoires Vivantes garde son propre `ReservationMailerService::buildIcsContent` (projet à part, jamais touché).
  */
 final class IcsBuilder

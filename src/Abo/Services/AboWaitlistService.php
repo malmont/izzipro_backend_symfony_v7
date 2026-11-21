@@ -64,15 +64,16 @@ class AboWaitlistService
             if ($conn->fetchOne("SELECT 1 FROM benefit_waitlist WHERE slot_id = ? AND subscription_id = ? AND status IN ('waiting', 'offered')", [$slotId, $subscriptionId]) !== false) {
                 throw new AboException(409, 'ALREADY_WAITING', 'Vous êtes déjà sur la liste d\'attente de ce créneau.', 'slotId');
             }
-            // un geste d'écriture : les offres échues de ce créneau passent d'abord à la suite
-            $offers = $this->promoteIn($conn, $slotId);
-            if ($this->agenda->freePlaces($conn, $slotId) > 0 && !$this->hasWaiting($conn, $slotId)) {
-                throw new AboException(409, 'SLOT_NOT_FULL', 'Une place est libre sur ce créneau : réservez-la directement.', 'slotId');
-            }
             if ((int) $conn->fetchOne("SELECT COUNT(*) FROM benefit_waitlist WHERE subscription_id = ? AND status IN ('waiting', 'offered')", [$subscriptionId]) >= AboWaitlist::MAX_OPEN) {
                 throw new AboException(409, 'WAITLIST_LIMIT', sprintf('%d listes d\'attente au plus en même temps.', AboWaitlist::MAX_OPEN), 'slotId');
             }
             $occurrence = $this->carriedRight($conn, $subscriptionId, (int) $slot['benefit_id'], (string) $slot['starts_at']);
+            // un geste d'écriture : les offres échues de ce créneau passent d'abord à la suite (après les refus : relecture du 21/11/2026,
+            // une inscription refusée ne défait plus les offres faites à d'autres)
+            $offers = $this->promoteIn($conn, $slotId);
+            if ($this->agenda->freePlaces($conn, $slotId) > 0 && !$this->hasWaiting($conn, $slotId)) {
+                throw new AboException(409, 'SLOT_NOT_FULL', 'Une place est libre sur ce créneau : réservez-la directement.', 'slotId');
+            }
 
             return (int) $conn->fetchOne("INSERT INTO benefit_waitlist (slot_id, subscription_id, benefit_id, occurrence_id, status, created_at) VALUES (?, ?, ?, ?, 'waiting', ?) RETURNING id",
                 [$slotId, $subscriptionId, (int) $slot['benefit_id'], $occurrence, AboWaitlist::utc(new \DateTimeImmutable())]);

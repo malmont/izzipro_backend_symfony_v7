@@ -196,6 +196,51 @@ class AboWaitlistTest extends WebTestCase
         $this->assertSame(['status' => 'left', 'closed_reason' => 'slot_gone'], $reason($we));
     }
 
+    /** Relecture du 21/11/2026 (constats 1, 2 et 6) */
+    public function testAFreedPlaceGoesToTheQueueBeforeADirectBookingAndAWaitKeepsAnotherValidRight(): void
+    {
+        $yoga = $this->benefit('Yoga file');
+        [$a, $b, $c] = $this->subscriptions($yoga, ['abo4-a@example.invalid', 'abo4-b@example.invalid', 'abo4-c@example.invalid']);
+        $slot = $this->slot($yoga, '+3 days', 1);
+        $booked = $this->json('POST', '/api/subscriptions/' . $a->getId() . '/rendez-vous', ['benefitId' => $yoga->getId(), 'slotId' => $slot], 201, 'abo4-a@example.invalid')['appointment'];
+        $wb = $this->json('POST', $this->join($b, $slot), null, 201, 'abo4-b@example.invalid')['wait']['waitId'];
+        $wc = $this->json('POST', $this->join($c, $slot), null, 201, 'abo4-c@example.invalid')['wait']['waitId'];
+        $this->json('DELETE', '/api/subscriptions/' . $a->getId() . '/rendez-vous/' . $booked['occurrenceId'], null, 200, 'abo4-a@example.invalid');
+        $status = fn (int $id) => $this->db->fetchAssociative('SELECT status, closed_reason FROM benefit_waitlist WHERE id = ?', [$id]);
+
+        // l'offre de B échoit sans aucun geste : la place n'est pas libre pour autant, C attend juste derrière
+        $this->db->executeStatement("UPDATE benefit_waitlist SET offer_expires_at = NOW() AT TIME ZONE 'UTC' - INTERVAL '1 minute' WHERE id = ?", [$wb]);
+        $em = $this->prov()->getEntityManager();
+        $em->clear();
+        $this->assertSame(0, static::getContainer()->get(AboAgendaService::class)->slotViews([$em->getRepository(BenefitSlot::class)->find($slot)], false)[0]['remaining'], 'la place gardée par la file');
+        $this->assertSame('SLOT_FULL', $this->json('POST', '/api/subscriptions/' . $a->getId() . '/rendez-vous', ['benefitId' => $yoga->getId(), 'slotId' => $slot], 409, 'abo4-a@example.invalid')['code'], 'A ne passe pas devant C');
+        $this->assertSame(['expired', 'offered'], [$status($wb)['status'], $status($wc)['status']], 'le refus offre aussitôt la place à C');
+        $this->assertNotNull($this->mailTo('abo4-c@example.invalid'));
+
+        // la première personne de la file prend directement une place libérée (personne devant elle) ; son attente se ferme (`already_booked`)
+        $s2 = $this->slot($yoga, '+4 days', 1);
+        $this->json('POST', '/api/subscriptions/' . $a->getId() . '/rendez-vous', ['benefitId' => $yoga->getId(), 'slotId' => $s2], 201, 'abo4-a@example.invalid');
+        $wb2 = $this->json('POST', $this->join($b, $s2), null, 201, 'abo4-b@example.invalid')['wait']['waitId'];
+        $this->json('POST', $this->join($c, $s2), null, 201, 'abo4-c@example.invalid');
+        $this->db->executeStatement('UPDATE benefit_slot SET capacity = 2 WHERE id = ?', [$s2]); // sans l'ORM : aucune promotion
+        $this->json('POST', '/api/subscriptions/' . $b->getId() . '/rendez-vous', ['benefitId' => $yoga->getId(), 'slotId' => $s2], 201, 'abo4-b@example.invalid');
+        $this->assertSame(['status' => 'left', 'closed_reason' => 'already_booked'], $status($wb2));
+
+        // le droit porté est daté ailleurs, un autre droit vaut encore au début du créneau : l'attente passe sur lui, au lieu de se fermer
+        $pilates = $this->benefit('Pilates droits');
+        [$e] = $this->subscriptions($pilates, ['abo4-c@example.invalid'], 2);
+        [$ap] = $this->subscriptions($pilates, ['abo4-a@example.invalid'], 1);
+        $p = $this->slot($pilates, '+3 days', 1);
+        $this->json('POST', '/api/subscriptions/' . $ap->getId() . '/rendez-vous', ['benefitId' => $pilates->getId(), 'slotId' => $p], 201, 'abo4-a@example.invalid');
+        $we = $this->json('POST', $this->join($e, $p), null, 201, 'abo4-c@example.invalid')['wait']['waitId'];
+        $carried = (int) $this->db->fetchOne('SELECT occurrence_id FROM benefit_waitlist WHERE id = ?', [$we]);
+        $other = (int) $this->db->fetchOne("SELECT id FROM benefit_occurrence WHERE subscription_id = ? AND status = 'available' AND id <> ?", [$e->getId(), $carried]);
+        $this->db->executeStatement("UPDATE benefit_occurrence SET valid_until = (SELECT starts_at FROM benefit_slot WHERE id = ?) + INTERVAL '1 day' WHERE id = ?", [$p, $other]);
+        $later = $this->slot($pilates, '+10 days', 1);
+        $this->json('POST', '/api/subscriptions/' . $e->getId() . '/rendez-vous', ['benefitId' => $pilates->getId(), 'slotId' => $later], 201, 'abo4-c@example.invalid');
+        $this->assertSame(['waiting', $other], [$this->db->fetchOne('SELECT status FROM benefit_waitlist WHERE id = ?', [$we]), (int) $this->db->fetchOne('SELECT occurrence_id FROM benefit_waitlist WHERE id = ?', [$we])]);
+    }
+
     public function testNoAutomaticOfferUnderAnHourButTheTeamCanProposeUntilTheStart(): void
     {
         $yoga = $this->benefit('Yoga dernière heure');
@@ -242,6 +287,9 @@ class AboWaitlistTest extends WebTestCase
         }
         $this->assertNotNull($ics, 'la pièce .ics');
         $this->assertStringContainsString('SUMMARY:Yoga rappel', (string) $ics);
+        // relecture du 21/11/2026 : PUBLISH (REQUEST exige un ORGANIZER), un identifiant par date (un droit rendu se redate sous le même numéro)
+        $this->assertStringContainsString("METHOD:PUBLISH\r\n", (string) $ics);
+        $this->assertStringContainsString('UID:abo-' . MV_TEST_TENANT_CODE . '-' . $ra['occurrenceId'] . '-' . $tomorrow->setTimezone(new \DateTimeZone('UTC'))->format('Ymd\\THis\\Z') . '@izzipro', (string) $ics);
         $this->assertStringContainsString('DTSTART:' . $tomorrow->setTimezone(new \DateTimeZone('UTC'))->format('Ymd\THis\Z'), (string) $ics);
 
         // l'offre d'une place, au niveau « Aucune » aussi : B se met en attente d'un créneau complet, A annule
@@ -314,6 +362,16 @@ class AboWaitlistTest extends WebTestCase
         $written = is_file($log) ? (string) file_get_contents($log, false, null, $offset) : '';
         $this->assertStringContainsString('/api/calendrier/***', $written, 'la requête est bien au journal, masquée');
         $this->assertStringNotContainsString($token, $written, 'jamais le jeton dans un journal');
+        // relecture du 21/11/2026 : une méthode refusée (405) est journalisée avec l'objet exception, dont le message porte l'adresse
+        $offset = filesize($log);
+        $this->client->getCookieJar()->clear();
+        $this->client->request('POST', $link, [], [], ['REMOTE_ADDR' => '10.79.1.' . random_int(1, 254)]);
+        $this->prov()->switchTenant(MV_TEST_TENANT_DB, MV_TEST_TENANT_CODE);
+        $this->assertSame(405, $this->client->getResponse()->getStatusCode());
+        clearstatcache();
+        $written = (string) file_get_contents($log, false, null, $offset);
+        $this->assertStringContainsString('/api/calendrier/***', $written, 'la méthode refusée est au journal, masquée');
+        $this->assertStringNotContainsString($token, $written, 'ni par l\'objet exception d\'une méthode refusée');
         $master->exec('DELETE FROM platform_incident');
 
         // débit : 60 lectures par heure et par jeton (la panne ci-dessus n'est pas passée par le contrôleur), puis 429

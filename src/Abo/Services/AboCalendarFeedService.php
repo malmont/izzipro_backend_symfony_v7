@@ -109,7 +109,7 @@ class AboCalendarFeedService
             $address = $r['address'] !== null ? implode(', ', array_filter([$r['address']['line1'], $r['address']['line2'], trim($r['address']['postalCode'] . ' ' . $r['address']['city']), $r['address']['province'], $r['address']['country']],
                 fn ($v) => $v !== null && trim((string) $v) !== '')) : null;
             $start = new \DateTimeImmutable((string) $r['startsAt']);
-            $events[] = ['uid' => $this->reminders->uid((int) $r['occurrenceId']), 'start' => $start, 'end' => $r['endsAt'] !== null ? new \DateTimeImmutable((string) $r['endsAt']) : $start->modify('+1 hour'),
+            $events[] = ['uid' => $this->reminders->uid((int) $r['occurrenceId'], $start), 'start' => $start, 'end' => $r['endsAt'] !== null ? new \DateTimeImmutable((string) $r['endsAt']) : $start->modify('+1 hour'),
                 // le prénom seul, comme l'écran : jamais le nom de famille ni le téléphone
                 'summary' => trim($r['name'] . (($r['customer']['firstname'] ?? null) ? ' · ' . $r['customer']['firstname'] : '')), 'location' => $address ?? $r['location']];
         }

@@ -64,12 +64,28 @@ final class WaitlistCloseListener
         $this->stale = false;
         $this->resized = [];
         if ($stale) {
+            $conn = $args->getObjectManager()->getConnection();
+            // relecture du 21/11/2026 : dans la transaction d'un appelant, la fermeture a son point de sauvegarde (une panne SQL
+            // n'avorte jamais la transaction de l'appelant ; rien ne compte sur son retour arrière)
+            $savepoint = $conn->isTransactionActive() ? 'abo_waitlist_close' : null;
             try {
-                $conn = $args->getObjectManager()->getConnection();
+                if ($savepoint !== null) {
+                    $conn->createSavepoint($savepoint);
+                }
                 if ($conn->fetchOne("SELECT to_regclass('benefit_waitlist')") !== null) {
                     AboWaitlist::closeStale($conn);
                 }
+                if ($savepoint !== null) {
+                    $conn->releaseSavepoint($savepoint);
+                }
             } catch (\Throwable $e) {
+                if ($savepoint !== null) {
+                    try {
+                        $conn->rollbackSavepoint($savepoint);
+                    } catch (\Throwable) {
+                        // la transaction de l'appelant est déjà perdue : son propre refus le dira
+                    }
+                }
                 $this->logger?->error('[ABO-4] Fermeture des attentes en panne (' . $e::class . ') : le passage horaire la rattrape.');
             }
         }
