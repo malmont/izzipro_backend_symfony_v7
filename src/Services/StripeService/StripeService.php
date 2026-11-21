@@ -312,43 +312,6 @@ class StripeService
         }
     }
 
-    /**
-     * Intention de paiement d'un panier : montant = total du devis du serveur (CartQuoteCalculator : lignes, livraison,
-     * taxes ; caution exclue), devise du site. Le navigateur n'envoie aucun montant d'article ; priceShipping (cents)
-     * n'est lu que pour un transporteur EasyPost.
-     *
-     * @param array<string, mixed> $payload items[], carrierId?, priceShipping|shippingPrice?, booking? (ancien envoi global)
-     * @return array{success?: bool, clientSecret?: string, calculatedAmount?: int, quote?: array, error?: string, status?: int, errors?: array}
-     */
-    public function createPaymentIntentFromItems(array $payload, float $priceShipping = 0.0, ?string $currency = null): array
-    {
-        if (!isset($payload['priceShipping']) && !isset($payload['shippingPrice']) && $priceShipping > 0) {
-            $payload['priceShipping'] = $priceShipping;
-        }
-        try {
-            $quote = $this->quotes->quote(\App\Dto\CartQuoteInputDto::fromArray($payload));
-        } catch (\App\Services\OrderService\CartQuoteException $e) {
-            return ['error' => $e->getMessage(), 'errors' => $e->errors, 'status' => $e->getStatusCode()];
-        }
-
-        $amountInCents = (int) $quote['total'];
-        if ($amountInCents <= 0) {
-            return ['error' => 'Montant invalide calculé', 'status' => 400];
-        }
-
-        $clientSecret = $this->createPaymentIntent($amountInCents, strtolower($currency ?? $quote['currency']));
-
-        if (!$clientSecret) {
-            return ['error' => 'Impossible de créer l\'intention de paiement.', 'status' => 500];
-        }
-
-        return [
-            'success' => true,
-            'clientSecret' => $clientSecret,
-            'calculatedAmount' => $amountInCents,
-            'quote' => $quote,
-        ];
-    }
 
     public function getStripeConfigForCurrentTenant(): ?StripeConfig
     {

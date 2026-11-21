@@ -16,7 +16,8 @@ class GetShippingSummaryForCart
         private TenantEntityManagerProvider $emProvider,
         private ShippingService           $shippingService,
         private ShipmentAddressBuilder    $builder,
-        private readonly ?\App\Services\ShippingService\ProductShippingResolver $resolver = null
+        private readonly ?\App\Services\ShippingService\ProductShippingResolver $resolver = null,
+        private readonly ?\App\Services\ShippingService\ShippingRateStore $rates = null, // lot CHECKOUT-LIVRAISON
     ) {}
 
     /**
@@ -54,7 +55,7 @@ class GetShippingSummaryForCart
         // 5) Agréger par carrier+service
         $buckets = [];
         foreach ($rateOptions as $r) {
-            $key = $r->carrier . '||' . $r->service;
+            $key = $r->carrier . '||' . $r->service . '||' . $r->carrierAccountId; // un compte par regroupement (deux comptes ne s'additionnent pas)
             if (! isset($buckets[$key])) {
                 $buckets[$key] = [
                     'carrier'       => $r->carrier,
@@ -63,6 +64,7 @@ class GetShippingSummaryForCart
                     'currency'      => $r->currency,
                     'estimatedDays' => 0,
                     'parcelCount'   => 0,
+                    'carrierAccountId' => $r->carrierAccountId,
                 ];
             }
             // ⚠️ on utilise $r->price (pas ->rate)
@@ -75,9 +77,16 @@ class GetShippingSummaryForCart
         }
 
         // 6) Construire les DTO de résumé (attention à l’ordre des arguments)
+        // lot CHECKOUT-LIVRAISON : chaque tarif reçoit son jeton, gardé par le serveur avec ce qu'il couvre (articles et quantités,
+        // destination, compte et service, montant) ; le devis web ne croira que lui
+        $products = [];
+        foreach ($cartItems as $ci) {
+            $products[(int) $ci->productId] = ($products[(int) $ci->productId] ?? 0) + (int) $ci->quantity;
+        }
+        $parcels = $this->shippingService->countParcels($items);
         $summaries = [];
         foreach ($buckets as $b) {
-            $summaries[] = new RateSummaryDto(
+            $summary = new RateSummaryDto(
                 $b['carrier'],
                 $b['service'],
                 (int) round($b['totalPrice'] * 100), // EasyPost rend des dollars : cents comme le reste de la boutique
@@ -85,6 +94,13 @@ class GetShippingSummaryForCart
                 $b['parcelCount'],
                 $b['estimatedDays']
             );
+            // un jeton seulement pour un tarif de TOUS les colis, d'un seul compte, vers une destination complète (pays et code postal)
+            $destination = \App\Services\ShippingService\ShippingRateStore::destination($toAddress);
+            if ($this->rates !== null && is_string($b['carrierAccountId']) && $b['carrierAccountId'] !== '' && $b['parcelCount'] === $parcels
+                && $destination['country'] !== null && $destination['postalCode'] !== null) {
+                $summary->rateToken = $this->rates->put($products, $toAddress, $b['carrierAccountId'], $b['service'], $summary->totalPrice, $b['currency']);
+            }
+            $summaries[] = $summary;
         }
 
         return $summaries;

@@ -267,7 +267,6 @@
     "payment POST /api/pos/terminal/payments/1/refund",
     "payment POST /api/pos/terminal/payments/1/refund/confirm",
     "payment POST /api/pos/terminal/payments/1/simulate",
-    "payment POST /api/shipping/buy",
     "payment POST /api/site/abonnements/1/droits",
     "payment POST /api/site/abonnements/1/pause",
     "payment POST /api/site/abonnements/1/reprise",

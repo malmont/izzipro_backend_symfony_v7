@@ -118,7 +118,6 @@ class EntryModeGuardSubscriber implements EventSubscriberInterface
         ['#^/api/cash-registers(/|$)#', ['POST', 'PUT', 'PATCH', 'DELETE'], 'payment'],
         // les achats d'un client (commande, panier) et l'achat d'une étiquette de transport (crédit de livraison)
         ['#^/api/(order|cart)(/|$)#', ['POST', 'PUT', 'PATCH', 'DELETE'], 'payment'],
-        ['#^/api/shipping/buy(/|$)#', [], 'payment'],
         ['#^/admin/orders/[^/]+/etiquette(/|$)#', [], 'payment'],
         // les droits : demander l'assistance d'une agence, le groupe lui-même, la vérification des taxes, l'adhésion et l'activation des applications
         ['#^/(api/site|admin)/assistance(/|$)#', ['POST', 'PUT', 'PATCH', 'DELETE'], 'rights'],

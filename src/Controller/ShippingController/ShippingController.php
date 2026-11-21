@@ -7,7 +7,6 @@ use App\Dto\CartItemDto;
 use App\UseCase\ShippingUseCase\GetShippingRatesForCart;
 use App\UseCase\ShippingUseCase\GetShippingSummaryForCart;
 use App\UseCase\ShippingUseCase\GetParcelSummariesForCart;
-use App\UseCase\ShippingUseCase\PurchaseShippingForCart;
 use App\Exception\ItemTooLargeForPackagingException;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
@@ -20,7 +19,6 @@ class ShippingController extends AbstractController
     public function __construct(
         private GetShippingRatesForCart    $getRatesForCart,
         private GetParcelSummariesForCart  $getParcelSummariesForCart,
-        private PurchaseShippingForCart    $purchaseShippingForCart,
         private GetShippingSummaryForCart  $getShippingSummaryForCart,
         private LoggerInterface            $logger,
         private \App\Services\TenantEntityManagerProvider $emProvider,
@@ -93,47 +91,9 @@ class ShippingController extends AbstractController
         }
     }
 
-    /**
-     * POST /api/shipping/buy
-     */
-    #[Route('/api/shipping/buy', methods: ['POST'])]
-    public function buy(Request $request): JsonResponse
-    {
-        try {
-            $data = json_decode($request->getContent(), true);
-            $orderId = (int) ($data['orderId'] ?? 0);
-            // S2.7 (30/10/2026) : étiquettes payées par le marchand → commande de l'utilisateur connecté ou administrateur (avant : tout utilisateur connecté, toute commande)
-            $order = $this->emProvider->getEntityManager()->find(\App\Entity\Order::class, $orderId);
-            if ($order === null) {
-                return $this->json(['error' => 'ORDER_NOT_FOUND', 'message' => "Commande #$orderId introuvable"], JsonResponse::HTTP_NOT_FOUND);
-            }
-            if (!$this->isGranted('ROLE_ADMIN') && $order->getUserId() !== $this->getUser()) {
-                return $this->json(['error' => 'FORBIDDEN', 'message' => 'Cette commande ne vous appartient pas'], JsonResponse::HTTP_FORBIDDEN);
-            }
-            $cart = array_map(
-                fn(array $i) => new CartItemDto($i['productId'], $i['quantity']),
-                $data['cartItems'] ?? []
-            );
-            $labels = $this->purchaseShippingForCart->execute(
-                $cart,
-                $data['to']               ?? [],
-                $data['from']             ?? [],
-                $data['carrierAccountId'] ?? '',
-                $data['service']          ?? '',
-                $orderId
-            );
-            return $this->json($labels);
-
-        } catch (ItemTooLargeForPackagingException $e) {
-            return $this->json(
-                ['error' => $e->getMessage()],
-                JsonResponse::HTTP_BAD_REQUEST
-            );
-        } catch (\Exception $e) {
-            // lot ERREURS-1 (12/11/2026) : avant, « DEBUG ERROR: » suivi du message de l'exception ; le détail reste au journal
-            return $this->json($this->safeError->body($e, 'POST /api/shipping/buy'), JsonResponse::HTTP_INTERNAL_SERVER_ERROR);
-        }
-    }
+    // POST /api/shipping/buy retiré (lot CHECKOUT-LIVRAISON, 21/11/2026) : un client y achetait des étiquettes aux frais du marchand ou de
+    // la plateforme (adresse, compte et service du corps, sans débit ni contrôle) ; aucun front ne l'appelait. L'administration achète
+    // l'étiquette d'une commande par /admin/orders/{id}/etiquette (AdminLabelPurchaseService : solde débité, commande vérifiée).
 
     /**
      * POST /api/shipping/summary
@@ -163,6 +123,17 @@ class ShippingController extends AbstractController
                 ['error' => $e->getMessage()],
                 JsonResponse::HTTP_BAD_REQUEST
             );
+        } catch (\App\Services\ShippingService\ShippingAddressRefusedException $e) {
+            $text = 'Cette adresse de livraison est refusée par le transporteur : vérifiez-la.';
+
+            return $this->json(['error' => $text, 'code' => 'SHIPPING_ADDRESS_INVALID', 'message' => $text], JsonResponse::HTTP_UNPROCESSABLE_ENTITY);
+        } catch (\App\Services\ShippingService\ShippingRatesUnavailableException $e) {
+            // lot CHECKOUT-LIVRAISON : EasyPost ne répond pas : 503 clair, aucun tarif,
+            // jamais un prix à 0 ; le retrait et les transporteurs à prix fixe restent possibles
+            $this->logger->error('Erreur API Shipping/Summary: ' . $e->getMessage(), ['exception' => $e::class]);
+            $text = 'Les tarifs de livraison sont indisponibles pour le moment : réessayez, ou choisissez le retrait ou un autre transporteur.';
+
+            return $this->json(['error' => $text, 'code' => 'SHIPPING_RATES_UNAVAILABLE', 'message' => $text], JsonResponse::HTTP_SERVICE_UNAVAILABLE);
         } catch (\Exception $e) {
             $this->logger->error('Erreur API Shipping/Summary: ' . $e->getMessage(), ['exception' => $e]);
             return $this->json(

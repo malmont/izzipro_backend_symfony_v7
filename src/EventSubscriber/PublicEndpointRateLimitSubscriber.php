@@ -49,6 +49,10 @@ class PublicEndpointRateLimitSubscriber implements EventSubscriberInterface
         #[Autowire(service: 'limiter.public_form_global_ip')] private readonly RateLimiterFactory $publicFormGlobalIp,
         #[Autowire(service: 'limiter.app_activation_ip')] private readonly RateLimiterFactory $appActivationIp,
         #[Autowire(service: 'limiter.pos_pin_login')] private readonly RateLimiterFactory $posPinLogin,
+        #[Autowire(service: 'limiter.checkout_ip')] private readonly RateLimiterFactory $checkoutIp,
+        #[Autowire(service: 'limiter.checkout_global_ip')] private readonly RateLimiterFactory $checkoutGlobalIp,
+        #[Autowire(service: 'limiter.shipping_summary_ip')] private readonly RateLimiterFactory $shippingSummaryIp,
+        #[Autowire(service: 'limiter.checkout_order_ip')] private readonly RateLimiterFactory $checkoutOrderIp,
         private readonly ?TenantConnectionProvider $tenant = null,
     ) {}
 
@@ -94,6 +98,19 @@ class PublicEndpointRateLimitSubscriber implements EventSubscriberInterface
             // Clé d'activation d'une application mobile : essais par IP
             $path === '/api/app/activate' => [
                 [$this->appActivationIp, $ip],
+            ],
+            // Paiement web (CHECKOUT-LIVRAISON) : intention Stripe créée ou relue à chaque appel ; par site et IP, plafond global par IP
+            $path === '/api/stripe/create-intent' => [
+                [$this->checkoutIp, $this->siteIpKey($request)],
+                [$this->checkoutGlobalIp, $ip],
+            ],
+            // create-guest suit un paiement : plus large, sans plafond global (un réseau partagé un jour de vente)
+            $path === '/api/order/create-guest' => [
+                [$this->checkoutOrderIp, $this->siteIpKey($request)],
+            ],
+            // Résumé et calcul des tarifs de livraison : un appel EasyPost à chaque fois
+            in_array($path, ['/api/shipping/summary', '/api/shipping/rates'], true) => [
+                [$this->shippingSummaryIp, $this->siteIpKey($request)],
             ],
             // Connexion par PIN : essais par terminal (à défaut par IP)
             $path === '/api/pos/pin-login' => [

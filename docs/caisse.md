@@ -1600,7 +1600,7 @@ prouve (`tests/Functional/...`, « — » = aucun test dédié).
 | GET | `/api/reviews/mine` | web + caisse | ses avis | ReviewApiTest |
 | DELETE | `/api/reviews/{id}` | web + caisse | auteur (404 sinon) | ReviewApiTest |
 | PUT, PATCH | `/api/reviews/{id}` | web + caisse | auteur (404 sinon) | ReviewApiTest |
-| POST | `/api/shipping/buy` | web + caisse | commande de l'utilisateur ou ROLE_ADMIN (403 `FORBIDDEN`, 404 `ORDER_NOT_FOUND`), trace retirée de la réponse (**corrigé S2.7**) | PosRoleMatrixTest |
+| POST | ~~`/api/shipping/buy`~~ | — | **retirée** (lot CHECKOUT-LIVRAISON, 21/11/2026) : l'étiquette s'achète par l'administration (`/admin/orders/{id}/etiquette`) |
 | POST | `/api/shipping/parcels` | web + caisse | calcul sans écriture | — |
 | GET | `/api/sizes` | web + caisse | lecture de référentiels | — |
 | GET | `/api/social-networks` | web + caisse | lecture de référentiels | — |

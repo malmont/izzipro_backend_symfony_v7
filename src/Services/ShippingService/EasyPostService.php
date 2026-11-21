@@ -133,9 +133,12 @@ class EasyPostService implements ShippingCarrierGatewayInterface
             }
 
             return is_array($shipment->rates ?? null) ? $shipment->rates : [];
+        } catch (\EasyPost\Exception\Api\InvalidRequestException|\EasyPost\Exception\Api\BadRequestException|\EasyPost\Exception\Api\NotFoundException $e) {
+            $this->logger->warning('[EasyPost] tarifs refusés : ' . $e->getMessage());
+            throw new ShippingAddressRefusedException('EasyPost refuse cette demande de tarifs (adresse ou colis) : ' . $e->getMessage(), 0, $e);
         } catch (\EasyPost\Exception\Api\ApiException $e) {
             $this->logger->error('[EasyPost] tarifs : ' . $e->getMessage());
-            throw new RuntimeException('Erreur lors de la récupération des tarifs EasyPost: ' . $e->getMessage(), 0, $e);
+            throw new ShippingRatesUnavailableException('Erreur lors de la récupération des tarifs EasyPost: ' . $e->getMessage(), 0, $e);
         }
     }
 

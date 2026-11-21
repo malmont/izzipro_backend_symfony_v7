@@ -25,8 +25,7 @@
             "POST /api/shipping/parcels"
         ],
         "refused": [
-            "POST /api/order/cancel/{id}",
-            "POST /api/shipping/buy"
+            "POST /api/order/cancel/{id}"
         ]
     },
     "gestion": {
