@@ -79,6 +79,8 @@ final class ScreenRegistry
         'groupe' => ['family' => self::VENTE, 'module' => null],
         // lot ABO-0 : le suivi des abonnements (gestion web et application de gestion mobile) : identité des abonnés, impayés
         'abonnements' => ['family' => self::VENTE, 'module' => 'module.boutique'],
+        // lot ABO-3b : l'intervenant, SES dates seulement (le prénom de l'abonné, l'adresse d'une prestation chez le client)
+        'abonnements.intervenant' => ['family' => self::VENTE, 'module' => 'module.boutique', 'roles' => ['ROLE_STAFF_PROVIDER']], // l'administrateur suit tout par « abonnements »
         // lot ABO-CONF : créer et configurer les formules et les prestations (le catalogue des abonnements), comme le catalogue des produits
         'abonnements.formules' => self::SHOP,
         'imports.commandes' => ['family' => self::VENTE, 'module' => 'module.boutique'],
@@ -310,6 +312,7 @@ final class ScreenRegistry
         ['#^/api/site/abonnements/formules/[^/]+/abonnes$#', 'abonnements'], // l'identité des abonnés : la vente
         ['#^/api/site/abonnements/(formules|prestations|produits)(/|$)#', 'abonnements.formules'], // lot ABO-CONF ; produits porteurs (ABO-CONF-b)
         ['#^/api/site/abonnements(/|$)#', 'abonnements'], // lot ABO-0
+        ['#^/api/staff/abonnements(/|$)#', 'abonnements.intervenant'], // lot ABO-3b
         ['#^/api/site/storefront(/preview)?$#', '@public'],
         ['#^/api/site/storefront/#', 'site.ouverture'],
         ['#^/api/(site/readiness|site/shipping|app-keys)(/|$)#', 'site.reglages'],

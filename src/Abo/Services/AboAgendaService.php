@@ -520,10 +520,12 @@ class AboAgendaService
      */
     public function upcoming(Subscription $subscription, bool $forTeam, string $locale = 'fr'): array
     {
-        $rows = $this->conn()->fetchAllAssociative("SELECT o.id, o.benefit_id, o.slot_id, o.scheduled_at, o.scheduled_end, o.scheduled_source, sl.location AS slot_location, sl.staff_user_id
-            FROM benefit_occurrence o LEFT JOIN benefit_slot sl ON sl.id = o.slot_id WHERE o.subscription_id = ? AND o.status = 'scheduled' AND o.scheduled_end > ?
+        $rows = $this->conn()->fetchAllAssociative("SELECT o.id, o.benefit_id, o.slot_id, o.scheduled_at, o.scheduled_end, o.scheduled_source, sl.location AS slot_location, " . AboStaffService::EFFECTIVE . " AS staff_user_id
+            FROM benefit_occurrence o JOIN benefit b ON b.id = o.benefit_id LEFT JOIN benefit_slot sl ON sl.id = o.slot_id WHERE o.subscription_id = ? AND o.status = 'scheduled' AND o.scheduled_end > ?
             ORDER BY o.scheduled_at, o.id LIMIT " . self::UPCOMING_MAX, [$subscription->getId(), self::utc(new \DateTimeImmutable())]);
         $out = [];
+        // lot ABO-3b : l'intervenant effectif (date, sinon créneau, sinon prestation) et son nom, pour l'équipe seulement
+        $staffNames = $forTeam ? $this->staffNames(array_map(fn (array $r) => $r['staff_user_id'] !== null ? (int) $r['staff_user_id'] : 0, $rows)) : [];
         foreach ($rows as $r) {
             $b = $this->benefits->benefits()->find((int) $r['benefit_id']);
             $pb = $subscription->getPlan() !== null ? $this->planBenefitOf($subscription->getPlan(), (int) $r['benefit_id']) : null;
@@ -534,7 +536,8 @@ class AboAgendaService
                 // jusqu'à quand l'abonné peut annuler sans perdre son droit
                 'cancellableUntil' => $this->at($start->modify('-' . ($pb?->getCancelDeadlineHours() ?? PlanBenefit::DEFAULT_CANCEL_HOURS) . ' hours'))];
             if ($forTeam) {
-                $view += ['staffUserId' => $r['staff_user_id'] !== null ? (int) $r['staff_user_id'] : null, 'source' => $r['scheduled_source']];
+                $staffId = $r['staff_user_id'] !== null ? (int) $r['staff_user_id'] : null;
+                $view += ['staffUserId' => $staffId, 'staffName' => $staffId !== null ? ($staffNames[$staffId] ?? null) : null, 'source' => $r['scheduled_source']];
             }
             $out[] = $view;
         }
@@ -968,11 +971,37 @@ class AboAgendaService
         return $d;
     }
 
-    /** L'intervenant : un compte du site @throws AboException 422 SLOT_RULE_STAFF_INVALID */
+    /**
+     * Prénom et nom des intervenants (lot ABO-3b), pour l'équipe seulement
+     *
+     * @param list<int> $ids
+     * @return array<int, string>
+     */
+    public function staffNames(array $ids): array
+    {
+        $ids = array_values(array_unique(array_filter($ids, fn ($v) => $v > 0)));
+        if ($ids === []) {
+            return [];
+        }
+        $out = [];
+        foreach ($this->conn()->executeQuery('SELECT id, firstname, lastname FROM "user" WHERE id IN (?)', [$ids], [\Doctrine\DBAL\ArrayParameterType::INTEGER])->fetchAllAssociative() as $u) {
+            $name = trim(($u['firstname'] ?? '') . ' ' . ($u['lastname'] ?? ''));
+            $out[(int) $u['id']] = $name !== '' ? $name : sprintf('Compte n° %d', (int) $u['id']);
+        }
+
+        return $out;
+    }
+
+    /**
+     * L'intervenant : un compte du site qui porte le rôle d'intervenant (lot ABO-3b ; les valeurs posées avant restent telles quelles)
+     *
+     * @throws AboException 422 SLOT_RULE_STAFF_INVALID
+     */
     private function assertStaff(?int $userId): void
     {
-        if ($userId !== null && $this->emProvider->getEntityManager()->getRepository(User::class)->find($userId) === null) {
-            throw new AboException(422, 'SLOT_RULE_STAFF_INVALID', 'Intervenant : un compte du site attendu.', 'staffUserId');
+        $user = $userId !== null ? $this->emProvider->getEntityManager()->getRepository(User::class)->find($userId) : null;
+        if ($userId !== null && (!$user instanceof User || !in_array(\App\Security\TeamRoles::STAFF_PROVIDER, $user->getRoles(), true))) {
+            throw new AboException(422, 'SLOT_RULE_STAFF_INVALID', 'Intervenant : un compte qui porte le rôle d\'intervenant (« Intervenants » du suivi des abonnements).', 'staffUserId');
         }
     }
 

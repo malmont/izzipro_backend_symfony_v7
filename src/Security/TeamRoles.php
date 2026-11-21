@@ -34,8 +34,16 @@ final class TeamRoles
     /** Boussole ESG : conseiller de l'équipe (lecture des entreprises du site, de leurs diagnostics, rapports et documents) */
     public const BOUSSOLE_CONSEILLER = 'ROLE_BOUSSOLE_CONSEILLER';
 
+    /**
+     * Abonnements : intervenant (lot ABO-3b, 20/11/2026). Il ne voit que SES dates (`/api/staff/abonnements/...`), le prénom de l'abonné et,
+     * pour une prestation chez le client, l'adresse de l'intervention ; il marque « fait » ou « absent ». Rien d'autre du site. Nommé par
+     * l'administrateur du site seulement (`/api/site/abonnements/intervenants`).
+     */
+    public const STAFF_PROVIDER = 'ROLE_STAFF_PROVIDER';
+
     /** Libellé (EasyAdmin) => rôle, pour toutes les applications */
     public const ALL = [
+        'Intervenant (abonnements)' => self::STAFF_PROVIDER,
         'Biographe (Mémoires Vivantes)' => self::MEMOIRES_BIOGRAPHE,
         'Responsable des biographes (Mémoires Vivantes)' => self::MEMOIRES_RESPONSABLE,
         'Conseiller (Boussole ESG)' => self::BOUSSOLE_CONSEILLER,

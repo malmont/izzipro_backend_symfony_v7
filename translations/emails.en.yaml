@@ -426,3 +426,13 @@ bug_report_answer:
         in_progress: 'in progress'
         fixed: 'fixed'
         wont_fix: 'will not be fixed'
+
+# Lot ABO-3b (20/11/2026): a subscription staff member is invited by the site administrator. %site%, %inviter%, %days%
+abo_staff_invitation:
+    subject: '%site%: your staff access'
+    title: 'Your staff access'
+    greeting: 'Hello %name%,'
+    message: '%inviter% invites you to follow your subscription appointments and sessions at %site%: your dates for today and the week, "done" or "absent". Choose your password to open your access.'
+    button: 'Choose my password'
+    validity: 'This link works once and stays valid for %days% days. After that, ask for a new invitation.'
+    ignore: 'If you were not expecting this invitation, ignore this email: no access is opened until the password is chosen.'

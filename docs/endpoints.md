@@ -261,7 +261,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (767)
+## Boutique et commun (782)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -856,6 +856,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | POST | `/api/site/abonnements/creneaux/{slotId}/annulation` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Abo\Controller\AboAgendaController::cancelSlot` |
 | POST | `/api/site/abonnements/creneaux/{slotId}/fait` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Abo\Controller\AboDeliveryController::session` |
 | GET | `/api/site/abonnements/creneaux` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Abo\Controller\AboAgendaController::slots` |
+| GET | `/api/site/abonnements/fils` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Abo\Controller\AboThreadController::unread` |
 | POST | `/api/site/abonnements/formules/apercu` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Abo\Controller\AboCatalogController::preview` |
 | GET | `/api/site/abonnements/formules/{id}/abonnes` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Abo\Controller\AboFollowUpController::subscribers` |
 | POST | `/api/site/abonnements/formules/{id}/archiver` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Abo\Controller\AboCatalogController::archive` |
@@ -866,6 +867,9 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | PATCH | `/api/site/abonnements/formules/{id}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Abo\Controller\AboCatalogController::update` |
 | GET | `/api/site/abonnements/formules` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Abo\Controller\AboFollowUpController::plans` |
 | POST | `/api/site/abonnements/formules` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Abo\Controller\AboCatalogController::create` |
+| DELETE | `/api/site/abonnements/intervenants/{userId}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Abo\Controller\AboStaffController::revoke` |
+| GET | `/api/site/abonnements/intervenants` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Abo\Controller\AboStaffController::list` |
+| POST | `/api/site/abonnements/intervenants` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Abo\Controller\AboStaffController::invite` |
 | DELETE | `/api/site/abonnements/prestations/{id}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Abo\Controller\AboCatalogController::deleteBenefit` |
 | PATCH | `/api/site/abonnements/prestations/{id}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Abo\Controller\AboCatalogController::updateBenefit` |
 | GET | `/api/site/abonnements/prestations` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Abo\Controller\AboCatalogController::benefits` |
@@ -873,10 +877,13 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | PATCH | `/api/site/abonnements/produits/{id}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Abo\Controller\AboCatalogController::updateProduct` |
 | GET | `/api/site/abonnements/produits` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Abo\Controller\AboCatalogController::products` |
 | POST | `/api/site/abonnements/{id}/droits` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Abo\Controller\AboFollowUpController::gift` |
+| GET | `/api/site/abonnements/{id}/fil` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Abo\Controller\AboThreadController::teamThread` |
+| POST | `/api/site/abonnements/{id}/fil` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Abo\Controller\AboThreadController::teamPost` |
 | POST | `/api/site/abonnements/{id}/occurrences/{occurrenceId}/absent` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Abo\Controller\AboDeliveryController::missed` |
 | POST | `/api/site/abonnements/{id}/occurrences/{occurrenceId}/contestation` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Abo\Controller\AboDeliveryController::resolve` |
 | POST | `/api/site/abonnements/{id}/occurrences/{occurrenceId}/correction` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Abo\Controller\AboDeliveryController::undo` |
 | POST | `/api/site/abonnements/{id}/occurrences/{occurrenceId}/fait` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Abo\Controller\AboDeliveryController::done` |
+| POST | `/api/site/abonnements/{id}/occurrences/{occurrenceId}/intervenant` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Abo\Controller\AboStaffController::assign` |
 | GET | `/api/site/abonnements/{id}/occurrences/{occurrenceId}/preuve` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Abo\Controller\AboDeliveryController::teamProof` |
 | POST | `/api/site/abonnements/{id}/pause` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Abo\Controller\AboFollowUpController::pause` |
 | DELETE | `/api/site/abonnements/{id}/rendez-vous/{occurrenceId}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Abo\Controller\AboAgendaController::teamCancel` |
@@ -948,6 +955,12 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/api/sizes` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\SizesController\SizeController::getSizes` |
 | POST | `/api/sizes` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\LandingContentController\BoutiqueCatalogController::createSize` |
 | GET | `/api/social-networks` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\SocialNetworkController\SocialNetworkController::list` |
+| GET | `/api/staff/abonnements/aujourdhui` | ROLE_STAFF_PROVIDER + `#[IsGranted(ROLE_STAFF_PROVIDER)]` | `Abo\Controller\AboStaffController::today` |
+| POST | `/api/staff/abonnements/creneaux/{slotId}/fait` | ROLE_STAFF_PROVIDER + `#[IsGranted(ROLE_STAFF_PROVIDER)]` | `Abo\Controller\AboStaffController::session` |
+| POST | `/api/staff/abonnements/occurrences/{occurrenceId}/absent` | ROLE_STAFF_PROVIDER + `#[IsGranted(ROLE_STAFF_PROVIDER)]` | `Abo\Controller\AboStaffController::missed` |
+| POST | `/api/staff/abonnements/occurrences/{occurrenceId}/fait` | ROLE_STAFF_PROVIDER + `#[IsGranted(ROLE_STAFF_PROVIDER)]` | `Abo\Controller\AboStaffController::done` |
+| GET | `/api/staff/abonnements/occurrences/{occurrenceId}/preuve` | ROLE_STAFF_PROVIDER + `#[IsGranted(ROLE_STAFF_PROVIDER)]` | `Abo\Controller\AboStaffController::proof` |
+| GET | `/api/staff/abonnements/semaine` | ROLE_STAFF_PROVIDER + `#[IsGranted(ROLE_STAFF_PROVIDER)]` | `Abo\Controller\AboStaffController::week` |
 | GET | `/api/statistiques/chiffre-affaires/{source}` | ROLE_ADMIN | `Controller\StatistiqueDashboard\StatistiqueGeneraleController::getChiffreAffaires` |
 | GET | `/api/statistiques/nombre-commandes/{source}` | ROLE_ADMIN | `Controller\StatistiqueDashboard\StatistiqueGeneraleController::getOrderStatistics` |
 | GET | `/api/statistiques/panier-moyen/{source}` | ROLE_ADMIN | `Controller\StatistiqueDashboard\StatistiqueGeneraleController::getAverageOrderValueStatistics` |
@@ -964,6 +977,8 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | POST | `/api/subscriptions/{id}/change-plan` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN + `#[IsGranted(ROLE_USER_INTERNET)]` | `Controller\SubscriptionController\SubscriptionController::changePlan` |
 | PATCH | `/api/subscriptions/{id}/courriels` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN + `#[IsGranted(ROLE_USER_INTERNET)]` | `Abo\Controller\AboDeliveryController::emails` |
 | GET | `/api/subscriptions/{id}/creneaux` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN + `#[IsGranted(ROLE_USER_INTERNET)]` | `Abo\Controller\AboAgendaController::clientSlots` |
+| GET | `/api/subscriptions/{id}/fil` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN + `#[IsGranted(ROLE_USER_INTERNET)]` | `Abo\Controller\AboThreadController::clientThread` |
+| POST | `/api/subscriptions/{id}/fil` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN + `#[IsGranted(ROLE_USER_INTERNET)]` | `Abo\Controller\AboThreadController::clientPost` |
 | POST | `/api/subscriptions/{id}/occurrences/{occurrenceId}/avis` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN + `#[IsGranted(ROLE_USER_INTERNET)]` | `Abo\Controller\AboDeliveryController::acknowledge` |
 | GET | `/api/subscriptions/{id}/occurrences/{occurrenceId}/preuve` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN + `#[IsGranted(ROLE_USER_INTERNET)]` | `Abo\Controller\AboDeliveryController::clientProof` |
 | POST | `/api/subscriptions/{id}/pause` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN + `#[IsGranted(ROLE_USER_INTERNET)]` | `Controller\SubscriptionController\SubscriptionController::pause` |

@@ -21,6 +21,8 @@ final class SubscriptionMailer
         // lot ABO-2 (Q2) : un créneau annulé par la boutique ; le droit redevient à planifier, rien n'est perdu
         'session_cancelled' => ['Votre séance est annulée', 'La boutique a annulé une séance de votre abonnement « %s » (détails ci-dessous). Rien n\'est perdu : votre séance est de nouveau à planifier depuis votre compte.'],
         // lot ABO-3a : une prestation marquée « faite » (un courriel par droit, jamais groupé ; l'abonné peut les couper depuis son compte)
+        // lot ABO-3b : la boutique a répondu dans le fil (jamais le texte dans le courriel ; au plus un par heure et par abonnement)
+        'thread_message' => ['Vous avez un message de la boutique', 'La boutique vous a écrit au sujet de votre abonnement « %s ». Lisez son message et répondez depuis votre compte.'],
         'session_done' => ['Votre prestation est faite', 'La boutique a noté comme faite une prestation de votre abonnement « %s » (détails ci-dessous). Depuis votre compte, vous pouvez la confirmer ou la contester dans les 30 jours, et couper ces courriels.'],
     ];
 
@@ -32,7 +34,7 @@ final class SubscriptionMailer
     }
 
     /**
-     * @param 'payment_failed'|'canceled_unpaid'|'paused'|'canceled'|'cancel_scheduled'|'cancel_at_term_end'|'session_cancelled'|'session_done' $kind
+     * @param 'payment_failed'|'canceled_unpaid'|'paused'|'canceled'|'cancel_scheduled'|'cancel_at_term_end'|'session_cancelled'|'session_done'|'thread_message' $kind
      * @param array{rows?: array<string, string>, payUrl?: ?string} $details lignes ajoutées au récapitulatif, lien de paiement
      */
     public function notify(Subscription $subscription, string $kind, string $locale, string $host, array $details = []): void

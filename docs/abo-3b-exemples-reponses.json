@@ -1,0 +1,574 @@
+{
+    "_lisezmoi": "Réponses complètes des routes du lot ABO-3b (intervenant et fil de l'abonné), capturées le 21/11/2026 sur la base de test (données fictives), heure du magasin America/Toronto. Contrat : docs/boutique.md § « Intervenant et fil de l'abonné ». Routes de l'intervenant : /api/staff/abonnements/... (ROLE_STAFF_PROVIDER, module Boutique) ; routes de l'équipe : /api/site/abonnements/... (ROLE_ADMIN).",
+    "GET /api/site/abonnements/intervenants": {
+        "staff": [
+            {
+                "userId": 21,
+                "firstname": "Bruno",
+                "lastname": "Intervenant",
+                "email": "abo3b-intervenant-b@example.invalid",
+                "pending": false,
+                "invitationExpiresAt": null
+            },
+            {
+                "userId": 20,
+                "firstname": "Alice",
+                "lastname": "Intervenante",
+                "email": "abo3b-intervenant-a@example.invalid",
+                "pending": false,
+                "invitationExpiresAt": null
+            }
+        ]
+    },
+    "POST /api/site/abonnements/intervenants (personne nouvelle : lien de 7 jours)": {
+        "staff": {
+            "userId": 22,
+            "firstname": "Nina",
+            "lastname": "Nouvelle",
+            "email": "abo3b-nouveau@example.invalid",
+            "pending": true,
+            "invitationExpiresAt": null
+        },
+        "changed": true,
+        "invitation": {
+            "emailSent": true,
+            "expiresAt": "2026-11-28T05:54:53+00:00",
+            "validHours": 168
+        }
+    },
+    "refus STAFF_IS_CUSTOMER (409)": {
+        "error": "STAFF_IS_CUSTOMER",
+        "code": "STAFF_IS_CUSTOMER",
+        "message": "Ce compte est celui d'un client (abonnement ou commande) : un intervenant a un compte à lui.",
+        "field": "email"
+    },
+    "refus STAFF_IS_ADMIN (409)": {
+        "error": "STAFF_IS_ADMIN",
+        "code": "STAFF_IS_ADMIN",
+        "message": "Ce compte administre le site : il a déjà accès à toutes les dates.",
+        "field": "email"
+    },
+    "DELETE /api/site/abonnements/intervenants/{userId}": {
+        "userId": 22,
+        "unassigned": 0
+    },
+    "POST /api/site/abonnements/{id}/occurrences/{occ}/intervenant": {
+        "assignment": {
+            "occurrenceId": 7,
+            "staffUserId": 20,
+            "staffName": "Alice Intervenante"
+        },
+        "subscription": {
+            "subscriptionId": 2,
+            "status": "active",
+            "quantity": 1,
+            "currentPeriodEnd": "2026-12-21T00:54:53-05:00",
+            "cancelAtPeriodEnd": false,
+            "pausedAt": null,
+            "createdAt": "2026-11-21T00:54:53-05:00",
+            "billedPrice": {
+                "price": 3500,
+                "currency": "CAD",
+                "interval": "week",
+                "intervalCount": 1
+            },
+            "paymentIssue": null,
+            "customer": {
+                "id": 18,
+                "firstname": "Camille",
+                "lastname": "Secretnom",
+                "email": "client-abo3b@example.invalid"
+            },
+            "plan": {
+                "id": 1,
+                "name": "Panier hebdomadaire",
+                "price": 3500,
+                "currency": "CAD",
+                "interval": "week",
+                "intervalCount": 1,
+                "active": true,
+                "fulfillmentType": "none"
+            },
+            "benefits": [
+                {
+                    "id": 1,
+                    "benefitId": 1,
+                    "kind": "session",
+                    "name": "Yoga refus",
+                    "description": null,
+                    "durationMinutes": 60,
+                    "location": null,
+                    "quantity": 3,
+                    "scheduling": "fixed_slots",
+                    "slotChoice": "admin",
+                    "cancelDeadlineHours": 24,
+                    "carryOverMax": 3,
+                    "proof": "none",
+                    "summary": "3 séances Yoga refus par semaine ; créneaux attribués par l'équipe ; annulation sans frais jusqu'à 24 h avant ; jusqu'à 3 reportées à la période suivante."
+                },
+                {
+                    "id": 2,
+                    "benefitId": 2,
+                    "kind": "session",
+                    "name": "Ménage à domicile",
+                    "description": null,
+                    "durationMinutes": 60,
+                    "location": null,
+                    "quantity": 4,
+                    "scheduling": "fixed_slots",
+                    "slotChoice": "admin",
+                    "cancelDeadlineHours": 24,
+                    "carryOverMax": 4,
+                    "proof": "none",
+                    "summary": "4 séances Ménage à domicile par semaine ; créneaux attribués par l'équipe ; annulation sans frais jusqu'à 24 h avant ; jusqu'à 4 reportées à la période suivante."
+                }
+            ],
+            "canceledAt": null,
+            "fulfillmentTarget": null,
+            "orders": [],
+            "todo": [],
+            "history": [
+                {
+                    "type": "scheduled",
+                    "benefitId": 2,
+                    "quantity": 1,
+                    "at": "2026-11-21T00:54:53-05:00",
+                    "by": "Admin",
+                    "note": null
+                },
+                {
+                    "type": "born",
+                    "benefitId": null,
+                    "quantity": 7,
+                    "at": "2026-11-21T00:54:53-05:00",
+                    "by": null,
+                    "note": null
+                }
+            ],
+            "balance": [
+                {
+                    "benefitId": 1,
+                    "name": "Yoga refus",
+                    "kind": "session",
+                    "available": 3,
+                    "scheduled": 0,
+                    "used": 0,
+                    "carried": 0,
+                    "unlimited": false,
+                    "nextExpiry": "2026-12-21T00:54:53-05:00"
+                },
+                {
+                    "benefitId": 2,
+                    "name": "Ménage à domicile",
+                    "kind": "session",
+                    "available": 3,
+                    "scheduled": 1,
+                    "used": 0,
+                    "carried": 0,
+                    "unlimited": false,
+                    "nextExpiry": "2026-12-21T00:54:53-05:00"
+                }
+            ],
+            "upcoming": [
+                {
+                    "occurrenceId": 7,
+                    "benefitId": 2,
+                    "name": "Ménage à domicile",
+                    "startsAt": "2026-11-23T10:00:00-05:00",
+                    "endsAt": "2026-11-23T11:00:00-05:00",
+                    "location": null,
+                    "slotId": 1,
+                    "cancellableUntil": "2026-11-22T10:00:00-05:00",
+                    "staffUserId": 20,
+                    "staffName": "Alice Intervenante",
+                    "source": "team"
+                }
+            ],
+            "delivered": [],
+            "doneEmails": true,
+            "unreadMessages": 0,
+            "pauses": []
+        }
+    },
+    "GET /api/staff/abonnements/aujourdhui": {
+        "date": "2026-11-20",
+        "timezone": "America/Toronto",
+        "counts": {
+            "toMark": 4,
+            "done": 0,
+            "missed": 0
+        },
+        "sessions": [
+            {
+                "slotId": 1,
+                "benefitId": 2,
+                "name": "Ménage à domicile",
+                "startsAt": "2026-11-20T22:54:55-05:00",
+                "endsAt": "2026-11-20T23:54:55-05:00",
+                "location": null,
+                "capacity": 2,
+                "booked": 1,
+                "done": 0,
+                "missed": 0,
+                "toMark": 1,
+                "appointments": [
+                    {
+                        "occurrenceId": 7,
+                        "benefitId": 2,
+                        "name": "Ménage à domicile",
+                        "status": "scheduled",
+                        "slotId": 1,
+                        "startsAt": "2026-11-20T22:54:55-05:00",
+                        "endsAt": "2026-11-20T23:54:55-05:00",
+                        "location": null,
+                        "doneAt": null,
+                        "hasProof": false,
+                        "customer": {
+                            "firstname": "Camille"
+                        },
+                        "address": {
+                            "line1": "12 rue de l'essai abo3b",
+                            "line2": "app. 3",
+                            "postalCode": "H2X 1Y4",
+                            "city": "Montréal",
+                            "province": "QC",
+                            "country": "CA"
+                        }
+                    }
+                ]
+            },
+            {
+                "slotId": 2,
+                "benefitId": 3,
+                "name": "Yoga",
+                "startsAt": "2026-11-20T22:54:55-05:00",
+                "endsAt": "2026-11-20T23:54:55-05:00",
+                "location": null,
+                "capacity": 4,
+                "booked": 2,
+                "done": 0,
+                "missed": 0,
+                "toMark": 2,
+                "appointments": [
+                    {
+                        "occurrenceId": 18,
+                        "benefitId": 3,
+                        "name": "Yoga",
+                        "status": "scheduled",
+                        "slotId": 2,
+                        "startsAt": "2026-11-20T22:54:55-05:00",
+                        "endsAt": "2026-11-20T23:54:55-05:00",
+                        "location": null,
+                        "doneAt": null,
+                        "hasProof": false,
+                        "customer": {
+                            "firstname": "Camille"
+                        },
+                        "address": null
+                    },
+                    {
+                        "occurrenceId": 29,
+                        "benefitId": 3,
+                        "name": "Yoga",
+                        "status": "scheduled",
+                        "slotId": 2,
+                        "startsAt": "2026-11-20T22:54:55-05:00",
+                        "endsAt": "2026-11-20T23:54:55-05:00",
+                        "location": null,
+                        "doneAt": null,
+                        "hasProof": false,
+                        "customer": {
+                            "firstname": "Autre"
+                        },
+                        "address": null
+                    }
+                ]
+            },
+            {
+                "slotId": 3,
+                "benefitId": 2,
+                "name": "Ménage à domicile",
+                "startsAt": "2026-11-20T22:54:55-05:00",
+                "endsAt": "2026-11-20T23:54:55-05:00",
+                "location": null,
+                "capacity": 2,
+                "booked": 1,
+                "done": 0,
+                "missed": 0,
+                "toMark": 1,
+                "appointments": [
+                    {
+                        "occurrenceId": 36,
+                        "benefitId": 2,
+                        "name": "Ménage à domicile",
+                        "status": "scheduled",
+                        "slotId": 3,
+                        "startsAt": "2026-11-20T22:54:55-05:00",
+                        "endsAt": "2026-11-20T23:54:55-05:00",
+                        "location": null,
+                        "doneAt": null,
+                        "hasProof": false,
+                        "customer": {
+                            "firstname": "Camille"
+                        },
+                        "address": null
+                    }
+                ]
+            }
+        ],
+        "appointments": []
+    },
+    "GET /api/staff/abonnements/semaine (14 jours)": {
+        "from": "2026-11-20",
+        "to": "2026-12-03",
+        "timezone": "America/Toronto",
+        "appointments": [
+            {
+                "occurrenceId": 7,
+                "benefitId": 2,
+                "name": "Ménage à domicile",
+                "status": "scheduled",
+                "slotId": 1,
+                "startsAt": "2026-11-20T22:54:55-05:00",
+                "endsAt": "2026-11-20T23:54:55-05:00",
+                "location": null,
+                "doneAt": null,
+                "hasProof": false,
+                "customer": {
+                    "firstname": "Camille"
+                },
+                "address": {
+                    "line1": "12 rue de l'essai abo3b",
+                    "line2": "app. 3",
+                    "postalCode": "H2X 1Y4",
+                    "city": "Montréal",
+                    "province": "QC",
+                    "country": "CA"
+                }
+            },
+            {
+                "occurrenceId": 18,
+                "benefitId": 3,
+                "name": "Yoga",
+                "status": "scheduled",
+                "slotId": 2,
+                "startsAt": "2026-11-20T22:54:55-05:00",
+                "endsAt": "2026-11-20T23:54:55-05:00",
+                "location": null,
+                "doneAt": null,
+                "hasProof": false,
+                "customer": {
+                    "firstname": "Camille"
+                },
+                "address": null
+            },
+            {
+                "occurrenceId": 29,
+                "benefitId": 3,
+                "name": "Yoga",
+                "status": "scheduled",
+                "slotId": 2,
+                "startsAt": "2026-11-20T22:54:55-05:00",
+                "endsAt": "2026-11-20T23:54:55-05:00",
+                "location": null,
+                "doneAt": null,
+                "hasProof": false,
+                "customer": {
+                    "firstname": "Autre"
+                },
+                "address": null
+            },
+            {
+                "occurrenceId": 36,
+                "benefitId": 2,
+                "name": "Ménage à domicile",
+                "status": "scheduled",
+                "slotId": 3,
+                "startsAt": "2026-11-20T22:54:55-05:00",
+                "endsAt": "2026-11-20T23:54:55-05:00",
+                "location": null,
+                "doneAt": null,
+                "hasProof": false,
+                "customer": {
+                    "firstname": "Camille"
+                },
+                "address": null
+            },
+            {
+                "occurrenceId": 37,
+                "benefitId": 2,
+                "name": "Ménage à domicile",
+                "status": "scheduled",
+                "slotId": 4,
+                "startsAt": "2026-11-26T10:00:00-05:00",
+                "endsAt": "2026-11-26T11:00:00-05:00",
+                "location": null,
+                "doneAt": null,
+                "hasProof": false,
+                "customer": {
+                    "firstname": "Camille"
+                },
+                "address": null
+            }
+        ]
+    },
+    "POST /api/staff/abonnements/creneaux/{slotId}/fait (séance entière, un absent)": {
+        "slotId": 2,
+        "done": 1,
+        "missed": 1,
+        "unchanged": 0,
+        "failed": 0
+    },
+    "POST /api/staff/abonnements/occurrences/{occ}/fait (multipart note + photo)": {
+        "occurrence": {
+            "occurrenceId": 7,
+            "benefitId": 2,
+            "name": "Ménage à domicile",
+            "status": "done",
+            "slotId": 1,
+            "startsAt": "2026-11-20T22:54:55-05:00",
+            "endsAt": "2026-11-20T23:54:55-05:00",
+            "location": null,
+            "doneAt": "2026-11-21T00:54:55-05:00",
+            "hasProof": true,
+            "customer": {
+                "firstname": "Camille"
+            },
+            "address": {
+                "line1": "12 rue de l'essai abo3b",
+                "line2": "app. 3",
+                "postalCode": "H2X 1Y4",
+                "city": "Montréal",
+                "province": "QC",
+                "country": "CA"
+            }
+        },
+        "changed": true
+    },
+    "POST /api/staff/abonnements/occurrences/{occ}/absent": {
+        "occurrence": {
+            "occurrenceId": 36,
+            "benefitId": 2,
+            "name": "Ménage à domicile",
+            "status": "missed",
+            "slotId": 3,
+            "startsAt": "2026-11-20T22:54:55-05:00",
+            "endsAt": "2026-11-20T23:54:55-05:00",
+            "location": null,
+            "doneAt": "2026-11-21T00:54:55-05:00",
+            "hasProof": false,
+            "customer": {
+                "firstname": "Camille"
+            },
+            "address": null
+        },
+        "changed": true
+    },
+    "refus OCCURRENCE_ALREADY_MARKED (409)": {
+        "error": "OCCURRENCE_ALREADY_MARKED",
+        "code": "OCCURRENCE_ALREADY_MARKED",
+        "message": "Ce droit est déjà marqué : corrigez d'abord le constat."
+    },
+    "refus NOT_YET_DUE (409)": {
+        "error": "NOT_YET_DUE",
+        "code": "NOT_YET_DUE",
+        "message": "Une date à venir se marque le jour même ou après."
+    },
+    "refus PROOF_TOO_LARGE (422)": {
+        "error": "PROOF_TOO_LARGE",
+        "code": "PROOF_TOO_LARGE",
+        "message": "La photo dépasse 10 Mo.",
+        "field": "photo"
+    },
+    "refus PROOF_FORMAT (422)": {
+        "error": "PROOF_FORMAT",
+        "code": "PROOF_FORMAT",
+        "message": "Photo illisible : JPEG, PNG ou WebP, 12 000 pixels au plus de côté.",
+        "field": "photo"
+    },
+    "refus DATE_OUT_OF_RANGE (422)": {
+        "error": "DATE_OUT_OF_RANGE",
+        "code": "DATE_OUT_OF_RANGE",
+        "message": "Une date de 30 jours en arrière à 14 jours devant.",
+        "field": "from"
+    },
+    "refus OCCURRENCE_NOT_FOUND (404 : la date d'un autre intervenant)": {
+        "error": "OCCURRENCE_NOT_FOUND",
+        "code": "OCCURRENCE_NOT_FOUND",
+        "message": "Date introuvable.",
+        "field": "occurrenceId"
+    },
+    "POST /api/subscriptions/{id}/fil (abonné)": {
+        "message": {
+            "id": 1,
+            "author": "customer",
+            "authorName": "Camille",
+            "body": "Bonjour, pouvez-vous passer plus tôt jeudi ?",
+            "occurrenceId": null,
+            "createdAt": "2026-11-21T00:54:55-05:00",
+            "read": false
+        }
+    },
+    "GET /api/site/abonnements/fils (non lus)": {
+        "threads": [
+            {
+                "subscriptionId": 2,
+                "plan": "Panier hebdomadaire",
+                "unread": 1,
+                "lastAt": "2026-11-21T00:54:55-05:00",
+                "customer": {
+                    "firstname": "Camille",
+                    "lastname": "Secretnom"
+                }
+            }
+        ]
+    },
+    "GET /api/site/abonnements/{id}/fil (équipe)": {
+        "messages": [
+            {
+                "id": 1,
+                "author": "customer",
+                "authorName": "Camille",
+                "body": "Bonjour, pouvez-vous passer plus tôt jeudi ?",
+                "occurrenceId": null,
+                "createdAt": "2026-11-21T00:54:55-05:00",
+                "read": false
+            }
+        ]
+    },
+    "POST /api/site/abonnements/{id}/fil (équipe)": {
+        "message": {
+            "id": 2,
+            "author": "team",
+            "authorName": "Admin",
+            "body": "Bien reçu, nous passons à 9 h.",
+            "occurrenceId": null,
+            "createdAt": "2026-11-21T00:54:55-05:00",
+            "read": false
+        },
+        "emailed": true
+    },
+    "GET /api/subscriptions/{id}/fil (abonné)": {
+        "messages": [
+            {
+                "id": 1,
+                "author": "customer",
+                "authorName": "Camille",
+                "body": "Bonjour, pouvez-vous passer plus tôt jeudi ?",
+                "occurrenceId": null,
+                "createdAt": "2026-11-21T00:54:55-05:00",
+                "read": true
+            },
+            {
+                "id": 2,
+                "author": "team",
+                "authorName": "Admin",
+                "body": "Bien reçu, nous passons à 9 h.",
+                "occurrenceId": null,
+                "createdAt": "2026-11-21T00:54:55-05:00",
+                "read": false
+            }
+        ],
+        "unread": 0
+    }
+}

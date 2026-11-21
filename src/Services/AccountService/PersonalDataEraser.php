@@ -77,6 +77,13 @@ class PersonalDataEraser
             [null, 'DELETE FROM user_app_membership WHERE user_id = ?', [$userId]], // appartenances aux familles d'applications (APPS-MEMBRES M1, 14/11/2026)
             // lot IMP-3 : ses commandes d'avant la migration restent dans la série des ventes d'avant, sans lien avec lui
             [null, 'UPDATE import_order SET user_id = NULL WHERE user_id = ?', [$userId]],
+            // lot ABO-3b : ses messages dans le fil de ses abonnements (gardés pour la boutique) sans son prénom ni son texte
+            [null, "UPDATE subscription_message SET author_name = NULL, author_user_id = NULL, body = '[message effacé]' WHERE author = 'customer' AND (author_user_id = ? OR subscription_id IN (SELECT id FROM subscription WHERE user_id = ?))", [$userId, $userId]],
+            // ... et, s'il était intervenant, ses dates et créneaux à venir redeviennent sans intervenant (comme un retrait du rôle)
+            [null, "UPDATE benefit_occurrence SET staff_user_id = NULL WHERE staff_user_id = ? AND status IN ('available', 'scheduled')", [$userId]],
+            [null, 'UPDATE benefit_slot SET staff_user_id = NULL WHERE staff_user_id = ? AND starts_at > NOW()', [$userId]],
+            [null, 'UPDATE benefit_slot_rule SET staff_user_id = NULL WHERE staff_user_id = ?', [$userId]],
+            [null, 'UPDATE benefit SET default_staff_user_id = NULL WHERE default_staff_user_id = ?', [$userId]],
         ];
         foreach ($statements as [$key, $sql, $params]) {
             try {

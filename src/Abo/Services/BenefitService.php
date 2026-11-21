@@ -33,6 +33,13 @@ class BenefitService
     /** @throws AboException 422 */
     public function validateBenefit(Benefit $benefit): void
     {
+        // lot ABO-3b : l'intervenant par défaut porte le rôle d'intervenant
+        if (($staff = $benefit->getDefaultStaffUserId()) !== null) {
+            $user = $this->emProvider->getEntityManager()->find(\App\Entity\User::class, $staff);
+            if (!$user instanceof \App\Entity\User || !in_array(\App\Security\TeamRoles::STAFF_PROVIDER, $user->getRoles(), true)) {
+                throw new AboException(422, 'STAFF_INVALID', 'Intervenant : un compte qui porte le rôle d\'intervenant (« Intervenants » du suivi des abonnements).', 'defaultStaffUserId');
+            }
+        }
         if (!in_array($benefit->getKind(), Benefit::KINDS, true)) {
             throw new AboException(422, 'BENEFIT_KIND_INVALID', 'Type de prestation inconnu : séance, service ou quota.', 'kind');
         }
@@ -114,7 +121,9 @@ class BenefitService
     public function benefitView(Benefit $benefit, string $locale): array
     {
         return ['id' => (int) $benefit->getId(), 'kind' => $benefit->getKind(), 'names' => $benefit->getNames(), 'name' => $benefit->getName($locale), 'descriptions' => $benefit->getDescriptions(),
-            'durationMinutes' => $benefit->getDurationMinutes(), 'location' => $benefit->getLocation(), 'active' => $benefit->isActive(), 'position' => $benefit->getPosition()];
+            'durationMinutes' => $benefit->getDurationMinutes(), 'location' => $benefit->getLocation(), 'active' => $benefit->isActive(), 'position' => $benefit->getPosition(),
+            // lot ABO-3b (écran de l'équipe seulement : jamais la grille publique) : chez le client, intervenant par défaut
+            'atCustomer' => $benefit->isAtCustomer(), 'defaultStaffUserId' => $benefit->getDefaultStaffUserId()];
     }
 
     /**
@@ -140,6 +149,20 @@ class BenefitService
         }
         if (array_key_exists('location', $data)) {
             $benefit->setLocation($data['location'] !== null ? (string) $data['location'] : null);
+        }
+        // lot ABO-3b : la prestation se rend chez le client ; l'intervenant par défaut porte le rôle d'intervenant
+        if (array_key_exists('atCustomer', $data)) {
+            if (!is_bool($data['atCustomer'])) {
+                throw new AboException(422, 'MUST_BE_BOOLEAN', 'atCustomer : vrai ou faux.', 'atCustomer');
+            }
+            $benefit->setAtCustomer($data['atCustomer']);
+        }
+        if (array_key_exists('defaultStaffUserId', $data)) {
+            $staff = $data['defaultStaffUserId'];
+            if ($staff !== null && !is_int($staff)) {
+                throw new AboException(422, 'STAFF_INVALID', 'Intervenant : un compte qui porte le rôle d\'intervenant, ou null.', 'defaultStaffUserId');
+            }
+            $benefit->setDefaultStaffUserId($staff); // le rôle est vérifié par validateBenefit (écran web, assistant, EasyAdmin)
         }
         if (array_key_exists('active', $data)) {
             if (!is_bool($data['active'])) {

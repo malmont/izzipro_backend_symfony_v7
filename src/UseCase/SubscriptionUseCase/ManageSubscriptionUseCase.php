@@ -18,7 +18,8 @@ class ManageSubscriptionUseCase
         private readonly ?\App\Abo\Services\AboRightsService $rights = null,
         private readonly ?\App\Abo\Services\AboCatalogService $catalog = null, // lot ABO-CONF : le prix que paie l'abonné // lot ABO-1 : solde, pause datée, engagement minimal
         private readonly ?\App\Abo\Services\AboAgendaService $agenda = null, // lot ABO-2 : prochaines dates, places retenues à la souscription
-        private readonly ?\App\Abo\Services\AboDeliveryService $delivery = null) // lot ABO-3a : prestations faites, avis de l'abonné
+        private readonly ?\App\Abo\Services\AboDeliveryService $delivery = null, // lot ABO-3a : prestations faites, avis de l'abonné
+        private readonly ?\App\Abo\Services\AboThreadService $thread = null) // lot ABO-3b : messages de la boutique pas encore lus
     {
     }
 
@@ -43,6 +44,9 @@ class ManageSubscriptionUseCase
         }
         if ($this->delivery !== null) {
             $dto = $dto->withDelivered($this->delivery->delivered($subscription, false, $locale), $subscription->wantsDoneEmails());
+        }
+        if ($this->thread !== null) {
+            $dto = $dto->withUnreadMessages($this->thread->unreadForCustomer($subscription));
         }
 
         return $dto->withBalance($this->rights->balance($subscription, $locale))->withCancellation([

@@ -208,4 +208,11 @@ class BenefitOccurrence
     public function getAckResolution(): ?string { return $this->ackResolution; }
     public function getAckResolvedAt(): ?\DateTimeImmutable { return $this->ackResolvedAt; }
     public function getAckResolvedBy(): ?string { return $this->ackResolvedBy; }
+
+    // ---- lot ABO-3b : l'intervenant de cette date (prime sur celui du créneau, puis sur celui de la prestation) -------------------------
+
+    #[ORM\Column(name: 'staff_user_id', nullable: true)]
+    private ?int $staffUserId = null;
+
+    public function getStaffUserId(): ?int { return $this->staffUserId; }
 }

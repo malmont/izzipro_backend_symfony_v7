@@ -122,6 +122,12 @@ class Subscription
     #[ORM\Column(name: 'done_emails', options: ['default' => true])]
     private bool $doneEmails = true;
 
+    /** Lot ABO-3b : dernier courriel « Vous avez un message » (au plus un par heure et par abonnement) */
+    #[ORM\Column(name: 'thread_emailed_at', type: Types::DATETIME_IMMUTABLE, nullable: true)]
+    private ?\DateTimeImmutable $threadEmailedAt = null;
+
+    public function getThreadEmailedAt(): ?\DateTimeImmutable { return $this->threadEmailedAt; }
+
     public function wantsDoneEmails(): bool { return $this->doneEmails; }
     public function setDoneEmails(bool $on): static { $this->doneEmails = $on; return $this; }
 

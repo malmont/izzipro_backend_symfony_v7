@@ -57,6 +57,8 @@ class AboDeliveryService
         private readonly ?\App\Services\ContentAuditService\ContentAuditRecorder $audit = null,
         private readonly ?\App\Services\SubscriptionService\SubscriptionMailer $mailer = null,
         private readonly ?\App\Support\Services\SupportCustomerService $support = null,
+        private readonly ?AboThreadService $thread = null, // lot ABO-3b : la contestation écrite dans le fil de l'abonné
+        private readonly ?AboAgendaService $agenda = null, // lot ABO-3b : le nom des intervenants (équipe seulement)
     ) {
     }
 
@@ -68,7 +70,7 @@ class AboDeliveryService
      * @return array{occurrence: array<string, mixed>, changed: bool}
      * @throws AboException 404 OCCURRENCE_NOT_FOUND, 409 NOT_YET_DUE | OCCURRENCE_NOT_SCHEDULED | OCCURRENCE_ALREADY_MARKED, 422 PROOF_TOO_LARGE | PROOF_FORMAT
      */
-    public function markDone(Subscription $subscription, int $occurrenceId, ?string $note, ?UploadedFile $photo, ?string $by, string $host = '', string $locale = 'fr'): array
+    public function markDone(Subscription $subscription, int $occurrenceId, ?string $note, ?UploadedFile $photo, ?string $by, string $host = '', string $locale = 'fr', ?int $onlyStaff = null): array
     {
         $note = self::clean($note, self::NOTE_MAX);
         $proof = null;
@@ -81,9 +83,10 @@ class AboDeliveryService
         }
         $used = false;
         try {
-            $changed = $this->locked($subscription, function () use ($subscription, $occurrenceId, $note, $proof, $by, &$used) {
-                return $this->conn()->transactional(function (Connection $conn) use ($subscription, $occurrenceId, $note, $proof, $by, &$used) {
+            $changed = $this->locked($subscription, function () use ($subscription, $occurrenceId, $note, $proof, $by, $onlyStaff, &$used) {
+                return $this->conn()->transactional(function (Connection $conn) use ($subscription, $occurrenceId, $note, $proof, $by, $onlyStaff, &$used) {
                     $o = $this->row($conn, $subscription, $occurrenceId);
+                    $this->assertStaffOf($conn, $occurrenceId, $onlyStaff);
                     if ($o['status'] === BenefitOccurrence::STATUS_DONE && $o['scheduled_at'] !== null) {
                         return false; // déjà fait : rien de changé, aucun second courriel (la photo envoyée de nouveau n'est pas gardée)
                     }
@@ -119,11 +122,12 @@ class AboDeliveryService
      * @return array{occurrence: array<string, mixed>, changed: bool}
      * @throws AboException 404 OCCURRENCE_NOT_FOUND, 409 NOT_YET_DUE | OCCURRENCE_NOT_SCHEDULED | OCCURRENCE_ALREADY_MARKED
      */
-    public function markMissed(Subscription $subscription, int $occurrenceId, ?string $note, ?string $by, string $locale = 'fr'): array
+    public function markMissed(Subscription $subscription, int $occurrenceId, ?string $note, ?string $by, string $locale = 'fr', ?int $onlyStaff = null): array
     {
         $note = self::clean($note, self::NOTE_MAX);
-        $changed = $this->locked($subscription, fn () => $this->conn()->transactional(function (Connection $conn) use ($subscription, $occurrenceId, $note, $by) {
+        $changed = $this->locked($subscription, fn () => $this->conn()->transactional(function (Connection $conn) use ($subscription, $occurrenceId, $note, $by, $onlyStaff) {
             $o = $this->row($conn, $subscription, $occurrenceId);
+            $this->assertStaffOf($conn, $occurrenceId, $onlyStaff);
             if ($o['status'] === BenefitOccurrence::STATUS_MISSED) {
                 return false;
             }
@@ -148,7 +152,7 @@ class AboDeliveryService
      * @return array{slotId: int, done: int, missed: int, unchanged: int, failed: list<array{occurrenceId: int, subscriptionId: int, code: string}>}
      * @throws AboException 404 SLOT_NOT_FOUND, 409 SLOT_CANCELLED | NOT_YET_DUE, 422 ABSENT_INVALID | ABSENT_NOT_ON_SLOT
      */
-    public function markSessionDone(int $slotId, mixed $absent, ?string $note, ?string $by, string $host = '', string $locale = 'fr'): array
+    public function markSessionDone(int $slotId, mixed $absent, ?string $note, ?string $by, string $host = '', string $locale = 'fr', ?int $onlyStaff = null): array
     {
         $absent ??= [];
         if (!is_array($absent) || count($absent) > self::SESSION_MAX || array_filter($absent, fn ($v) => !is_int($v) && !(is_string($v) && ctype_digit($v))) !== []) {
@@ -161,10 +165,16 @@ class AboDeliveryService
             throw new AboException(409, 'SLOT_CANCELLED', 'Ce créneau est annulé.');
         }
         $this->assertDue(new \DateTimeImmutable((string) $slot['starts_at'], new \DateTimeZone('UTC')));
-        $rows = $conn->fetchAllAssociative("SELECT id, subscription_id FROM benefit_occurrence WHERE slot_id = ? AND status IN ('scheduled', 'done', 'missed') ORDER BY id LIMIT " . self::SESSION_MAX, [$slotId]);
+        // lot ABO-3b : l'intervenant ne marque que SES inscrits (une date confiée à un autre intervenant reste à celui-ci)
+        $rows = $onlyStaff === null
+            ? $conn->fetchAllAssociative("SELECT id, subscription_id FROM benefit_occurrence WHERE slot_id = ? AND status IN ('scheduled', 'done', 'missed') ORDER BY id LIMIT " . self::SESSION_MAX, [$slotId])
+            : $conn->fetchAllAssociative('SELECT o.id, o.subscription_id FROM benefit_occurrence o JOIN benefit b ON b.id = o.benefit_id LEFT JOIN benefit_slot sl ON sl.id = o.slot_id WHERE o.slot_id = ? AND '
+                . AboStaffService::EFFECTIVE . " = ? AND o.status IN ('scheduled', 'done', 'missed') ORDER BY o.id LIMIT " . self::SESSION_MAX, [$slotId, $onlyStaff]);
         $onSlot = array_map(fn (array $r) => (int) $r['subscription_id'], $rows);
         if (($stranger = array_diff($absent, $onSlot)) !== []) {
-            throw new AboException(422, 'ABSENT_NOT_ON_SLOT', sprintf('Abonnement(s) %s : pas inscrit(s) à cette séance.', implode(', ', $stranger)), 'absentSubscriptionIds');
+            // relecture neuve d'ABO-3b : à l'intervenant, jamais un numéro d'abonnement
+            throw new AboException(422, 'ABSENT_NOT_ON_SLOT', $onlyStaff !== null ? 'Un absent désigné n\'est plus sur cette séance : relisez votre journée.'
+                : sprintf('Abonnement(s) %s : pas inscrit(s) à cette séance.', implode(', ', $stranger)), $onlyStaff !== null ? 'absentOccurrenceIds' : 'absentSubscriptionIds');
         }
         $out = ['slotId' => $slotId, 'done' => 0, 'missed' => 0, 'unchanged' => 0, 'failed' => []];
         $em = $this->emProvider->getEntityManager();
@@ -175,7 +185,7 @@ class AboDeliveryService
             }
             $isAbsent = in_array((int) $r['subscription_id'], $absent, true);
             try {
-                $res = $isAbsent ? $this->markMissed($subscription, (int) $r['id'], $note, $by, $locale) : $this->markDone($subscription, (int) $r['id'], $note, null, $by, $host, $locale);
+                $res = $isAbsent ? $this->markMissed($subscription, (int) $r['id'], $note, $by, $locale, $onlyStaff) : $this->markDone($subscription, (int) $r['id'], $note, null, $by, $host, $locale, $onlyStaff);
                 $res['changed'] ? ++$out[$isAbsent ? 'missed' : 'done'] : ++$out['unchanged'];
             } catch (AboException $e) {
                 $out['failed'][] = ['occurrenceId' => (int) $r['id'], 'subscriptionId' => (int) $r['subscription_id'], 'code' => $e->errorCode];
@@ -321,6 +331,13 @@ class AboDeliveryService
             $this->event($subscription, $decision, (int) $o['benefit_id'], $text !== '' ? mb_substr($text, 0, self::NOTE_MAX) : null, 'client', $occurrenceId);
             $this->journal($subscription, 'occurrence_' . $decision, ['occurrenceId' => $occurrenceId]);
             if ($decision === BenefitOccurrence::ACK_CONTESTED) {
+                // lot ABO-3b (plan § 8) : TOUJOURS dans le fil ; une demande d'Assistance EN PLUS quand le module est actif
+                try {
+                    $this->thread?->recordContestation($subscription, $customer, $occurrenceId, $text);
+                } catch (\Throwable $e) {
+                    // relecture neuve : l'avis est déjà gardé ; le fil en panne ne fait ni 500 ni perdre la demande d'Assistance
+                    $this->logger->error('Abonnements : contestation non écrite dans le fil (' . $e::class . ').');
+                }
                 $ticket = $this->openTicket($customer, $subscription, $o, $text, $locale);
             }
         }
@@ -361,8 +378,9 @@ class AboDeliveryService
         $conn = $this->conn();
         $bounds = [self::utc($start), self::utc($end)];
         $slots = $conn->fetchAllAssociative("SELECT id, benefit_id, starts_at, ends_at, capacity, location, staff_user_id FROM benefit_slot WHERE status = 'open' AND starts_at >= ? AND starts_at < ? ORDER BY starts_at, id LIMIT " . self::TODAY_MAX, $bounds);
-        $rows = $conn->fetchAllAssociative("SELECT o.id, o.subscription_id, o.benefit_id, o.slot_id, o.scheduled_at, o.scheduled_end, o.status, o.done_at, o.note, o.proof_path, o.customer_ack, o.ack_resolution
-            FROM benefit_occurrence o WHERE o.scheduled_at >= ? AND o.scheduled_at < ? AND o.status IN ('scheduled', 'done', 'missed', 'late_cancelled') ORDER BY o.scheduled_at, o.id LIMIT " . self::TODAY_MAX, $bounds);
+        $rows = $conn->fetchAllAssociative("SELECT o.id, o.subscription_id, o.benefit_id, o.slot_id, o.scheduled_at, o.scheduled_end, o.status, o.done_at, o.note, o.proof_path, o.customer_ack, o.ack_resolution,
+                " . AboStaffService::EFFECTIVE . " AS staff_user_id
+            FROM benefit_occurrence o JOIN benefit b ON b.id = o.benefit_id LEFT JOIN benefit_slot sl ON sl.id = o.slot_id WHERE o.scheduled_at >= ? AND o.scheduled_at < ? AND o.status IN ('scheduled', 'done', 'missed', 'late_cancelled') ORDER BY o.scheduled_at, o.id LIMIT " . self::TODAY_MAX, $bounds);
         $sessions = [];
         foreach ($slots as $s) {
             $sessions[(int) $s['id']] = ['slotId' => (int) $s['id'], 'benefitId' => (int) $s['benefit_id'], 'name' => $this->benefitName((int) $s['benefit_id'], $locale),
@@ -373,11 +391,14 @@ class AboDeliveryService
         $free = [];
         $counts = ['toMark' => 0, 'done' => 0, 'missed' => 0];
         $customers = $withIdentity ? $this->customers(array_map(fn (array $r) => (int) $r['subscription_id'], $rows)) : [];
+        // lot ABO-3b : l'intervenant effectif de chaque date, pour l'équipe seulement (jamais pour le modèle)
+        $staffNames = $withIdentity && $this->agenda !== null ? $this->agenda->staffNames(array_map(fn (array $r) => $r['staff_user_id'] !== null ? (int) $r['staff_user_id'] : 0, $rows)) : [];
         foreach ($rows as $r) {
             $item = ['occurrenceId' => (int) $r['id'], 'subscriptionId' => (int) $r['subscription_id'], 'benefitId' => (int) $r['benefit_id'], 'name' => $this->benefitName((int) $r['benefit_id'], $locale),
                 'status' => (string) $r['status'], 'startsAt' => $this->at(self::fromUtc($r['scheduled_at'])), 'endsAt' => $this->at(self::fromUtc($r['scheduled_end'])),
                 'doneAt' => $this->at(self::fromUtc($r['done_at'])), 'hasProof' => $r['proof_path'] !== null, ($withIdentity ? 'customerAck' : 'ack') => $r['customer_ack'], 'contestationPending' => $r['customer_ack'] === BenefitOccurrence::ACK_CONTESTED && $r['ack_resolution'] === null]
-                + ($withIdentity ? ['note' => $r['note'], 'customer' => $customers[(int) $r['subscription_id']] ?? null] : []);
+                + ($withIdentity ? ['note' => $r['note'], 'customer' => $customers[(int) $r['subscription_id']] ?? null,
+                    'staffUserId' => $r['staff_user_id'] !== null ? (int) $r['staff_user_id'] : null, 'staffName' => $r['staff_user_id'] !== null ? ($staffNames[(int) $r['staff_user_id']] ?? null) : null] : []);
             $key = match ((string) $r['status']) { 'scheduled' => 'toMark', 'done' => 'done', 'missed' => 'missed', default => null };
             if ($key !== null) {
                 ++$counts[$key];
@@ -546,6 +567,23 @@ class AboDeliveryService
         $o = $conn->fetchAssociative('SELECT * FROM benefit_occurrence WHERE id = ? AND subscription_id = ? FOR UPDATE', [$occurrenceId, $subscription->getId()]);
 
         return $o !== false ? $o : throw new AboException(404, 'OCCURRENCE_NOT_FOUND', 'Droit introuvable.', 'occurrenceId');
+    }
+
+    /**
+     * Lot ABO-3b, relecture neuve : le geste d'un intervenant relit, sous le verrou, que la date est toujours la sienne (une date réaffectée
+     * entre son contrôle et son geste : 404, comme une date qui n'existe pas)
+     *
+     * @throws AboException 404 OCCURRENCE_NOT_FOUND
+     */
+    private function assertStaffOf(Connection $conn, int $occurrenceId, ?int $onlyStaff): void
+    {
+        if ($onlyStaff === null) {
+            return;
+        }
+        $staff = $conn->fetchOne('SELECT ' . AboStaffService::EFFECTIVE . ' FROM benefit_occurrence o JOIN benefit b ON b.id = o.benefit_id LEFT JOIN benefit_slot sl ON sl.id = o.slot_id WHERE o.id = ?', [$occurrenceId]);
+        if ($staff === false || $staff === null || (int) $staff !== $onlyStaff) {
+            throw new AboException(404, 'OCCURRENCE_NOT_FOUND', 'Date introuvable.', 'occurrenceId');
+        }
     }
 
     /** @param array<string, mixed> $o @throws AboException 409 OCCURRENCE_ALREADY_MARKED | OCCURRENCE_NOT_SCHEDULED | NOT_YET_DUE */

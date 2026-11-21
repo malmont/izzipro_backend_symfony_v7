@@ -44,6 +44,8 @@ final class SubscriptionOutputDto
         public readonly array $delivered = [],
         /** Lot ABO-3a : l'abonné reçoit le courriel « prestation faite » (il le coupe par PATCH …/courriels) */
         public readonly bool $doneEmails = true,
+        /** Lot ABO-3b : messages de la boutique pas encore lus dans le fil (`GET /api/subscriptions/{id}/fil` les marque lus) */
+        public readonly int $unreadMessages = 0,
     ) {
     }
 
@@ -89,6 +91,14 @@ final class SubscriptionOutputDto
         $args = get_object_vars($this);
         $args['delivered'] = array_map(fn (array $d) => array_intersect_key($d, array_flip(['occurrenceId', 'benefitId', 'name', 'status', 'startsAt', 'doneAt', 'note', 'hasProof', 'customerAck', 'ackUntil'])), $delivered);
         $args['doneEmails'] = $doneEmails;
+
+        return new self(...$args);
+    }
+
+    public function withUnreadMessages(int $unread): self
+    {
+        $args = get_object_vars($this);
+        $args['unreadMessages'] = max(0, $unread);
 
         return new self(...$args);
     }
