@@ -1440,6 +1440,20 @@ est pas enregistré, le reste de la fiche l'est, le refus est affiché ; un inte
 `AboStaffRoleMatrixTest` balaie toutes les routes de l'API : hors `/api/staff/abonnements`, l'intervenant n'obtient rien de plus qu'un
 compte client ; EasyAdmin lui est fermé.
 
+### Langue des courriels des abonnements (lot ABO-LANG, 21/11/2026, décision du chef)
+
+Un courriel suit la langue de son DESTINATAIRE, sinon celle du site, jamais celle de la requête (avant : une réponse de l'équipe partait
+dans la langue de l'écran de l'administrateur, et les avis d'abonnement étaient en français seulement).
+
+- `user.locale` (`fr`, `en` ou vide ; migration `Version20270202300000`) : posée par l'inscription (`locale` du corps, sinon `?locale=`),
+  par `PATCH /api/profile { locale: "fr" | "en" | null }` (400 `LOCALE_INVALID` sinon ; `GET /api/profile` la rend), et par l'invitation
+  d'un intervenant (`locale` du corps ; jamais par-dessus une langue que le compte a déjà).
+- Avis d'abonnement (`SubscriptionMailer`, toutes les sortes : paiement refusé, résiliation, pause, séance annulée, prestation faite,
+  message du fil) : langue de l'abonné (`EmailLocale::forUser`) ; textes `subscription_notice.*` de `translations/emails.{fr,en}.yaml`,
+  libellés des lignes du récapitulatif en clés `subscription_notice.row.*`.
+- Invitation d'un intervenant : sa langue, sinon celle du site. Courriel à l'équipe (« un abonné vous a écrit », adresse du site) : la
+  langue du site.
+
 ### Codes des refus des abonnements (04/11/2026, application e-commerce mobile)
 
 Même contrat que les codes du devis : chaque refus (`SubscriptionException`) porte un `code` de premier niveau et un `message`

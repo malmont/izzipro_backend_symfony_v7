@@ -193,6 +193,8 @@ class RegistrationController extends AbstractController
         });
 
         $user->setRoles(['ROLE_USER_INTERNET']);
+        // lot ABO-LANG (21/11/2026) : la langue du compte, du corps (`locale`) sinon de `?locale=` ; toute autre valeur : celle du site
+        $user->setLocale(is_string($decoded['locale'] ?? null) ? $decoded['locale'] : (is_string($locale) ? $locale : null));
 
         $user->setIsVerified(false);
         $verificationToken = bin2hex(random_bytes(32));

@@ -398,10 +398,11 @@ class AboAgendaService
                 continue;
             }
             $em->persist(new SubscriptionAboEvent($subscription, 'slot_cancelled', $slot?->getBenefit()?->getId(), $n, $reason, $by));
-            $this->mailer?->notify($subscription, 'session_cancelled', $locale, $host, ['rows' => [
-                ($locale === 'en' ? 'Session' : 'Séance') => (string) $slot?->getBenefit()?->getName($locale),
-                ($locale === 'en' ? 'Date' : 'Date') => $slot !== null ? $slot->getStartsAt()->setTimezone($this->clock->timezone())->format('d/m/Y H:i') : '',
-                ($locale === 'en' ? 'Reason' : 'Motif') => $reason,
+            // lot ABO-LANG : la langue de chaque abonné, jamais celle de l'administrateur qui annule
+            $this->mailer?->notify($subscription, 'session_cancelled', $host, ['rows' => [
+                'subscription_notice.row.session' => (string) $slot?->getBenefit()?->getName($this->mailer->languageOf($subscription)),
+                'subscription_notice.row.date' => $slot !== null ? $slot->getStartsAt()->setTimezone($this->clock->timezone())->format('d/m/Y H:i') : '',
+                'subscription_notice.row.reason' => $reason,
             ]]);
         }
         $em->flush();

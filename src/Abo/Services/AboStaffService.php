@@ -95,24 +95,27 @@ class AboStaffService
             if (($refusal = $this->eligibility->refusal((int) $user->getId(), $user->getRoles())) !== null) {
                 throw $refusal;
             }
+            if (is_string($locale) && $user->getLocale() === null) {
+                $user->setLocale($locale); // lot ABO-LANG : la langue dite à l'invitation, jamais par-dessus celle que le compte a choisie
+            }
             if (in_array(self::ROLE, $user->getRoles(), true)) {
                 // déjà intervenant : une invitation en attente est renvoyée (l'ancien lien ne vaut plus), sinon rien ne change
-                return $this->isPending($user) ? ['staff' => $this->row($user), 'changed' => false, 'invitation' => $this->send($user, $by, is_string($locale) ? $locale : null)]
+                return $this->isPending($user) ? ['staff' => $this->row($user), 'changed' => false, 'invitation' => $this->send($user, $by)]
                     : ['staff' => $this->row($user), 'changed' => false, 'invitation' => null];
             }
             $this->roles->set($user, self::ROLE, true, ['abonnements']);
 
             // relecture neuve : un intervenant retiré avant d'avoir choisi son mot de passe, invité de nouveau, reçoit un lien neuf
-            return ['staff' => $this->row($user), 'changed' => true, 'invitation' => $this->isPending($user) ? $this->send($user, $by, is_string($locale) ? $locale : null) : null];
+            return ['staff' => $this->row($user), 'changed' => true, 'invitation' => $this->isPending($user) ? $this->send($user, $by) : null];
         }
         $user = (new User())->setEmail($email)->setUsername($email)->setFirstname($names['firstName'])->setLastname($names['lastName'])
-            ->setRoles([])->setIsVerified(false)->setSignupChannel(User::SIGNUP_STAFF_INVITE);
+            ->setRoles([])->setIsVerified(false)->setSignupChannel(User::SIGNUP_STAFF_INVITE)->setLocale(is_string($locale) ? $locale : null); // ABO-LANG
         $user->setPassword($this->hasher->hashPassword($user, bin2hex(random_bytes(24)))); // inutilisable : l'intervenant choisit le sien par le lien
         $em->persist($user);
         $em->flush();
         $this->roles->set($user, self::ROLE, true, ['abonnements', 'invite']);
 
-        return ['staff' => $this->row($user), 'changed' => true, 'invitation' => $this->send($user, $by, is_string($locale) ? $locale : null)];
+        return ['staff' => $this->row($user), 'changed' => true, 'invitation' => $this->send($user, $by)];
     }
 
     /**
@@ -242,13 +245,13 @@ class AboStaffService
     }
 
     /** Pose un jeton neuf (l'ancien ne vaut plus), envoie le lien et rend l'état de l'invitation, jamais le jeton */
-    private function send(User $user, User $by, ?string $locale): array
+    private function send(User $user, User $by): array
     {
         $token = bin2hex(random_bytes(32));
         $expires = new \DateTimeImmutable('+' . self::INVITATION_HOURS . ' hours');
         $user->setResetToken($token)->setResetTokenExpiresAt($expires);
         $this->emProvider->getEntityManager()->flush();
-        $language = $this->locale->language($locale);
+        $language = $this->locale->forUser($user); // lot ABO-LANG : la langue de l'intervenant, sinon celle du site, jamais celle de l'administrateur
         $link = $this->adminSpace->activation($token); // jeton dans le fragment de l'adresse : jamais journalisé par un serveur
         $code = (string) $this->tenants->getCurrentTenantCode();
         $site = $code !== '' ? $this->hosts->describe($code) : null;

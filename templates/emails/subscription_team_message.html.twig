@@ -1,6 +1,7 @@
 {% extends 'base.email.html.twig' %}
 
-{# Lot ABO-3b : un abonné a écrit dans le fil de son abonnement. Jamais le texte du message ni l'identité de l'abonné dans le courriel. #}
+{# Lot ABO-3b : un abonné a écrit dans le fil de son abonnement. Jamais le texte du message ni l'identité de l'abonné dans le courriel.
+   Lot ABO-LANG : dans la langue du site (courriel à l'adresse du site). #}
 {% block title %}{{ title }}{% endblock %}
 
 {% block body %}
@@ -15,8 +16,8 @@
                 </tr>
                 <tr>
                     <td style="padding: 30px; font-size: 15px; color: #1e293b;">
-                        <p style="margin-top: 0;">Un abonné vous a écrit au sujet de son abonnement n° {{ subscriptionId }}{% if plan %} (formule « {{ plan }} »){% endif %}.</p>
-                        <p>Lisez son message et répondez-lui depuis le suivi des abonnements de votre espace d'administration.</p>
+                        <p style="margin-top: 0;">{{ (plan ? 'subscription_team_message.message_plan' : 'subscription_team_message.message')|trans({'%id%': subscriptionId, '%plan%': plan}, 'emails', locale) }}</p>
+                        <p>{{ 'subscription_team_message.action'|trans({}, 'emails', locale) }}</p>
                     </td>
                 </tr>
             </table>

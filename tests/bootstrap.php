@@ -215,6 +215,11 @@ foreach ([MV_TEST_TENANT_DB, MV_TEST_TENANT2_DB] as $db) {
     foreach (\DoctrineMigrations\Version20270202200000::STATEMENTS as $sql) {
         $tenantDb->exec($sql);
     }
+    // PROVISOIRE, lot ABO-LANG (21/11/2026) : la migration Version20270202300000 (langue du compte), de la même façon
+    require_once dirname(__DIR__) . '/migrations/Version20270202300000.php';
+    foreach (\DoctrineMigrations\Version20270202300000::STATEMENTS as $sql) {
+        $tenantDb->exec($sql);
+    }
     $tenantDb = null;
 }
 

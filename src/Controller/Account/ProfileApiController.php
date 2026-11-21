@@ -46,6 +46,8 @@ class ProfileApiController extends BaseTenantApiController
             'memberships' => array_map(fn (\App\Entity\UserAppMembership $m) => ['app' => $m->getApp(), 'joinedAt' => $m->getJoinedAt()->format(\DateTimeInterface::ATOM), 'termsVersion' => $m->getTermsVersion()],
                 $this->memberships->of((int) $user->getId())),
             'teamRoles' => \App\Security\TeamRoles::of($user->getRoles()),
+            // lot ABO-LANG (21/11/2026) : langue des courriels du compte (fr, en), null : celle du site
+            'locale' => $user->getLocale(),
         ]);
     }
 
@@ -84,6 +86,13 @@ class ProfileApiController extends BaseTenantApiController
             return $this->json($refused['body'], $refused['status']);
         }
 
+        // lot ABO-LANG : la langue des courriels du compte ; null la retire (celle du site s'applique)
+        if (array_key_exists('locale', $data)) {
+            if ($data['locale'] !== null && !in_array($data['locale'], ['fr', 'en'], true)) {
+                return $this->json(['error' => 'Invalid locale', 'code' => 'LOCALE_INVALID', 'message' => 'Invalid locale', 'params' => ['allowed' => ['fr', 'en']]], Response::HTTP_BAD_REQUEST);
+            }
+            $user->setLocale($data['locale']);
+        }
         if (isset($data['firstName'])) {
             $user->setFirstname($data['firstName']);
         }

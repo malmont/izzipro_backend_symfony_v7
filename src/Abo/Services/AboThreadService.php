@@ -40,6 +40,8 @@ class AboThreadService
         private readonly ?SubscriptionMailer $mailer = null,
         private readonly ?NotificationGate $gate = null,
         private readonly ?\App\Services\EmailConfigurationService\EmailSenderService $sender = null,
+        private readonly ?\App\Services\EmailConfigurationService\EmailLocale $locale = null, // lot ABO-LANG : langue du site pour l'équipe
+        private readonly ?\Symfony\Contracts\Translation\TranslatorInterface $translator = null,
     ) {
     }
 
@@ -110,7 +112,7 @@ class AboThreadService
         $emailed = $this->mailer !== null && $this->conn()->executeStatement('UPDATE subscription SET thread_emailed_at = ? WHERE id = ? AND (thread_emailed_at IS NULL OR thread_emailed_at < ?)',
             [self::utc($now), $subscription->getId(), self::utc($now->modify('-' . self::EMAIL_EVERY_MINUTES . ' minutes'))]) === 1;
         if ($emailed) {
-            $this->mailer->notify($subscription, 'thread_message', $locale, $host);
+            $this->mailer->notify($subscription, 'thread_message', $host);
         }
 
         return ['message' => $this->view($message, true), 'emailed' => $emailed];
@@ -231,17 +233,19 @@ class AboThreadService
         $this->conn()->executeStatement('UPDATE subscription_message SET read_at = ? WHERE subscription_id = ? AND author = ? AND read_at IS NULL', [self::utc(new \DateTimeImmutable()), $subscription->getId(), $author]);
     }
 
-    /** L'équipe : courriel de suivi à l'adresse du site, selon ses niveaux (NOTIF) ; jamais le texte du message */
+    /** L'équipe : courriel de suivi à l'adresse du site, selon ses niveaux (NOTIF), dans la langue du site (ABO-LANG) ; jamais le texte du message */
     private function notifyTeam(Subscription $subscription, string $host): void
     {
         $to = $this->emProvider->getEntityManager()->getRepository(Entreprise::class)->findOneBy([])?->getEmail();
         if ($this->sender === null || !$to) {
             return;
         }
-        $subject = sprintf('Un abonné vous a écrit (abonnement n° %d)', (int) $subscription->getId());
+        $language = $this->locale?->language(null) ?? 'fr'; // l'adresse du site : la langue du site
+        $subject = $this->translator?->trans('subscription_team_message.subject', ['%id%' => (int) $subscription->getId()], 'emails', $language)
+            ?? sprintf('Un abonné vous a écrit (abonnement n° %d)', (int) $subscription->getId());
         $send = fn (): bool => $this->sender->sendTemplatedEmail($to, $subject, 'emails/subscription_team_message.html.twig', [
-            'title' => $subject, 'subscriptionId' => (int) $subscription->getId(), 'plan' => $subscription->getPlan()?->getName('fr'),
-        ], 'fr', $host);
+            'title' => $subject, 'subscriptionId' => (int) $subscription->getId(), 'plan' => $subscription->getPlan()?->getName($language),
+        ], $language, $host);
         try {
             $this->gate !== null ? $this->gate->deliver(NotificationCatalog::SUBSCRIPTION_MESSAGE, $to, $subject, ['screen' => 'abonnements', 'params' => ['id' => (int) $subscription->getId()]], $send) : $send();
         } catch (\Throwable) {

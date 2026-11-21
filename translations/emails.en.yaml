@@ -436,3 +436,63 @@ abo_staff_invitation:
     button: 'Choose my password'
     validity: 'This link works once and stays valid for %days% days. After that, ask for a new invitation.'
     ignore: 'If you were not expecting this invitation, ignore this email: no access is opened until the password is chosen.'
+
+# Lot ABO-LANG (21/11/2026): subscription notice, in the subscriber's language (else the site's). %plan%: plan name
+subscription_notice:
+    greeting: 'Hello %name%,'
+    manage: 'Manage your subscription from your account on the site.'
+    pay_now: 'Pay now'
+    row:
+        plan: 'Plan'
+        quantity: 'Quantity'
+        status: 'Status'
+        period_end: 'End of period'
+        unpaid: 'Unpaid amount'
+        attempts: 'Payment attempts'
+        ends_on: 'Ends on'
+        session: 'Session'
+        date: 'Date'
+        place: 'Place'
+        done_at: 'Done on'
+        note: 'Note'
+        next_attempt: 'Next attempt'
+        due: 'Amount due'
+        attempt: 'Attempt'
+        service: 'Service'
+        photo: 'Photo'
+        photo_available: 'available in your account'
+        reason: 'Reason'
+    payment_failed:
+        subject: 'Your subscription payment was declined'
+        message: 'The payment of your subscription "%plan%" did not go through. Pay the instalment with the button below or update your card from your account: without payment, the subscription will be cancelled after the last attempt.'
+    canceled_unpaid:
+        subject: 'Your subscription is cancelled for non-payment'
+        message: 'After several attempts, the payment of your subscription "%plan%" did not go through: the subscription is cancelled. You can subscribe again at any time from the site.'
+    paused:
+        subject: 'Your subscription is paused'
+        message: 'Your subscription "%plan%" is paused: no instalment will be charged until you resume it from your account.'
+    canceled:
+        subject: 'Your subscription is cancelled'
+        message: 'Your subscription "%plan%" is cancelled. Thank you for your trust; you can subscribe again at any time.'
+    cancel_scheduled:
+        subject: 'Your subscription will end'
+        message: 'Your subscription "%plan%" will end at the end of the current period. You can resume it before that date from your account.'
+    cancel_at_term_end:
+        subject: 'Your cancellation is recorded'
+        message: 'Your request to cancel the subscription "%plan%" is recorded. It will end at the end of your commitment, on the date below; no instalment will be charged after it. You can withdraw this cancellation before that date from your account.'
+    session_cancelled:
+        subject: 'Your session is cancelled'
+        message: 'The shop cancelled a session of your subscription "%plan%" (details below). Nothing is lost: your session can be scheduled again from your account.'
+    session_done:
+        subject: 'Your service is done'
+        message: 'The shop marked a service of your subscription "%plan%" as done (details below). From your account, you can confirm or contest it within 30 days, and turn these emails off.'
+    thread_message:
+        subject: 'You have a message from the shop'
+        message: 'The shop wrote to you about your subscription "%plan%". Read the message and reply from your account.'
+
+# Lot ABO-LANG: a subscriber wrote in the thread (email to the site address, in the site language). %id%, %plan%
+subscription_team_message:
+    subject: 'A subscriber wrote to you (subscription no. %id%)'
+    message: 'A subscriber wrote to you about their subscription no. %id%.'
+    message_plan: 'A subscriber wrote to you about their subscription no. %id% (plan "%plan%").'
+    action: 'Read the message and reply from the subscriptions follow-up in your administration space.'

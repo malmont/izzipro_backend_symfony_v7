@@ -624,16 +624,16 @@ class AboDeliveryService
         if ($r === false) {
             return;
         }
-        $en = $locale === 'en';
-        $rows = [($en ? 'Service' : 'Prestation') => $this->benefitName((int) $r['benefit_id'], $locale),
-            'Date' => (string) self::fromUtc($r['scheduled_at'])?->setTimezone($this->clock->timezone())->format('d/m/Y H:i')];
+        $language = $this->mailer->languageOf($subscription); // lot ABO-LANG : la langue de l'abonné, jamais celle de l'équipe qui marque
+        $rows = ['subscription_notice.row.service' => $this->benefitName((int) $r['benefit_id'], $language),
+            'subscription_notice.row.date' => (string) self::fromUtc($r['scheduled_at'])?->setTimezone($this->clock->timezone())->format('d/m/Y H:i')];
         if ($r['note'] !== null && $r['note'] !== '') {
-            $rows['Note'] = (string) $r['note'];
+            $rows['subscription_notice.row.note'] = (string) $r['note'];
         }
         if ($r['proof_path'] !== null) {
-            $rows[$en ? 'Photo' : 'Photo'] = $en ? 'available in your account' : 'disponible dans votre compte';
+            $rows['subscription_notice.row.photo'] = $this->mailer->text('subscription_notice.row.photo_available', $language);
         }
-        $this->mailer->notify($subscription, 'session_done', $locale, $host, ['rows' => $rows]);
+        $this->mailer->notify($subscription, 'session_done', $host, ['rows' => $rows]);
     }
 
     /** @param array<string, mixed> $o */

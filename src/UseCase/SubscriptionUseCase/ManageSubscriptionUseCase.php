@@ -139,10 +139,10 @@ class ManageSubscriptionUseCase
             throw $this->aboRefusal($e);
         }
         if ($engaged && $subscription->getCancelAt() !== null) {
-            $this->mailer->notify($subscription, 'cancel_at_term_end', $locale, $host, ['rows' => [($locale === 'en' ? 'Ends on' : 'Fin de l\'abonnement') => $this->rights->at($subscription->getCancelAt()) !== null
+            $this->mailer->notify($subscription, 'cancel_at_term_end', $host, ['rows' => ['subscription_notice.row.ends_on' => $this->rights->at($subscription->getCancelAt()) !== null
                 ? \DateTimeImmutable::createFromFormat(\DATE_ATOM, (string) $this->rights->at($subscription->getCancelAt()))->format('d/m/Y') : '']]);
         } else {
-            $this->mailer->notify($subscription, $engaged || $atPeriodEnd ? 'cancel_scheduled' : 'canceled', $locale, $host);
+            $this->mailer->notify($subscription, $engaged || $atPeriodEnd ? 'cancel_scheduled' : 'canceled', $host);
         }
 
         return $this->dto($subscription, $locale);
@@ -164,7 +164,7 @@ class ManageSubscriptionUseCase
         } catch (\App\Abo\Services\AboException $e) {
             throw $this->aboRefusal($e);
         }
-        $this->mailer->notify($subscription, 'paused', $locale, $host);
+        $this->mailer->notify($subscription, 'paused', $host);
 
         return $this->dto($subscription, $locale);
     }

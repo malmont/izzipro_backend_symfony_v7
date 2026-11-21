@@ -3,53 +3,67 @@
 namespace App\Services\SubscriptionService;
 
 use App\Entity\Subscription;
+use App\Services\EmailConfigurationService\EmailLocale;
 use App\Services\EmailConfigurationService\EmailSenderService;
 use App\Services\MediaUrlResolver;
 use Psr\Log\LoggerInterface;
+use Symfony\Contracts\Translation\TranslatorInterface;
 
-/** Courriels des abonnements (échec de paiement, résiliation faute de paiement, pause, résiliation ; lot ABO-2 : séance annulée par la boutique ; lot ABO-3a : prestation faite) : configuration d'envoi du site, jamais bloquants */
+/**
+ * Courriels des abonnements (échec de paiement, résiliation faute de paiement, pause, résiliation ; lot ABO-2 : séance annulée par la
+ * boutique ; lot ABO-3a : prestation faite ; lot ABO-3b : message de la boutique dans le fil) : configuration d'envoi du site, jamais
+ * bloquants. Lot ABO-LANG (21/11/2026, décision du chef) : dans la langue de l'ABONNÉ (`user.locale`), sinon celle du site, jamais celle
+ * de la requête ; textes dans `translations/emails.{fr,en}.yaml` (`subscription_notice.*`).
+ */
 final class SubscriptionMailer
 {
-    private const TEXTS = [
-        'payment_failed' => ['Paiement de votre abonnement refusé', 'Le paiement de votre abonnement « %s » n\'a pas abouti. Payez l\'échéance avec le bouton ci-dessous ou mettez votre carte à jour depuis votre compte : sans paiement, l\'abonnement sera résilié après le dernier essai.'],
-        'canceled_unpaid' => ['Votre abonnement est résilié faute de paiement', 'Après plusieurs essais, le paiement de votre abonnement « %s » n\'a pas abouti : l\'abonnement est résilié. Vous pouvez souscrire de nouveau à tout moment depuis le site.'],
-        'paused' => ['Votre abonnement est en pause', 'Votre abonnement « %s » est en pause : aucune échéance ne sera facturée jusqu\'à sa reprise depuis votre compte.'],
-        'canceled' => ['Votre abonnement est résilié', 'Votre abonnement « %s » est résilié. Merci de votre confiance ; vous pouvez souscrire de nouveau à tout moment.'],
-        'cancel_scheduled' => ['Votre abonnement prendra fin', 'Votre abonnement « %s » prendra fin à la fin de la période en cours. Vous pouvez le reprendre avant cette date depuis votre compte.'],
-        // lot ABO-1 : résiliation programmée à la fin d'un engagement minimal (la date est dans le récapitulatif)
-        'cancel_at_term_end' => ['Votre résiliation est enregistrée', 'Votre demande de résiliation de l\'abonnement « %s » est enregistrée. Il prendra fin à la fin de votre engagement, à la date ci-dessous ; aucune échéance ne sera prélevée après. Vous pouvez annuler cette résiliation avant cette date depuis votre compte.'],
-        // lot ABO-2 (Q2) : un créneau annulé par la boutique ; le droit redevient à planifier, rien n'est perdu
-        'session_cancelled' => ['Votre séance est annulée', 'La boutique a annulé une séance de votre abonnement « %s » (détails ci-dessous). Rien n\'est perdu : votre séance est de nouveau à planifier depuis votre compte.'],
-        // lot ABO-3a : une prestation marquée « faite » (un courriel par droit, jamais groupé ; l'abonné peut les couper depuis son compte)
-        // lot ABO-3b : la boutique a répondu dans le fil (jamais le texte dans le courriel ; au plus un par heure et par abonnement)
-        'thread_message' => ['Vous avez un message de la boutique', 'La boutique vous a écrit au sujet de votre abonnement « %s ». Lisez son message et répondez depuis votre compte.'],
-        'session_done' => ['Votre prestation est faite', 'La boutique a noté comme faite une prestation de votre abonnement « %s » (détails ci-dessous). Depuis votre compte, vous pouvez la confirmer ou la contester dans les 30 jours, et couper ces courriels.'],
-    ];
+    public const KINDS = ['payment_failed', 'canceled_unpaid', 'paused', 'canceled', 'cancel_scheduled', 'cancel_at_term_end', 'session_cancelled', 'session_done', 'thread_message'];
 
     public function __construct(
         private readonly EmailSenderService $mailer,
         private readonly MediaUrlResolver $urls,
-        private readonly LoggerInterface $logger
+        private readonly LoggerInterface $logger,
+        private readonly EmailLocale $locale,
+        private readonly TranslatorInterface $translator,
     ) {
     }
 
+    /** La langue des courriels de cet abonnement : celle de l'abonné, sinon celle du site */
+    public function languageOf(Subscription $subscription): string
+    {
+        return $this->locale->forUser($subscription->getUser());
+    }
+
+    /** Un texte du domaine `emails` dans cette langue (valeur d'une ligne du récapitulatif) */
+    public function text(string $key, string $language, array $parameters = []): string
+    {
+        return $this->translator->trans($key, $parameters, 'emails', $language);
+    }
+
     /**
-     * @param 'payment_failed'|'canceled_unpaid'|'paused'|'canceled'|'cancel_scheduled'|'cancel_at_term_end'|'session_cancelled'|'session_done'|'thread_message' $kind
-     * @param array{rows?: array<string, string>, payUrl?: ?string} $details lignes ajoutées au récapitulatif, lien de paiement
+     * @param value-of<self::KINDS> $kind
+     * @param array{rows?: array<string, string>, payUrl?: ?string} $details lignes ajoutées au récapitulatif (libellé : une clé
+     *        `subscription_notice.row.*`, traduite ici ; valeur déjà dans la langue de `languageOf`), lien de paiement
      */
-    public function notify(Subscription $subscription, string $kind, string $locale, string $host, array $details = []): void
+    public function notify(Subscription $subscription, string $kind, string $host, array $details = []): void
     {
         $email = $subscription->getUser()?->getEmail();
-        if (!$email || !isset(self::TEXTS[$kind])) {
+        if (!$email || !in_array($kind, self::KINDS, true)) {
             return;
         }
-        [$subject, $message] = self::TEXTS[$kind];
+        $language = $this->languageOf($subscription);
+        $subject = $this->text('subscription_notice.' . $kind . '.subject', $language);
+        $rows = [];
+        foreach ($details['rows'] ?? [] as $label => $value) {
+            $rows[$this->text((string) $label, $language)] = $value;
+        }
         try {
             $this->mailer->sendTemplatedEmail($email, $subject, 'emails/subscription_notice.html.twig', [
                 'subscription' => $subscription, 'kind' => $kind, 'title' => $subject,
-                'message' => sprintf($message, $subscription->getPlan()?->getName($locale) ?? ''),
-                'rows' => $details['rows'] ?? [], 'payUrl' => $details['payUrl'] ?? null,
-            ], $locale, $this->urls->getEmailLogosBaseUrl($host) . '/');
+                'message' => $this->text('subscription_notice.' . $kind . '.message', $language, ['%plan%' => $subscription->getPlan()?->getName($language) ?? '']),
+                'planName' => $subscription->getPlan()?->getName($language),
+                'rows' => $rows, 'payUrl' => $details['payUrl'] ?? null,
+            ], $language, $this->urls->getEmailLogosBaseUrl($host) . '/');
         } catch (\Throwable $e) {
             $this->logger->error('[Subscription] Courriel non envoyé : ' . $e->getMessage(), ['kind' => $kind, 'subscription' => $subscription->getId()]);
         }
