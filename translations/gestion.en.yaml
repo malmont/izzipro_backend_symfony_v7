@@ -65,6 +65,7 @@ notifications:
         weekly_digest: 'Weekly update by email'
         loss_exit: 'Loss prevention: item at the exit without a sale'
         group_catalog_copied: 'Group: items copied into your catalogue'
+        aid_reminder: 'Aids: reminder of overdue conditions and supporting documents, by email'
         loss_box_plugged: 'Loss prevention: your box is plugged in'
     # NOTIF-1: follow-up e-mail levels ("Notifications" screen)
     levels:
@@ -142,6 +143,7 @@ cash:
         subscription: Subscriptions
         utilities: Utilities and telecoms
         loan: Loan
+        aid: Aid
         tax: Taxes
         other: Other
         recorded: Recorded expenses
@@ -150,6 +152,7 @@ cash:
         RECORDED_EXPENSES_INCLUDED: 'Expenses recorded in the app (supplier orders, shipping, expense reports, advertising) count on their date, as if paid that day.'
         TAXES_INCLUDED: 'Receipts include collected taxes, which will be paid back: plan them as a "Taxes" movement.'
         LOAN_MAY_OVERLAP_MOVEMENTS: 'A manual "Loan" planned movement exists next to a recorded loan: its instalments may be counted twice. Keep one or the other; nothing is deleted without you.'
+        AID_MAY_OVERLAP_MOVEMENTS: 'A manual incoming planned movement has the same amount as an aid payment, in the same month: it may be counted twice. Keep one or the other; nothing is deleted without you.'
         NO_SALES_HISTORY: 'No sales in the last 30 days: no receipts average.'
 # Period simulator (lot B1b-2, 11/11/2026, docs/simulateur-gestion.md)
 simulation:
@@ -200,6 +203,9 @@ advice:
         CASH_TIGHT:
             title: "Cash is tight"
             text: "Your expected balance drops to %cash_low% on %cash_low_date%, below your %cash_threshold% threshold."
+        AID_CONDITIONS_DUE:
+            title: "Aid conditions to meet"
+            text: "%count% aid condition(s) have reached their due date: mark them met, or enter the repayment. Granted amount at stake: %effect%."
         PURCHASE_CAPACITY:
             title: "Postpone stock purchases"
             text: "%remaining_purchases% of planned stock purchases remain: your cash does not allow them before %date%."
@@ -235,6 +241,9 @@ advice:
             title: "%name% is no longer rented"
             text: "No rental of %name% for %days_without_rental% days (%last_year_rental_revenue% last year over the same window). Lower the rate or feature it."
     sources:
+        aid_conditions_due: "Overdue conditions"
+        aids: "Aids concerned"
+        aid_granted: "Granted amount"
         occupancy: "Occupancy"
         rentals: "Rentals"
         weekday_occupancy: "Occupancy Monday to Thursday"
@@ -297,6 +306,7 @@ advice:
         6: Saturday
         7: Sunday
     effects:
+        aid_at_stake: "Aid at stake"
         extra_rental_revenue: "Estimated extra rental revenue"
         rental_potential: "Potential of the quiet days"
         rental_revenue_last_year: "Rental revenue last year"
@@ -1040,6 +1050,7 @@ prices:
 console:
     analyses:
         loans_overview: 'Loans and cost of credit'
+        aids_overview: 'Aids: received, to receive, conditions'
         period_result: 'Result of a period'
         sales_overview: 'Sales and margin'
         year_overview: 'The business year'
@@ -1060,6 +1071,12 @@ console:
         creditCost: 'Total cost of credit'
         chargesToDate: 'Cost of credit incurred so far'
         chargesLeft: 'Cost of credit still to come'
+        aidsCount: 'Aids'
+        aidsReceived: 'Aids received'
+        aidsToReceive: 'Aids granted, not yet received'
+        aidsConditionsDue: 'Overdue conditions to meet'
+        aidsDocumentsMissing: 'Aids received without supporting document'
+        operatingAidsYear: 'Operating aids this year (estimate)'
         revenue: 'Sales'
         orders: 'Orders'
         cogs: 'Cost of goods sold'
@@ -1152,6 +1169,16 @@ console:
             high: 'High'
             medium: 'Medium'
             low: 'Cautious'
+        aidKind:
+            operating: 'Operating'
+            investment: 'Investment'
+            refundable_advance: 'Refundable advance'
+        aidStatus:
+            requested: 'Requested'
+            granted: 'Granted'
+            received: 'Received'
+            to_repay: 'To repay'
+            closed: 'Closed'
     # Table columns (lot W2-d): `columns: [{ key, label, unit }]`
     columns:
         rate: 'Annual rate'
@@ -1159,6 +1186,12 @@ console:
         nextAmount: 'Instalment amount'
         creditCost: 'Total cost of credit'
         lastDate: 'Last instalment'
+        aidKind: 'Kind'
+        aidStatus: 'Aid status'
+        granted: 'Granted'
+        received: 'Received'
+        toReceive: 'To receive'
+        conditionsDue: 'Overdue conditions'
         month: 'Month'
         sales: 'Sales'
         grossMargin: 'Gross margin'

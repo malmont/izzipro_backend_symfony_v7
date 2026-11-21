@@ -77,6 +77,7 @@ class AdviceRules
         private readonly CampaignProfitabilityCalculator $campaigns,
         private readonly ?\App\Services\CaisseService\StoreClock $clock = null,
         private readonly ?GestionRentalStatisticsService $rentals = null, // lot LOC2
+        private readonly ?\App\Gestion\Aid\GestionAidService $aids = null, // lot FIS-2
     ) {
     }
 
@@ -151,6 +152,7 @@ class AdviceRules
         }
         if ($has('selling', 'end', 'trip', 'planning')) {
             array_push($c, ...$this->cashTight($today));
+            array_push($c, ...$this->aidConditionsDue($todayKey)); // lot FIS-2
         }
         if ($has('selling', 'trip', 'planning')) {
             array_push($c, ...$this->purchaseCapacity($period, $today));
@@ -382,6 +384,23 @@ class AdviceRules
             $a['low14']['amount'] - $a['threshold'], 'cash_shortfall', $a['series'] === 'projectionWithSales' ? 'medium' : 'high', [
                 $this->src('cash_low', $a['low14']['amount'], 'money'), $this->src('cash_low_date', $a['low14']['date'], 'date'), $this->src('cash_threshold', $a['threshold'], 'money'),
             ], [], [])];
+    }
+
+    /**
+     * Lot FIS-2 : des conditions d'aide encore « à faire » sont arrivées à échéance → les marquer tenues, ou indiquer le remboursement.
+     * Effet : le montant accordé des aides concernées (devise du site), l'argent en jeu si les conditions ne sont pas tenues.
+     */
+    private function aidConditionsDue(string $today): array
+    {
+        $due = array_values(array_filter($this->aids?->list($today) ?? [], static fn (array $a): bool => $a['conditionsDue'] > 0 && $a['inCalculations']));
+        if ($due === []) {
+            return [];
+        }
+        $count = array_sum(array_column($due, 'conditionsDue'));
+        $amount = array_sum(array_column($due, 'amount'));
+
+        return [$this->advice('AID_CONDITIONS_DUE', 'selling', 'AID_CONDITIONS_DUE', ['aidIds' => array_column($due, 'id')], ['screen' => 'aides', 'params' => count($due) === 1 ? ['aidId' => $due[0]['id']] : new \stdClass()],
+            $amount, 'aid_at_stake', 'high', [$this->src('aid_conditions_due', $count, 'count'), $this->src('aids', count($due), 'count'), $this->src('aid_granted', $amount, 'money')], [], ['count' => $count])];
     }
 
     /** R8 : reste à acheter du stock prévu non finançable aujourd'hui → premier jour possible dans les 90 jours */

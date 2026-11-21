@@ -709,3 +709,22 @@ prets:
             label: 'In the cash position'
             text: 'The payout comes into the account; each whole instalment goes out, principal included. If you had entered the instalments as a planned movement, remove it so they are not counted twice.'
     next: 'Add your loans with the figures of the bank offer, then check the schedule against its amortisation table.'
+aides:
+    purpose: 'Your aids: each grant or advance, with what is granted, already received and still expected, its conditions to meet and its supporting documents. Payments come into the cash position; an operating aid also counts in the result.'
+    points:
+        trois-genres:
+            label: 'Three kinds'
+            text: 'Operating: it counts in the result, prorated over the period covered. Investment: it only comes into the cash position. Refundable advance: it becomes a 0% loan, visible in "Loans".'
+        recu-a-recevoir:
+            label: 'Received and to receive'
+            text: 'A granted aid counts from the day it is granted. Until it is fully received, the result shows two parts, received and granted not yet received: it is an estimate.'
+        conditions:
+            label: 'Conditions'
+            text: 'Each commitment has a due date. Mark it met or not met; a condition still to do on its due date is reminded to you once.'
+        justificatifs:
+            label: 'Supporting documents'
+            text: 'Attach documents already uploaded to the management app (agreement, certificate). An aid received without a supporting document is reminded to you once.'
+        a-rembourser:
+            label: 'To repay'
+            text: 'If a condition is not met, enter the amount and date of the repayment: it leaves the cash position on that date, and the income already counted goes down in the period of the decision.'
+    next: 'Add your aids with the agreement from the body, then attach the agreement as a supporting document.'

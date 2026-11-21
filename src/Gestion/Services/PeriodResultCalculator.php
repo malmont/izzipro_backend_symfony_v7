@@ -41,6 +41,7 @@ class PeriodResultCalculator
         private readonly ?TenantCurrencyProvider $currency = null,
         private readonly ?GestionFixedCostService $fixedCosts = null, // lot FF1
         private readonly ?\App\Gestion\Loan\GestionLoanService $loans = null, // lot FIS-1 : charges financières des prêts
+        private readonly ?\App\Gestion\Aid\GestionAidService $aids = null, // lot FIS-2 : aides d'exploitation, en produit
     ) {
     }
 
@@ -85,7 +86,11 @@ class PeriodResultCalculator
         // netAfterFixed inchangés ; le capital remboursé n'est jamais une charge (il ne touche que la trésorerie)
         $financial = $this->loans?->chargesBetween($period->getStartDateCollection()->format('Y-m-d'), $period->getEndDateCollection()->format('Y-m-d'))
             ?? ['interest' => 0, 'insurance' => 0, 'fees' => 0, 'total' => 0, 'loans' => 0];
-        $netAfterCharges = $netAfterFixed - $financial['total'];
+        // lot FIS-2 : aides d'exploitation accordées, en PRODUIT au prorata de leur période couverte (reçu, accordé pas encore reçu, moins un
+        // remboursement décidé sur la période) ; une estimation tant que tout n'est pas reçu
+        $operatingAids = $this->aids?->productBetween($period->getStartDateCollection()->format('Y-m-d'), $period->getEndDateCollection()->format('Y-m-d'))
+            ?? ['received' => 0, 'pending' => 0, 'repaid' => 0, 'total' => 0, 'aids' => 0];
+        $netAfterCharges = $netAfterFixed - $financial['total'] + $operatingAids['total'];
         $investmentPurchases = (int) ($purchases['purchaseCost'] ?? 0);
 
         return [
@@ -113,8 +118,10 @@ class PeriodResultCalculator
             'fixedCosts' => $fixed,
             // lot FIS-1 ; FIS-2 à FIS-5 y ajouteront aides, salaires, impôts. Remarque de double comptage : un mouvement prévu « prêt » saisi à la
             // main (éventuellement compté en frais fixe) à côté d'un prêt : rien n'est retiré, le gérant choisit lequel garder
-            'charges' => ['financial' => $financial, 'total' => $financial['total'],
-                'caveats' => ($this->loans?->mayOverlapMovements() ?? false) ? [['code' => 'LOAN_MAY_OVERLAP_MOVEMENTS']] : []],
+            // lot FIS-2 : `total` est le solde des charges, aides d'exploitation déduites (netAfterCharges = netAfterFixed − total)
+            'charges' => ['financial' => $financial, 'operatingAids' => $operatingAids + ['estimated' => $operatingAids['pending'] > 0], 'total' => $financial['total'] - $operatingAids['total'],
+                'caveats' => array_values(array_filter([($this->loans?->mayOverlapMovements() ?? false) ? ['code' => 'LOAN_MAY_OVERLAP_MOVEMENTS'] : null,
+                    ($this->aids?->mayOverlapMovements() ?? false) ? ['code' => 'AID_MAY_OVERLAP_MOVEMENTS'] : null]))],
             'investment' => ['purchases' => $investmentPurchases, 'shipping' => $shipping, 'total' => $investmentPurchases + $shipping],
         ];
     }

@@ -45,6 +45,7 @@ valeurs** d'une liste fermée séparées par des virgules.
 | Code d'écran | Paramètres | Ce qu'il ouvre |
 |---|---|---|
 | `imports` | aucun | Imports du site (catalogue, clients, commandes) ; l'avis d'une copie du catalogue par le directeur du groupe y mène (lot G-4) |
+| `aides` | `id` (entier, facultatif : l'identifiant d'une aide) | aides de la gestion, ou la fiche d'une aide (lot FIS-2 : rappel des conditions échues et des justificatifs manquants) |
 | `pertes.home` | aucun | Prévention des pertes, synthèse |
 | `pertes.constats` | `isNew` (drapeau) ; `status` (plusieurs valeurs : `open`, `watch`, `explained`, `dismissed`, `confirmed`) ; `rule` (une valeur : `CASH_DISCREPANCY`, `DRAWER_NO_SALE`, `VOID_AFTER_SALE`, `REFUND_PATTERN`, `DISCOUNT_PATTERN`, `PRICE_OVERRIDE`, `APPROVAL_PATTERN`, `UNREAD_SOLD`) | liste des constats, filtrée |
 | `pertes.constat` | `id` (entier, **obligatoire** : l'identifiant du constat, pas son numéro) | fiche d'un constat |

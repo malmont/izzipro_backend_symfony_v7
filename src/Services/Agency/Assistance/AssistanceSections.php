@@ -65,6 +65,8 @@ final class AssistanceSections
             ['DELETE', '/api/commandes/{id}/lignes/{lineId}'],
             ['DELETE', '/api/commandes/{id}/products/{productId}'],
             ['DELETE', '/api/fournisseurs/{id}'],
+            ['DELETE', '/api/gestion/aides/{id}'], // lot FIS-2 : les aides, comme les prêts
+            ['DELETE', '/api/gestion/aides/{id}/justificatifs/{documentId}'],
             ['DELETE', '/api/gestion/campagnes/{id}'],
             ['DELETE', '/api/gestion/prets/{id}'], // lot FIS-1 : les prêts, comme les mouvements prévus de la trésorerie
             ['DELETE', '/api/gestion/prets/{id}/remboursements/{index}'],
@@ -78,6 +80,8 @@ final class AssistanceSections
             ['PATCH', '/api/commandes/{id}/frais-de-port'],
             ['PATCH', '/api/commandes/{id}/lignes/{lineId}'],
             ['PATCH', '/api/fournisseurs/{id}'],
+            ['PATCH', '/api/gestion/aides/{id}'],
+            ['PATCH', '/api/gestion/aides/{id}/conditions/{index}'],
             ['PATCH', '/api/gestion/campagnes/{id}'],
             ['PATCH', '/api/gestion/prets/{id}'],
             ['PATCH', '/api/gestion/tresorerie/mouvements/{id}'],
@@ -124,6 +128,8 @@ final class AssistanceSections
             ['POST', '/api/gestion/prets/apercu'],
             ['POST', '/api/gestion/prets/{id}/remboursements'],
             ['POST', '/api/gestion/prets'],
+            ['POST', '/api/gestion/aides'],
+            ['POST', '/api/gestion/aides/{id}/justificatifs'],
             ['POST', '/api/gestion/promotions/variantes/terminer'],
             ['POST', '/api/gestion/reprise/annuler'],
             ['POST', '/api/gestion/reprise/appliquer'],

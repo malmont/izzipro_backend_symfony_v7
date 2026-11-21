@@ -201,6 +201,17 @@ support_reply:
     footer: 'Référence de votre demande : %reference%. Répondez à ce courriel pour la compléter.'
 
 # Prévention des pertes (lot L1-b) : résumé du jour, envoyé aux administrateurs du site. Aucun nom, aucun détail d'un constat, aucun lien.
+aid_reminder:
+    subject: "{1}Aides : 1 point à vérifier|]1,Inf[Aides : %count% points à vérifier"
+    title: 'Vos aides'
+    greeting: 'Bonjour,'
+    message: "{1}1 point de vos aides demande votre attention.|]1,Inf[%count% points de vos aides demandent votre attention."
+    row_condition: '%aid% : la condition « %condition% » est arrivée à échéance le %date%.'
+    row_documents: '%aid% : reçue, sans justificatif rattaché.'
+    more: "{1}Et 1 autre point.|]1,Inf[Et %count% autres points."
+    next: 'Ouvrez l''écran « Aides » de votre application de gestion : marquez chaque condition tenue ou non tenue, et rattachez les justificatifs.'
+    notice: 'Chaque point n''est rappelé qu''une fois. Vous pouvez arrêter ce courriel dans les préférences de notification de la gestion.'
+    link: 'Ouvrir les aides'
 loss_digest:
     subject: "{1}Prévention des pertes : 1 nouveau constat à vérifier|]1,Inf[Prévention des pertes : %count% nouveaux constats à vérifier"
     title: 'Prévention des pertes'

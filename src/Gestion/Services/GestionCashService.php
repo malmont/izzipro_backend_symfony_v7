@@ -56,6 +56,7 @@ class GestionCashService
         private readonly TranslatorInterface $translator,
         private readonly ?TenantCurrencyProvider $currency = null,
         private readonly ?\App\Gestion\Loan\GestionLoanService $loans = null, // lot FIS-1 : échéances des prêts
+        private readonly ?\App\Gestion\Aid\GestionAidService $aids = null, // lot FIS-2 : versements des aides, remboursement décidé
     ) {
     }
 
@@ -363,6 +364,18 @@ class GestionCashService
                 $byCategory['loan']['out'] += $f['amount'];
             }
         }
+        // lot FIS-2 : aides (versements en entrée ; remboursement décidé en sortie), rangées sous « aide ». Une avance remboursable n'a
+        // aucun flux ici : son prêt à 0 % porte le déblocage et les remboursements (rangés sous « prêt »)
+        foreach ($this->aids?->cashFlows($fromKey, $endKey) ?? [] as $f) {
+            $byCategory['aid'] ??= ['in' => 0, 'out' => 0];
+            if ($f['direction'] === 'in') {
+                $mvIn[$f['date']] = ($mvIn[$f['date']] ?? 0) + $f['amount'];
+                $byCategory['aid']['in'] += $f['amount'];
+            } else {
+                $mvOut[$f['date']] = ($mvOut[$f['date']] ?? 0) + $f['amount'];
+                $byCategory['aid']['out'] += $f['amount'];
+            }
+        }
         $recorded = $this->recordedExpenses($fromKey, $endKey);
         $yesterdayKey = $today->modify('-1 day')->format('Y-m-d');
         $actual = $fromKey <= $yesterdayKey ? $this->receiptsByDay($fromKey, $yesterdayKey)['days'] : [];
@@ -394,6 +407,9 @@ class GestionCashService
                 $categories[] = ['category' => $c, 'label' => $this->label($c, $locale), 'in' => $byCategory[$c]['in'], 'out' => $byCategory[$c]['out']];
             }
         }
+        if (isset($byCategory['aid'])) { // lot FIS-2 : catégorie de la projection seulement (jamais celle d'un mouvement saisi)
+            $categories[] = ['category' => 'aid', 'label' => $this->label('aid', $locale), 'in' => $byCategory['aid']['in'], 'out' => $byCategory['aid']['out']];
+        }
         $categories[] = ['category' => self::RECORDED, 'label' => $this->label(self::RECORDED, $locale), 'in' => 0, 'out' => array_sum($recorded['days']), 'details' => $recorded['details']];
 
         $caveats = [];
@@ -404,6 +420,9 @@ class GestionCashService
         $caveats[] = $this->caveat('TAXES_INCLUDED', $locale);
         if ($this->loans?->mayOverlapMovements() ?? false) {
             $caveats[] = $this->caveat('LOAN_MAY_OVERLAP_MOVEMENTS', $locale); // lot FIS-1 : rien n'est supprimé, le gérant choisit
+        }
+        if ($this->aids?->mayOverlapMovements() ?? false) {
+            $caveats[] = $this->caveat('AID_MAY_OVERLAP_MOVEMENTS', $locale); // lot FIS-2 : de même
         }
         if ($average['orders'] === 0) {
             $caveats[] = $this->caveat('NO_SALES_HISTORY', $locale);
@@ -438,6 +457,9 @@ class GestionCashService
             }
             foreach ($this->loans?->cashFlows($from, $endDate) ?? [] as $f) {
                 $amount += ($f['direction'] === 'in' ? 1 : -1) * $f['amount']; // lot FIS-1
+            }
+            foreach ($this->aids?->cashFlows($from, $endDate) ?? [] as $f) {
+                $amount += ($f['direction'] === 'in' ? 1 : -1) * $f['amount']; // lot FIS-2
             }
             $amount -= array_sum($this->recordedExpenses($from, $endDate)['days']);
             $yesterday = $today->modify('-1 day')->format('Y-m-d');
@@ -657,6 +679,9 @@ class GestionCashService
         }
         foreach ($this->loans?->cashFlows($from, $to) ?? [] as $f) {
             $totals[$f['direction'] === 'in' ? 'in' : 'out'] += $f['amount']; // lot FIS-1 : les échéances sont des attendus du rapprochement
+        }
+        foreach ($this->aids?->cashFlows($from, $to) ?? [] as $f) {
+            $totals[$f['direction'] === 'in' ? 'in' : 'out'] += $f['amount']; // lot FIS-2 : les versements et le remboursement décidé aussi
         }
 
         return $totals;

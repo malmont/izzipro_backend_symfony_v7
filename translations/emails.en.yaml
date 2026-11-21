@@ -197,6 +197,17 @@ support_reply:
     footer: 'Your request reference: %reference%. Reply to this email to add to it.'
 
 # Loss prevention (lot L1-b): daily summary sent to the site administrators. No name, no detail of a finding, no link.
+aid_reminder:
+    subject: "{1}Aids: 1 item to check|]1,Inf[Aids: %count% items to check"
+    title: 'Your aids'
+    greeting: 'Hello,'
+    message: "{1}1 item of your aids needs your attention.|]1,Inf[%count% items of your aids need your attention."
+    row_condition: '%aid%: the condition "%condition%" reached its due date on %date%.'
+    row_documents: '%aid%: received, with no supporting document attached.'
+    more: "{1}And 1 more item.|]1,Inf[And %count% more items."
+    next: 'Open the "Aids" screen of your management app: mark each condition met or not met, and attach the supporting documents.'
+    notice: 'Each item is reminded only once. You can stop this email in the notification preferences of the management app.'
+    link: 'Open the aids'
 loss_digest:
     subject: "{1}Loss prevention: 1 new finding to check|]1,Inf[Loss prevention: %count% new findings to check"
     title: 'Loss prevention'

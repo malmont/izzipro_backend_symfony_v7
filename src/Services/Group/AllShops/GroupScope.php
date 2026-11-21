@@ -57,7 +57,7 @@ final class GroupScope
     public const TABLES = [
         'gestion_statistiques' => ['address_entreprise', 'booking', 'commande', 'commande_line', 'entreprise', 'gestion_stock_snapshot', 'import_order',
             'import_order_line', 'order', 'order_items', 'product', 'product_variant'],
-        'gestion_journee' => ['address_entreprise', 'booking', 'color', 'commande', 'commande_line', 'entreprise', 'frais_de_port', 'gestion_cash_balance',
+        'gestion_journee' => ['address_entreprise', 'booking', 'color', 'commande', 'commande_line', 'entreprise', 'frais_de_port', 'gestion_aid', 'gestion_cash_balance',
             'gestion_cash_movement', 'gestion_cash_setting', 'gestion_document', 'gestion_loan', 'gestion_stock_snapshot', 'import_order', 'import_order_line',
             'marketing_campaign', 'note_de_frais', 'order', 'order_items', 'payments', 'pos_gift_card', 'pos_gift_card_transaction', 'pos_return',
             'product', 'product_variant', 'size', 'support_ticket'],
@@ -66,11 +66,11 @@ final class GroupScope
         // une base d'essai RICHE lit davantage (jointures non vides) : la suite complète l'a montré ; même liste large pour les deux routes
         // lot FIS-1 : les prêts (charges financières du résultat, flux de la trésorerie) : `gestion_loan` dans la journée, l'année et le résultat
         'gestion_statistiques_annee' => ['address_entreprise', 'booking', 'collections', 'color', 'commande', 'commande_line', 'entreprise', 'frais_de_port',
-            'gestion_advice', 'gestion_budget_line', 'gestion_cash_balance', 'gestion_cash_movement', 'gestion_cash_setting', 'gestion_loan', 'gestion_reprise',
+            'gestion_advice', 'gestion_aid', 'gestion_budget_line', 'gestion_cash_balance', 'gestion_cash_movement', 'gestion_cash_setting', 'gestion_loan', 'gestion_reprise',
             'gestion_stock_snapshot', 'gestion_trip', 'import_order', 'import_order_line', 'marketing_campaign', 'note_de_frais', 'order', 'order_items',
             'payments', 'period_result', 'pos_gift_card', 'pos_gift_card_transaction', 'pos_return', 'product', 'product_variant', 'size'],
         'gestion_groupe_resultat' => ['address_entreprise', 'booking', 'collections', 'color', 'commande', 'commande_line', 'entreprise', 'frais_de_port',
-            'gestion_advice', 'gestion_budget_line', 'gestion_cash_balance', 'gestion_cash_movement', 'gestion_cash_setting', 'gestion_loan', 'gestion_reprise',
+            'gestion_advice', 'gestion_aid', 'gestion_budget_line', 'gestion_cash_balance', 'gestion_cash_movement', 'gestion_cash_setting', 'gestion_loan', 'gestion_reprise',
             'gestion_stock_snapshot', 'gestion_trip', 'import_order', 'import_order_line', 'marketing_campaign', 'note_de_frais', 'order', 'order_items',
             'payments', 'period_result', 'pos_gift_card', 'pos_gift_card_transaction', 'pos_return', 'product', 'product_variant', 'size'],
     ];

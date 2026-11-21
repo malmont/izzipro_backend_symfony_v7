@@ -94,6 +94,9 @@ final class LexiqueCatalog
         'capital-restant-du' => ['related' => ['cout-du-credit', 'tresorerie'], 'analysis' => ['key' => 'loans.overview', 'params' => [], 'figures' => ['remainingCapital', 'loansCount']], 'quiz' => []],
         'cout-du-credit' => ['related' => ['capital-restant-du', 'charges-financieres'], 'analysis' => ['key' => 'loans.overview', 'params' => [], 'figures' => ['creditCost', 'chargesToDate', 'chargesLeft']], 'quiz' => []],
         'charges-financieres' => ['related' => ['cout-du-credit', 'resultat'], 'analysis' => null, 'quiz' => []],
+        // aides de la gestion (lot FIS-2, 21/11/2026)
+        'aide-exploitation' => ['related' => ['resultat', 'avance-remboursable'], 'analysis' => ['key' => 'aids.overview', 'params' => [], 'figures' => ['operatingAidsYear', 'aidsToReceive']], 'quiz' => []],
+        'avance-remboursable' => ['related' => ['aide-exploitation', 'capital-restant-du'], 'analysis' => null, 'quiz' => []],
     ];
 
     /**
@@ -115,6 +118,7 @@ final class LexiqueCatalog
         'missingCostItems' => 'cout-d-achat', 'cost' => 'cout-d-achat', 'coefficient' => 'coefficient', 'proposedCoefficient' => 'coefficient',
         'verdict' => 'verdict', 'similarCount' => 'semblables',
         'remainingCapital' => 'capital-restant-du', 'creditCost' => 'cout-du-credit', // lot FIS-1
+        'operatingAidsYear' => 'aide-exploitation', // lot FIS-2
     ];
 
     public static function has(mixed $key): bool

@@ -46,6 +46,7 @@ class GestionStatisticsSections
         private readonly ?GestionStockSnapshotService $stock = null,
         private readonly ?HomeTilesService $tiles = null,
         private readonly ?\App\Gestion\Loan\GestionLoanService $loans = null, // lot FIS-1
+        private readonly ?\App\Gestion\Aid\GestionAidService $aids = null, // lot FIS-2
     ) {
     }
 
@@ -105,7 +106,11 @@ class GestionStatisticsSections
     {
         [$cur, $prev, $ly] = [$ctx['cur'], $ctx['prev'], $ctx['ly']];
         $of = fn (array $r) => $this->loans?->chargesBetween($r[0], $r[1]) ?? ['interest' => 0, 'insurance' => 0, 'fees' => 0, 'total' => 0, 'loans' => 0];
-        return ['financial' => $of($cur), 'previous' => $prev === null ? null : $of($prev), 'lastYear' => $of($ly), 'capitalRepaid' => $this->loans?->capitalRepaidBetween($cur[0], $cur[1]) ?? 0];
+        // lot FIS-2 : les aides d'exploitation en produit (reçu, accordé pas encore reçu, remboursement décidé), sur les mêmes trois plages
+        $aids = fn (array $r) => $this->aids?->productBetween($r[0], $r[1]) ?? ['received' => 0, 'pending' => 0, 'repaid' => 0, 'total' => 0, 'aids' => 0];
+
+        return ['financial' => $of($cur), 'previous' => $prev === null ? null : $of($prev), 'lastYear' => $of($ly), 'capitalRepaid' => $this->loans?->capitalRepaidBetween($cur[0], $cur[1]) ?? 0,
+            'operatingAids' => ['current' => $aids($cur), 'previous' => $prev === null ? null : $aids($prev), 'lastYear' => $aids($ly)]];
     }
 
     // ------------------------------------------------------------------ paiements

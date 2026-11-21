@@ -455,3 +455,11 @@ charges-financieres:
     term: 'Financial charges'
     definition: 'The interest, insurance and fees of your loans, counted in the result in proportion to the days of each period. Principal repaid only affects the cash position.'
     synonyms: 'finance costs'
+aide-exploitation:
+    term: 'Operating aid'
+    definition: 'Aid paid to keep the business running (an operating grant, a hiring subsidy). Once granted, it adds to the result, in proportion to the days of the period it covers. Until it is fully received, the figure is an estimate.'
+    synonyms: 'operating grant, operating subsidy'
+avance-remboursable:
+    term: 'Refundable advance'
+    definition: 'Aid you will have to pay back, often interest-free. The app treats it as a 0% loan: the money received comes into the cash position and each repayment goes out, but it never counts in the result.'
+    synonyms: 'interest-free loan, honour loan'

@@ -71,7 +71,7 @@ class ConsoleResponder
      */
     public const CONSOLE_FALLBACK_CHARGED = false;
     /** Champs d'une ligne qui sont des montants en cents */
-    private const MONEY_KEYS = ['price', 'cost', 'sales', 'grossMargin', 'result', 'planned', 'actual', 'remaining', 'effect', 'revenue', 'nextAmount', 'creditCost'];
+    private const MONEY_KEYS = ['price', 'cost', 'sales', 'grossMargin', 'result', 'planned', 'actual', 'remaining', 'effect', 'revenue', 'nextAmount', 'creditCost', 'granted', 'received', 'toReceive'];
     private const PERCENT_KEYS = ['similarSoldShare', 'rate'];
     /** Chiffre d'état => jeu de libellés de son code (`console.values.*`, `console.sentences.*`) */
     private const STATE_SETS = ['cashStatus' => 'cash', 'budgetStatus' => 'budget', 'verdict' => 'verdict'];
@@ -348,7 +348,7 @@ class ConsoleResponder
                         continue;
                     }
                     $line[$k] = match (true) {
-                        in_array($k, ['productId', 'adviceId', 'loanId'], true) => $v, // un identifiant : jamais un nombre à écrire
+                        in_array($k, ['productId', 'adviceId', 'loanId', 'aidId'], true) => $v, // un identifiant : jamais un nombre à écrire
                         isset(AnalysisCatalog::CODED[$k]) && is_string($v) => $note(mb_strtolower(AnalysisCatalog::valueLabel($this->translator, AnalysisCatalog::CODED[$k], $v, $locale))), // « à monter », jamais « raise » ; en minuscule : il s'écrit au milieu d'une phrase
                         in_array($k, self::MONEY_KEYS, true) && is_numeric($v) => $note($this->display($v, 'money', $locale)),
                         in_array($k, self::PERCENT_KEYS, true) && is_numeric($v) => $note($this->display($v, 'percent', $locale)),

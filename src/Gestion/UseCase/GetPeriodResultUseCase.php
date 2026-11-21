@@ -45,6 +45,10 @@ class GetPeriodResultUseCase
                     $payload['result']['netAfterCharges'] = null; // la forme stable : la clé existe, sa valeur n'est pas connue
                     $payload['result']['netAfterChargesRate'] = null;
                 }
+                // lot FIS-2 : figée après les prêts mais avant les aides : l'instantané reste tel quel, ses aides ne sont pas connues
+                if (is_array($payload['charges']) && !array_key_exists('operatingAids', $payload['charges'])) {
+                    $payload['charges']['operatingAids'] = null;
+                }
 
                 return $payload;
             }

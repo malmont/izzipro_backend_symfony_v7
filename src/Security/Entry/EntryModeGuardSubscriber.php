@@ -93,6 +93,8 @@ class EntryModeGuardSubscriber implements EventSubscriberInterface
         // lot FIS-1 (décision du chef, 19/11/2026) : les prêts sont en LECTURE SEULE pour le directeur (créer, modifier, supprimer un prêt
         // sont des écritures des comptes de la boutique) ; l'aperçu, qui n'écrit rien, reste ouvert
         ['#^/api/gestion/prets(/(?!apercu$)[^/]+.*)?$#', ['POST', 'PUT', 'PATCH', 'DELETE'], 'payment'],
+        // lot FIS-2 (décision du chef) : les aides de même, en LECTURE SEULE pour le directeur (une avance crée un prêt)
+        ['#^/api/gestion/aides(/.*)?$#', ['POST', 'PUT', 'PATCH', 'DELETE'], 'payment'],
         ['#^/api/site/features/.+/(request|trial|enable|disable)(/|$)#', [], 'modules'],
         ['#^/api/site/features/?$#', ['PUT', 'PATCH', 'POST'], 'modules'],
         // les mêmes gestes de module dans EasyAdmin (« Mon site »)

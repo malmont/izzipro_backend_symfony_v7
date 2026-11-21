@@ -106,6 +106,7 @@ final class ScreenRegistry
         'periode.simulation' => self::G, 'preparation' => self::G, 'statistiques' => self::G, 'statistiques.annee' => self::G, 'rapports' => self::G, 'reglages' => self::G,
         'reprise' => self::G, 'lexique' => self::G, 'notifications' => self::G, 'exercice' => self::G, 'annee' => self::G, 'stock.low' => self::G,
         'prets' => self::G, // lot FIS-1 : les prêts de la gestion
+        'aides' => self::G, // lot FIS-2 : les aides de la gestion
         // anciens codes de la gestion, gardés : les applications en place les envoient encore
         'accueil' => self::G, 'journee' => self::G, 'periode.resultat' => self::G, 'periode.preparation' => self::G, 'commande' => self::G, 'article' => self::G,
         'stock' => self::G, 'tresorerie.rapprochements' => self::G, 'documents' => self::G, 'simulateur' => self::G, 'console' => self::G,
@@ -234,6 +235,7 @@ final class ScreenRegistry
         // --- gestion
         ['#^/api/gestion/codes-barres(/|$)#', 'codes-barres'],
         ['#^/api/gestion/(accueil|journee|ecrans)(/|$)#', 'gestion.home'],
+        ['#^/api/gestion/aides(/|$)#', 'aides'],
         ['#^/api/gestion/articles(/|$)#', 'articles'],
         ['#^/api/gestion/campagnes(/|$)#', 'publicite'],
         ['#^/api/gestion/conseils(/|$)#', 'conseils'],

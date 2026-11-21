@@ -68,6 +68,7 @@ notifications:
         weekly_digest: 'Point de la semaine par courriel'
         loss_exit: 'Prévention des pertes : article à la sortie sans vente'
         group_catalog_copied: 'Groupe : articles copiés dans votre catalogue'
+        aid_reminder: 'Aides : rappel des conditions échues et des justificatifs, par courriel'
         loss_box_plugged: 'Prévention des pertes : votre boîtier est branché'
     # Lot NOTIF-1 : niveaux des courriels de suivi (écran « Notifications »)
     levels:
@@ -145,6 +146,7 @@ cash:
         subscription: Abonnements
         utilities: Énergie et télécoms
         loan: Prêt
+        aid: Aide
         tax: Taxes et impôts
         other: Autres
         recorded: Dépenses saisies
@@ -153,6 +155,7 @@ cash:
         RECORDED_EXPENSES_INCLUDED: "Les dépenses saisies dans l'application (commandes fournisseurs, frais de port, notes de frais, publicité) sont comptées à leur date, comme si elles étaient payées ce jour-là."
         TAXES_INCLUDED: 'Les encaissements comprennent les taxes perçues, qui seront reversées : prévoyez-les en mouvement « Taxes et impôts ».'
         LOAN_MAY_OVERLAP_MOVEMENTS: 'Un mouvement prévu « Emprunt » saisi à la main existe à côté d''un prêt enregistré : ses échéances risquent d''être comptées deux fois. Gardez l''un ou l''autre ; rien n''est supprimé sans vous.'
+        AID_MAY_OVERLAP_MOVEMENTS: 'Un mouvement prévu d''entrée saisi à la main a le même montant qu''un versement d''aide, le même mois : il risque d''être compté deux fois. Gardez l''un ou l''autre ; rien n''est supprimé sans vous.'
         NO_SALES_HISTORY: 'Aucune vente sur les 30 derniers jours : pas de moyenne des encaissements.'
 # Simulateur de période (lot B1b-2, 11/11/2026, docs/simulateur-gestion.md)
 simulation:
@@ -203,6 +206,9 @@ advice:
         CASH_TIGHT:
             title: "Trésorerie tendue"
             text: "Le solde prévu descend à %cash_low% le %cash_low_date%, sous votre seuil de %cash_threshold%."
+        AID_CONDITIONS_DUE:
+            title: "Conditions d’aide à tenir"
+            text: "%count% condition(s) d’aide sont arrivées à échéance : marquez-les tenues, ou indiquez le remboursement. Montant accordé en jeu : %effect%."
         PURCHASE_CAPACITY:
             title: "Achats de stock à décaler"
             text: "Il reste %remaining_purchases% d’achats de stock prévus : la trésorerie ne le permet pas avant le %date%."
@@ -238,6 +244,9 @@ advice:
             title: "%name% ne se loue plus"
             text: "Aucune location de %name% depuis %days_without_rental% jours (%last_year_rental_revenue% l’an dernier sur la même fenêtre). Baissez le tarif ou mettez-le en avant."
     sources:
+        aid_conditions_due: "Conditions échues"
+        aids: "Aides concernées"
+        aid_granted: "Montant accordé"
         occupancy: "Occupation"
         rentals: "Locations"
         weekday_occupancy: "Occupation du lundi au jeudi"
@@ -300,6 +309,7 @@ advice:
         6: samedi
         7: dimanche
     effects:
+        aid_at_stake: "Aide en jeu"
         extra_rental_revenue: "Revenu de location en plus estimé"
         rental_potential: "Potentiel des jours creux"
         rental_revenue_last_year: "Revenu de location l’an dernier"
@@ -1044,6 +1054,7 @@ prices:
 console:
     analyses:
         loans_overview: 'Prêts et coût du crédit'
+        aids_overview: 'Aides : reçu, à recevoir, conditions'
         period_result: 'Résultat d''une période'
         sales_overview: 'Ventes et marge'
         year_overview: 'L''année de l''entreprise'
@@ -1064,6 +1075,12 @@ console:
         creditCost: 'Coût total du crédit'
         chargesToDate: 'Coût du crédit déjà couru'
         chargesLeft: 'Coût du crédit à venir'
+        aidsCount: 'Aides'
+        aidsReceived: 'Aides reçues'
+        aidsToReceive: 'Aides accordées, pas encore reçues'
+        aidsConditionsDue: 'Conditions échues à tenir'
+        aidsDocumentsMissing: 'Aides reçues sans justificatif'
+        operatingAidsYear: 'Aides d''exploitation de l''année (estimation)'
         revenue: 'Ventes'
         orders: 'Commandes'
         cogs: 'Coût des articles vendus'
@@ -1156,6 +1173,16 @@ console:
             high: 'Élevée'
             medium: 'Moyenne'
             low: 'Prudente'
+        aidKind:
+            operating: 'Exploitation'
+            investment: 'Investissement'
+            refundable_advance: 'Avance remboursable'
+        aidStatus:
+            requested: 'Demandée'
+            granted: 'Accordée'
+            received: 'Reçue'
+            to_repay: 'À rembourser'
+            closed: 'Close'
     # Colonnes des tableaux (lot W2-d) : `columns: [{ key, label, unit }]`
     columns:
         rate: 'Taux annuel'
@@ -1163,6 +1190,12 @@ console:
         nextAmount: 'Montant de l''échéance'
         creditCost: 'Coût total du crédit'
         lastDate: 'Dernière échéance'
+        aidKind: 'Genre'
+        aidStatus: 'État de l''aide'
+        granted: 'Accordé'
+        received: 'Reçu'
+        toReceive: 'À recevoir'
+        conditionsDue: 'Conditions échues'
         month: 'Mois'
         sales: 'Ventes'
         grossMargin: 'Marge brute'

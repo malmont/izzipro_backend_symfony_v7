@@ -62,6 +62,7 @@ class AnalysisCatalog
         // le guide de l'écran d'où vient la question : `screen` est donné par le serveur (le contexte), jamais par le modèle (lot A-4)
         'screen.guide' => ['params' => ['screen'], 'required' => ['screen'], 'screen' => 'ecran', 'route' => 'GET /api/gestion/ecrans/{screen}/guide'],
         'loans.overview' => ['params' => [], 'required' => [], 'screen' => 'prets', 'route' => 'GET /api/gestion/prets'], // lot FIS-1
+        'aids.overview' => ['params' => [], 'required' => [], 'screen' => 'aides', 'route' => 'GET /api/gestion/aides'], // lot FIS-2
     ];
 
     /**
@@ -77,9 +78,10 @@ class AnalysisCatalog
         'articles.new' => ['name' => 'text', 'cost' => 'money', 'price' => 'money', 'coefficient' => 'ratio', 'proposedCoefficient' => 'ratio', 'verdict' => 'text', 'similarCount' => 'count', 'similarSoldShare' => 'percent'],
         'advice.current' => ['title' => 'text', 'effect' => 'money', 'confidence' => 'text'],
         'loans.overview' => ['label' => 'text', 'remaining' => 'money', 'rate' => 'percent', 'nextDate' => 'text', 'nextAmount' => 'money', 'creditCost' => 'money', 'lastDate' => 'text'],
+        'aids.overview' => ['label' => 'text', 'aidKind' => 'text', 'aidStatus' => 'text', 'granted' => 'money', 'received' => 'money', 'toReceive' => 'money', 'conditionsDue' => 'count'],
     ];
     /** Champs d'une ligne dont la valeur est un CODE : jeu de libellés (`console.values.*`) qui le rédige */
-    public const CODED = ['verdict' => 'verdict', 'status' => 'budget', 'confidence' => 'confidence'];
+    public const CODED = ['verdict' => 'verdict', 'status' => 'budget', 'confidence' => 'confidence', 'aidKind' => 'aidKind', 'aidStatus' => 'aidStatus']; // lot FIS-2 : genre et état d'une aide
 
     /** Type de chaque paramètre : le seul vocabulaire que le modèle peut employer */
     public const PARAM_TYPES = ['periodId' => 'id', 'productId' => 'id', 'year' => 'year', 'days' => 'days', 'range' => 'range', 'term' => 'term', 'screen' => 'screen'];
@@ -105,6 +107,7 @@ class AnalysisCatalog
         private readonly ScreenGuides $guides,
         private readonly GestionLoanService $loans,
         private readonly TenantCurrencyProvider $currency,
+        private readonly ?\App\Gestion\Aid\GestionAidService $aids = null, // lot FIS-2
     ) {
     }
 
@@ -230,6 +233,7 @@ class AnalysisCatalog
             'lexique.term' => $this->lexiqueTerm($params, $locale),
             'screen.guide' => ['figures' => [], 'guide' => $this->guides->guide((string) $params['screen'], $locale)],
             'loans.overview' => $this->loansOverview($locale),
+            'aids.overview' => $this->aidsOverview($locale),
         };
         $rows = $result['rows'] ?? [];
         $total = $result['total'] ?? count($rows);
@@ -366,6 +370,42 @@ class AnalysisCatalog
             $this->figure('endAmount', $series['end']['amount'] ?? null, 'money', $locale, [], $horizon),
             $this->figure('endDate', $series['end']['date'] ?? null, 'date', $locale, [], $horizon),
             $this->coded('cashStatus', $p['status'] ?? null, 'cash', $locale),
+        ]];
+    }
+
+    /**
+     * Aides du site (lot FIS-2) : les chiffres de l'écran des aides. Les totaux ne réunissent que les aides dans la devise du site. Ni
+     * l'organisme, ni les notes, ni le texte des conditions ne sont rendus : seulement le libellé donné par le gérant, le genre, l'état et les
+     * montants. Le produit des aides d'exploitation de l'année civile en cours est une estimation tant que tout n'est pas reçu.
+     */
+    private function aidsOverview(string $locale): array
+    {
+        $today = $this->calendar->today()->format('Y-m-d');
+        $site = $this->currency->code();
+        $aids = $this->aids?->list($today) ?? [];
+        $received = $toReceive = $due = $missing = 0;
+        $rows = [];
+        foreach ($aids as $a) {
+            $own = $a['currency'] === $site;
+            $rows[] = ['aidId' => $a['id'], 'label' => $a['label'], 'currency' => $a['currency'], 'aidKind' => $a['kind'], 'aidStatus' => $a['status'], 'granted' => $own ? $a['amount'] : null,
+                'received' => $own ? $a['receivedTotal'] : null, 'toReceive' => $own ? $a['toReceive'] : null, 'conditionsDue' => $a['conditionsDue']];
+            $due += $a['conditionsDue'];
+            $missing += $a['documentsMissing'] ? 1 : 0;
+            if ($own) {
+                $received += $a['receivedTotal'];
+                $toReceive += $a['toReceive'];
+            }
+        }
+        $year = substr($today, 0, 4);
+        $product = $aids === [] ? null : $this->aids?->productBetween($year . '-01-01', $year . '-12-31');
+
+        return ['rows' => $rows, 'figures' => [
+            $this->figure('aidsCount', count($aids), 'count', $locale),
+            $this->figure('aidsReceived', $aids === [] ? null : $received, 'money', $locale),
+            $this->figure('aidsToReceive', $aids === [] ? null : $toReceive, 'money', $locale),
+            $this->figure('aidsConditionsDue', $aids === [] ? null : $due, 'count', $locale),
+            $this->figure('aidsDocumentsMissing', $aids === [] ? null : $missing, 'count', $locale),
+            $this->figure('operatingAidsYear', $product['total'] ?? null, 'money', $locale),
         ]];
     }
 

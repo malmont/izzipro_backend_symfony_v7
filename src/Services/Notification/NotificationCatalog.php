@@ -47,6 +47,8 @@ final class NotificationCatalog
     /** Lot ABO-4 : « une place s'est libérée » à l'abonné en liste d'attente (échéance de 2 h au plus) ; le rappel de la veille */
     public const SUBSCRIPTION_WAITLIST_OFFER = 'subscription_waitlist_offer';
     public const SUBSCRIPTION_REMINDER = 'subscription_reminder';
+    /** Lot FIS-2 : rappel des aides de la gestion (condition échue encore à faire, aide reçue sans justificatif), aux administrateurs */
+    public const AID_REMINDER = 'aid_reminder';
     /** Le courriel qui réunit les courriels de suivi retenus d'un sujet ; son sujet est celui des courriels qu'il porte */
     public const FOLLOWUP_SUMMARY = 'followup_summary';
 
@@ -57,6 +59,7 @@ final class NotificationCatalog
         self::BOOKING_NEW => [self::FOLLOWUP, self::TOPIC_BOOKINGS],
         self::BOOK_PAYMENT_RECEIVED => [self::FOLLOWUP, self::TOPIC_PAYMENTS],
         self::LOSS_DIGEST => [self::FOLLOWUP, self::TOPIC_LOSS],
+        self::AID_REMINDER => [self::FOLLOWUP, self::TOPIC_MANAGEMENT], // lot FIS-2 : niveau du commerçant et plafond du jour
         self::ENTITLEMENT_FOLLOWUP => [self::FOLLOWUP, self::TOPIC_ENTITLEMENTS], // essai commencé, droit accordé à la main ou à l'essai, fin d'essai dans 7 jours, accès rétabli, demande enregistrée ou refusée
         self::WEEKLY_DIGEST => [self::FOLLOWUP, null], // le résumé de la semaine lui-même (NotificationWeeklyService) : type coupable dans « Avancé »
         self::FOLLOWUP_SUMMARY => [self::FOLLOWUP, null],
@@ -126,6 +129,7 @@ final class NotificationCatalog
         'src/Controller/Account/RegistrationController.php' => ['email_verification'],
         'src/Controller/Account/ResetPasswordController.php' => ['password_reset'],
         'src/Controller/FinancementApiController.php' => ['customer_message'],
+        'src/Gestion/Aid/AidReminderService.php' => [self::AID_REMINDER],
         'src/LossPrevention/Services/LossDigestService.php' => [self::LOSS_DIGEST],
         'src/LossPrevention/Services/LossExerciseService.php' => ['loss_exercise'],
         'src/MemoiresVivantes/Controller/Admin/UserManagementController.php' => ['memoires_account_invitation'],

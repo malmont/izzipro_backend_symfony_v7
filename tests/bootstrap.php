@@ -232,6 +232,11 @@ foreach ([MV_TEST_TENANT_DB, MV_TEST_TENANT2_DB] as $db) {
     foreach (\DoctrineMigrations\Version20270202400000::STATEMENTS as $sql) {
         $tenantDb->exec($sql);
     }
+    // PROVISOIRE, lot FIS-2 (21/11/2026) : la migration Version20270202500000 (aides de la gestion), de la même façon (après FIS-1)
+    require_once dirname(__DIR__) . '/migrations/Version20270202500000.php';
+    foreach (\DoctrineMigrations\Version20270202500000::STATEMENTS as $sql) {
+        $tenantDb->exec($sql);
+    }
     $tenantDb = null;
 }
 

@@ -709,3 +709,22 @@ prets:
             label: 'Dans la trésorerie'
             text: 'Le déblocage entre sur le compte ; chaque échéance entière en sort, capital compris. Si vous aviez saisi les échéances en mouvement prévu, retirez-le pour ne pas les compter deux fois.'
     next: 'Ajoutez vos prêts avec les chiffres de l''offre de la banque, puis vérifiez l''échéancier contre son tableau d''amortissement.'
+aides:
+    purpose: 'Vos aides : chaque subvention ou avance, avec ce qui est accordé, déjà reçu et encore attendu, ses conditions à tenir et ses justificatifs. Les versements entrent dans la trésorerie ; une aide d''exploitation compte aussi dans le résultat.'
+    points:
+        trois-genres:
+            label: 'Trois genres'
+            text: 'Exploitation : elle compte dans le résultat, au prorata de la période couverte. Investissement : elle entre seulement dans la trésorerie. Avance remboursable : elle devient un prêt à 0 %, visible dans « Prêts ».'
+        recu-a-recevoir:
+            label: 'Reçu et à recevoir'
+            text: 'Une aide accordée compte dès son accord. Tant qu''elle n''est pas reçue en entier, le résultat montre deux parts, reçu et accordé pas encore reçu : c''est une estimation.'
+        conditions:
+            label: 'Conditions'
+            text: 'Chaque engagement a une échéance. Marquez-le tenu ou non tenu ; une condition encore à faire à son échéance vous est rappelée une fois.'
+        justificatifs:
+            label: 'Justificatifs'
+            text: 'Rattachez les documents déjà déposés dans la gestion (convention, attestation). Une aide reçue sans justificatif vous est rappelée une fois.'
+        a-rembourser:
+            label: 'À rembourser'
+            text: 'Si une condition n''est pas tenue, indiquez le montant et la date du remboursement : il sort de la trésorerie à cette date, et le produit déjà compté baisse sur la période de la décision.'
+    next: 'Ajoutez vos aides avec la convention de l''organisme, puis rattachez la convention comme justificatif.'

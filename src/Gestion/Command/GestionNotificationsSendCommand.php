@@ -42,6 +42,7 @@ class GestionNotificationsSendCommand extends Command
         private readonly ?\App\Import\OrderImportService $orderImports = null, // lot IMP-3 : fichiers de commandes abandonnés
         private readonly ?\App\Services\Agency\AgencySiteRequestService $agencySites = null, // lot AG-2 : rattrapage de la file des sites demandés par les agences
         private readonly ?\App\Services\Platform\Sites\PlatformSiteService $platformSites = null, // lot TYPE-1 : rattrapage des demandes de création de site de la plateforme
+        private readonly ?\App\Gestion\Aid\AidReminderService $aidReminders = null, // lot FIS-2 : rappel des aides (courriel de suivi)
     ) {
         parent::__construct();
     }
@@ -76,6 +77,7 @@ class GestionNotificationsSendCommand extends Command
                     $io->text(sprintf('%s : application de gestion non activée, aucune notification', $row['code']));
                     continue;
                 }
+                $this->remindAids((string) $row['code'], $io, $at); // lot FIS-2 : à chaque passage, à partir de 8 h du magasin ; chaque élément une fois
                 $result = $this->notifications->runDaily($at, (bool) $input->getOption('force'));
                 if ($result['ran']) {
                     $this->snapshot((string) $row['code']);
@@ -144,6 +146,19 @@ class GestionNotificationsSendCommand extends Command
             }
         } catch (\Throwable $e) {
             $this->logger->error(sprintf('Résumé de la semaine : site %s non traité : %s', $code, $e->getMessage()));
+        }
+    }
+
+    /** Lot FIS-2 : le rappel des aides ; une erreur n'empêche jamais les notifications du téléphone */
+    private function remindAids(string $code, SymfonyStyle $io, ?\DateTimeImmutable $at): void
+    {
+        try {
+            $result = $this->aidReminders?->sendIfDue($at) ?? ['status' => 'nothing_due', 'sent' => 0, 'held' => 0];
+            if ($result['sent'] + $result['held'] > 0) {
+                $io->text(sprintf('%s : rappel des aides envoyé à %d administrateur(s), %d retenu(s)', $code, $result['sent'], $result['held']));
+            }
+        } catch (\Throwable $e) {
+            $this->logger->error(sprintf('Rappel des aides : site %s non traité (%s)', $code, $e::class));
         }
     }
 

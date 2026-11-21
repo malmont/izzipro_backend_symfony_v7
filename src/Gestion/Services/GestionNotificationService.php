@@ -51,14 +51,16 @@ class GestionNotificationService
     /** Lot G-4 : le directeur du groupe a copié des articles dans le catalogue de cette boutique (masqués). INDISPENSABLE : l'écriture d'un tiers */
     public const GROUP_CATALOG_COPIED = 'group_catalog_copied';
     public const INDISPENSABLE = [self::LOSS_BOX_PLUGGED, self::GROUP_CATALOG_COPIED];
-    public const KINDS = [self::LOW_STOCK => true, self::DUPLICATE_INVOICE => true, self::CASH_CRITICAL => true, self::TRIP_BUDGET => true, self::LOSS_DIGEST => true, self::WEEKLY_DIGEST => true, self::LOSS_EXIT => true, self::LOSS_BOX_PLUGGED => true, self::GROUP_CATALOG_COPIED => true]; // trip_budget : lot B1a ; cash_critical : lot B1b-1 ; loss_exit : lot L5-d ; loss_box_plugged : lot L6-b
+    /** Lot FIS-2 : rappel des aides (condition échue, justificatif manquant), par COURRIEL de suivi, coupable ici */
+    public const AID_REMINDER = 'aid_reminder';
+    public const KINDS = [self::LOW_STOCK => true, self::DUPLICATE_INVOICE => true, self::CASH_CRITICAL => true, self::TRIP_BUDGET => true, self::LOSS_DIGEST => true, self::WEEKLY_DIGEST => true, self::LOSS_EXIT => true, self::LOSS_BOX_PLUGGED => true, self::GROUP_CATALOG_COPIED => true, self::AID_REMINDER => true]; // trip_budget : lot B1a ; cash_critical : lot B1b-1 ; loss_exit : lot L5-d ; loss_box_plugged : lot L6-b
     /** Canal d'un type : `push` (téléphone) par défaut ; `email` pour ceux listés ici */
-    public const EMAIL_KINDS = [self::LOSS_DIGEST, self::WEEKLY_DIGEST];
+    public const EMAIL_KINDS = [self::LOSS_DIGEST, self::WEEKLY_DIGEST, self::AID_REMINDER];
     /** Lot NOTIF-1, type → [famille, sujet] : `urgent` part dès le niveau « Essentiel », `followup` (suivi) est regroupé par les niveaux */
     public const FAMILIES = [
         self::LOW_STOCK => ['followup', 'management'], self::DUPLICATE_INVOICE => ['followup', 'management'], self::CASH_CRITICAL => ['urgent', 'management'],
         self::TRIP_BUDGET => ['followup', 'management'], self::LOSS_DIGEST => ['followup', 'loss'], self::WEEKLY_DIGEST => ['followup', null], self::LOSS_EXIT => ['urgent', 'loss'],
-        self::LOSS_BOX_PLUGGED => ['indispensable', 'loss'], self::GROUP_CATALOG_COPIED => ['indispensable', 'management'],
+        self::LOSS_BOX_PLUGGED => ['indispensable', 'loss'], self::GROUP_CATALOG_COPIED => ['indispensable', 'management'], self::AID_REMINDER => ['followup', 'management'],
     ];
     public const CASH_REPEAT_DAYS = 7;
     public const DAILY_HOUR = 10;

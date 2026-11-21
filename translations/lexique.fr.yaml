@@ -458,3 +458,11 @@ charges-financieres:
     term: 'Charges financières'
     definition: 'Les intérêts, l''assurance et les frais de vos prêts, comptés dans le résultat au prorata des jours de chaque période. Le capital remboursé, lui, ne touche que la trésorerie.'
     synonyms: 'frais financiers'
+aide-exploitation:
+    term: 'Aide d''exploitation'
+    definition: 'Une aide versée pour faire tourner l''entreprise (une subvention de fonctionnement, une aide à l''embauche). Une fois accordée, elle compte dans le résultat, en plus, au prorata des jours de la période qu''elle couvre. Tant qu''elle n''est pas reçue en entier, le chiffre est une estimation.'
+    synonyms: 'subvention d''exploitation, subvention de fonctionnement'
+avance-remboursable:
+    term: 'Avance remboursable'
+    definition: 'Une aide qu''il faudra rendre, souvent sans intérêts. L''application la traite comme un prêt à 0 % : l''argent reçu entre dans la trésorerie et chaque remboursement en sort, mais elle ne compte jamais dans le résultat.'
+    synonyms: 'prêt d''honneur, prêt à taux zéro'
