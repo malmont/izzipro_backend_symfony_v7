@@ -83,6 +83,15 @@ final class PrepareCheckoutUseCase
             throw new CheckoutException(400, 'Montant invalide calculé', [], 'AMOUNT_INVALID');
         }
         $cart = array_intersect_key($payload, array_flip(CheckoutCartGuard::CART_KEYS)); // `rental` compris : le devis l'applique
+        // lot CHECKOUT-LIVRAISON : la livraison gardée est celle que le SERVEUR a cotée (tarif du jeton EasyPost, prix fixe, offerte) ;
+        // la commande et le webhook la reprennent du panier, jamais un prix envoyé, et le jeton peut expirer après le paiement
+        unset($cart['priceShipping'], $cart['service'], $cart['carrierAccountId']);
+        $cart['shippingPrice'] = (int) $quote['shipping'];
+        if (is_array($quote['shippingRate'] ?? null)) {
+            // le service et le compte PAYÉS sont ceux du jeton, jamais ceux du client (l'étiquette se lira sur eux)
+            $cart['service'] = $quote['shippingRate']['service'];
+            $cart['carrierAccountId'] = $quote['shippingRate']['carrierAccountId'];
+        }
         $opened = $this->sessions->open($cart, $amount, (string) $quote['currency'], $user, $order, $locale, $host, $reusable, $dropKept);
 
         return [

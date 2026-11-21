@@ -19,6 +19,10 @@ final class FakeEasyPostGateway implements ShippingCarrierGatewayInterface
     public static string $environment = 'test';
     public static ?string $trackingStatus = 'in_transit';
     public static int $labels = 0;
+    /** EasyPost qui ne répond pas (lot CHECKOUT-LIVRAISON) : getRates lève l'erreur de EasyPostService */
+    public static bool $ratesDown = false;
+    /** EasyPost qui refuse la demande (adresse invalide) : getRates lève l'erreur de refus */
+    public static bool $ratesRefused = false;
 
     public static function reset(): void
     {
@@ -32,11 +36,19 @@ final class FakeEasyPostGateway implements ShippingCarrierGatewayInterface
         self::$environment = 'test';
         self::$trackingStatus = 'in_transit';
         self::$labels = 0;
+        self::$ratesDown = false;
+        self::$ratesRefused = false;
     }
 
     public function getRates(array $data): array
     {
         self::$requests[] = ['kind' => 'rates', 'data' => $data];
+        if (self::$ratesRefused) {
+            throw new \App\Services\ShippingService\ShippingAddressRefusedException('EasyPost refuse cette demande de tarifs (adresse ou colis) : simulée');
+        }
+        if (self::$ratesDown) {
+            throw new \App\Services\ShippingService\ShippingRatesUnavailableException('Erreur lors de la récupération des tarifs EasyPost: simulée');
+        }
 
         return array_map(fn (array $r) => (object) ($r + ['id' => 'rate_' . md5(json_encode($r))]), self::$rates);
     }

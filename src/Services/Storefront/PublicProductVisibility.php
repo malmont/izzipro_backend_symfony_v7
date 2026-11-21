@@ -39,6 +39,20 @@ final class PublicProductVisibility
         return !$this->viewerIsTeam();
     }
 
+    /** Rôles qui saisissent un prix de livraison (lot CHECKOUT-LIVRAISON) : l'administration et la caisse, pas tout le personnel */
+    private const SHIPPING_PRICE_ROLES = ['ROLE_ADMIN', 'ROLE_SUPER_ADMIN', 'ROLE_USER_POS', 'ROLE_POS_MANAGER'];
+
+    /**
+     * Le prix de livraison saisi est-il celui de l'administration ou de la caisse ? Jamais hors requête HTTP (un traitement interne qui
+     * coterait le web n'est pas le personnel) ; rôles relus en base depuis le jeton (StorefrontViewer).
+     */
+    public function viewerMayTypeShippingPrice(): bool
+    {
+        $request = $this->requests->getMainRequest();
+
+        return $request !== null && array_intersect(self::SHIPPING_PRICE_ROLES, $this->viewer->roles($request)) !== [];
+    }
+
     /** La requête vient-elle d'un compte d'équipe du site ? (lu une fois par requête) */
     public function viewerIsTeam(): bool
     {

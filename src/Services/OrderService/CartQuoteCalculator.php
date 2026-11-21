@@ -50,7 +50,8 @@ final class CartQuoteCalculator
         private readonly ?OrderTaxAddressResolver $taxAddress = null, // retrait en magasin : taxes du lieu de remise (B20, 08/11/2026)
         private readonly ?\App\Services\Booking\RentalPromotionService $rentalPromotions = null, // promotion de location (lot LOC3, 11/11/2026)
         private readonly ?VariantPriceResolver $variantPrices = null, // promotion par variante (lot VAR, 11/11/2026)
-        private readonly ?\App\Services\Storefront\PublicProductVisibility $visibility = null, // lot FICHES-HORS-LIGNE (21/11/2026)
+        private readonly ?\App\Services\Storefront\PublicProductVisibility $visibility = null,
+        private readonly ?\App\Services\ShippingService\ShippingRateStore $shippingRates = null, // lot CHECKOUT-LIVRAISON // lot FICHES-HORS-LIGNE (21/11/2026)
     ) {
     }
 
@@ -175,7 +176,7 @@ final class CartQuoteCalculator
             throw new CartQuoteException(422, $errors[0]['path'] . ' : ' . $errors[0]['message'] . (count($errors) > 1 ? sprintf(' (et %d autre(s) erreur(s))', count($errors) - 1) : ''), $errors);
         }
 
-        [$shipping, $carrier] = $this->shipping($input, $subtotal);
+        [$shipping, $carrier, $shippingRate] = $this->shipping($input, $subtotal, $web && !($this->visibility?->viewerMayTypeShippingPrice() ?? false), $lines);
         // Retrait en magasin (B20, 08/11/2026) : le bien est remis au magasin, les taxes suivent la province de la boutique (règle du lieu de
         // fourniture, comme une vente au comptoir), que le client ait donné une adresse ou non ; sans fiche entreprise, l'adresse donnée
         [$taxAddress, $taxBasis] = [$input->address, 'shipping'];
@@ -205,6 +206,7 @@ final class CartQuoteCalculator
 
         return ($discounts !== null ? ['discounts' => $discounts, 'grossSubtotal' => $discounts['gross']] : []) + $posLines + [
             'lines' => $lines, 'subtotal' => $subtotal, 'shipping' => $shipping,
+            'shippingRate' => $shippingRate, // lot CHECKOUT-LIVRAISON : service et compte EasyPost du jeton (null hors tarif EasyPost du web)
             'taxes' => $tax['taxes'], 'taxStatus' => $tax['status'], 'taxProvider' => $tax['provider'],
             'pricesIncludeTax' => (bool) ($tax['inclusive'] ?? false), // F18 partie 2b : TTC → les taxes sont dans subtotal et shipping, total = subtotal + shipping
             'taxCalculationId' => $tax['calculationId'], 'deposit' => $deposit,
@@ -423,10 +425,10 @@ final class CartQuoteCalculator
      * @param int $subtotal lignes seules, en cents (livraison offerte au-dessus d'un montant, lot 1, 07/11/2026)
      * @return array{0: int, 1: ?Carrier} frais de livraison en cents, transporteur
      */
-    private function shipping(CartQuoteInputDto $input, int $subtotal = 0): array
+    private function shipping(CartQuoteInputDto $input, int $subtotal = 0, bool $publicWeb = false, array $lines = []): array
     {
         if ($input->carrierId === null) {
-            return [0, null];
+            return [0, null, null];
         }
         $carrier = $this->emProvider->getEntityManager()->getRepository(Carrier::class)->find($input->carrierId);
         if ($carrier === null) {
@@ -434,12 +436,52 @@ final class CartQuoteCalculator
         }
         // Retrait en magasin : jamais de frais ; livraison offerte à partir d'un montant de lignes (réglage commerce.freeShippingAbove)
         if ($carrier->isPickup() || $this->freeShippingApplied($carrier, $subtotal)) {
-            return [0, $carrier];
+            return [0, $carrier, null];
         }
-        // Transporteur EasyPost : le tarif dépend des colis et de l'adresse (shipping/summary) ; sinon prix fixe du transporteur
+        // Transporteur EasyPost : le tarif dépend des colis et de l'adresse (shipping/summary). Sur le web public (lot CHECKOUT-LIVRAISON),
+        // seul le tarif gardé par le serveur pour ce jeton est cru ; le prix envoyé est ignoré, jamais 0 par défaut. Caisse et équipe :
+        // le prix saisi, comme avant ; sinon prix fixe du transporteur
+        if ($carrier->getCarrierAccountId() && $publicWeb) {
+            $rate = $this->rateOfToken($input, $carrier, $lines);
+
+            return [(int) $rate['amount'], $carrier, ['service' => $rate['service'], 'carrierAccountId' => $rate['carrierAccountId']]];
+        }
         $price = $carrier->getCarrierAccountId() ? ($input->shippingPrice ?? (int) round((float) $carrier->getPrice())) : (int) round((float) $carrier->getPrice());
 
-        return [max(0, $price), $carrier];
+        return [max(0, $price), $carrier, null];
+    }
+
+    /**
+     * Le tarif gardé pour le jeton (ShippingRateStore), s'il couvre CE panier, CETTE destination et CE transporteur.
+     *
+     * @throws CartQuoteException 422 SHIPPING_RATE_REQUIRED, SHIPPING_RATE_EXPIRED, SHIPPING_RATE_MISMATCH
+     */
+    private function rateOfToken(CartQuoteInputDto $input, Carrier $carrier, array $lines): array
+    {
+        $refuse = static fn (string $code, string $message): CartQuoteException => new CartQuoteException(422, "shippingRateToken : $message", [CartQuoteException::error('shippingRateToken', $code, $message)]);
+        if ($input->shippingRateToken === null) {
+            throw $refuse('SHIPPING_RATE_REQUIRED', 'tarif de livraison à choisir dans le résumé des tarifs (rateToken)');
+        }
+        $rate = $this->shippingRates?->get($input->shippingRateToken);
+        if ($rate === null) {
+            throw $refuse('SHIPPING_RATE_EXPIRED', 'tarif de livraison expiré ou inconnu : redemandez le résumé des tarifs');
+        }
+        $products = [];
+        foreach ($lines as $line) {
+            if (is_numeric($line['productId'] ?? null)) {
+                $products[(int) $line['productId']] = ($products[(int) $line['productId']] ?? 0) + (int) $line['quantity'];
+            }
+        }
+        ksort($products);
+        $quoted = \App\Services\ShippingService\ShippingRateStore::destination($input->address);
+        // destination STRICTE : le jeton n'est émis que pour un pays et un code postal connus, et le devis doit donner les mêmes
+        $sameDestination = $rate['destination']['country'] !== null && $rate['destination']['postalCode'] !== null && $quoted === $rate['destination'];
+        if ($rate['products'] !== $products || !$sameDestination || $rate['carrierAccountId'] !== $carrier->getCarrierAccountId()
+            || $rate['currency'] !== strtoupper($this->currency->code())) {
+            throw $refuse('SHIPPING_RATE_MISMATCH', 'ce tarif a été calculé pour un autre panier, une autre adresse ou un autre transporteur');
+        }
+
+        return $rate;
     }
 
     /** Livraison offerte (lot 1) : seuil réglé, atteint par les lignes, transporteur payant (le retrait est déjà gratuit) */

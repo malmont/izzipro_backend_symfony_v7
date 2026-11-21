@@ -31,6 +31,12 @@ class ShippingService
      * @throws ItemTooLargeForPackagingException
      */
 
+    /** Nombre de colis emballés pour ces articles (lot CHECKOUT-LIVRAISON : un tarif ne vaut que s'il les couvre tous) */
+    public function countParcels(array $items): int
+    {
+        return count($this->getPackedParcels($items));
+    }
+
     private function getPackedParcels(array $items): PackedBoxList
     {
         $em = $this->emProvider->getEntityManager();

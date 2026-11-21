@@ -261,7 +261,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (765)
+## Boutique et commun (764)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -841,7 +841,6 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | PUT | `/api/service-families/{id}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\ServiceFamilyController\ServiceFamilyController::update` |
 | GET | `/api/service-families` | PUBLIC_ACCESS | `Controller\ServiceFamilyController\ServiceFamilyController::index` |
 | POST | `/api/service-families` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\ServiceFamilyController\ServiceFamilyController::create` |
-| POST | `/api/shipping/buy` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\ShippingController\ShippingController::buy` |
 | POST | `/api/shipping/parcels` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\ShippingController\ShippingController::parcels` |
 | POST | `/api/shipping/rates` | PUBLIC_ACCESS | `Controller\ShippingController\ShippingController::rates` |
 | POST | `/api/shipping/summary` | PUBLIC_ACCESS | `Controller\ShippingController\ShippingController::summary` |
