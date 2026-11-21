@@ -134,15 +134,6 @@ class ProductService
         return new ProductDetailedOutputDTO($product, $host, $locale, $this->currency->code());
     }
 
-    public function getProductBySlug(string $slug, string $host, string $locale = 'fr'): ProductDetailedOutputDTO
-    {
-        $product = $this->repository->findBySlugAndLocale($slug, $locale);
-
-        if (!$product) {
-            throw new NotFoundHttpException('Product not found for slug: ' . $slug);
-        }
-        return new ProductDetailedOutputDTO($product, $host, $locale, $this->currency->code());
-    }
 
     public function getProductsByOffer(string $offer, string $host, string $locale = 'fr'): array
     {
@@ -164,7 +155,8 @@ class ProductService
 
     public function getLandingPageProducts(string $host, string $locale = 'fr'): array
     {
-        $products = $this->repository->findTranslatedByCriteria($locale, ['isLandingPage' => true]);
+        // lot FICHES-HORS-LIGNE (21/11/2026) : seulement les articles en ligne (aucun article coché « page d'accueil » hors ligne, mesuré)
+        $products = $this->repository->findTranslatedByCriteria($locale, ['isLandingPage' => true, 'isWeb' => true]);
         return array_map(fn($product) => new ProductDetailedOutputDTO($product, $host, $locale, $this->currency->code()), $products);
     }
 }

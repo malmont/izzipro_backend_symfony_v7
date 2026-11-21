@@ -26,7 +26,8 @@ class ProductVariantController extends AbstractController
         GetProductVariantsUseCase $getProductVariantsUseCase,
         CreateProductVariantUseCase $createProductVariantUseCase,
         DeleteProductVariantUseCase $deleteProductVariantUseCase,
-        TenantCacheService $cache
+        TenantCacheService $cache,
+        private readonly ?\App\Services\Storefront\PublicProductVisibility $visibility = null, // lot FICHES-HORS-LIGNE (21/11/2026)
     ) {
         $this->getProductVariantsUseCase = $getProductVariantsUseCase;
         $this->createProductVariantUseCase = $createProductVariantUseCase;
@@ -37,6 +38,10 @@ class ProductVariantController extends AbstractController
     #[Route('/api/products/{id}/variants', name: 'get_product_variants', methods: ['GET'], requirements: ['id' => '\d+'])]
     public function getProductVariants(Product $product): JsonResponse
     {
+        // lot FICHES-HORS-LIGNE : article hors ligne = la réponse d'un article absent (celle du résolveur d'entité), avant le cache
+        if ($this->visibility?->hidden((int) $product->getId())) {
+            throw new \Symfony\Component\HttpKernel\Exception\NotFoundHttpException(\sprintf('"%s" object not found by "%s".', Product::class, \Symfony\Bridge\Doctrine\ArgumentResolver\EntityValueResolver::class));
+        }
         $cacheKey = 'product_variants_' . $product->getId();
         $variants = $this->cache->get(
             $cacheKey,

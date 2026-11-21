@@ -93,7 +93,7 @@ Pour une route fermée :
 |---|---|
 | visiteur, compte client (même né par Mémoires Vivantes, Living Memory ou Boussole) | 403 `STOREFRONT_UNDER_CONSTRUCTION { name, scope }` (une page sobre « Bientôt ouvert » pour une page du serveur) |
 | compte d'**équipe** connecté (administrateur, assistance, caisse, biographe, agence…) | servie |
-| jeton d'aperçu valable (en-tête `X-Storefront-Preview`), en lecture (`GET`, `HEAD`) | servie ; jamais une écriture |
+| jeton d'aperçu valable (en-tête `X-Storefront-Preview`), en lecture (`GET`, `HEAD`) | servie ; jamais une écriture ; l'aperçu voit ce que verra le public : un article hors ligne y est absent (lot FICHES-HORS-LIGNE, `docs/boutique.md`) |
 
 Écritures fermées à **tous**, équipe et aperçu compris :
 

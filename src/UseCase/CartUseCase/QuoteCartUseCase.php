@@ -33,7 +33,9 @@ class QuoteCartUseCase
                 $body['shippingAddress'] = $store;
             }
         }
-        $quote = $this->calculator->quote(CartQuoteInputDto::fromArray($body));
+        // web pour TOUTE la route (relecture de FICHES-HORS-LIGNE) : un cashRegisterId posé par un visiteur ne lève pas le refus d'un
+        // article hors ligne ; le caissier, compte d'équipe, n'est jamais refusé
+        $quote = $this->calculator->quote(CartQuoteInputDto::fromArray($body), web: true);
         if ($counter) {
             // Devis de caisse seulement (19/10/2026) : total à payer si tout est réglé en espèces, déjà arrondi (cents)
             $quote['cashTotal'] = $this->cashRounding->round((int) $quote['total']);

@@ -107,6 +107,34 @@ dédiées, inchangées** : `/api/products/{id}` (fiche, DTO), `/api/products/by-
 `/api/products/{bestsellers|newarrivals|…}`, `/api/productsid/{id}`, avis et éligibilité, variantes ; catégories : `/api/category`.
 Le site ne relit plus jamais la liste complète en repli d'une fiche en erreur (correction côté Next.js). Véhicules de la boutique : `GET /api/vehicle_products` et `/{id}` (tableau simple, routes maison ; véhicules en ligne seulement, sans `vin`, `quantity` ni `stockQuantity` de location, lot VEHICULES-PUBLIC du 21/11/2026 ; le NIV reste sur la fiche, `vehicleDetails.vin` de `/api/products/{id}`, décision du propriétaire). Le carrousel du bloc « financement » est `GET /api/vehicles/carousel` (entité `Vehicle`, véhicules `webDisplay`).
 
+## Article hors ligne : invisible au public (lot FICHES-HORS-LIGNE, 21/11/2026)
+
+Un article **hors ligne** (`isWeb` faux ou vide) est servi à l'**équipe** du site et à personne d'autre. L'équipe suit la règle de la
+boutique en construction (`StorefrontViewer::isTeam` : administrateur, caisse, support, rôles d'agence, entrée d'agence ou de
+directeur ; rôles relus en base depuis le jeton) : l'éditeur de pages, la gestion, MAUI et la caisse (articles de caisse seule) lisent
+toujours tout. Le visiteur, le compte client et le **lien d'aperçu** (qui montre ce que verra le public à l'ouverture) reçoivent
+EXACTEMENT la réponse d'un article absent, statut et corps, pour ne pas révéler son existence. Service : `PublicProductVisibility`
+(`src/Services/Storefront/`), une requête sur la clé primaire, faite **avant** tout cache (les fiches sont en cache sous une clé
+partagée par tous). Essai : `tests/Functional/Boutique/FichesHorsLigneTest.php`.
+
+| Route | Pour le public, un article hors ligne… |
+|---|---|
+| `GET /api/products/{id}`, `/api/productsid/{id}`, `/api/products/by-slug/{slug}` | la réponse d'un article absent (404) |
+| `GET /api/products/{id}/variants`, `/reviews`, `/reviews/eligibility`, `POST /api/products/{id}/reviews` | la réponse d'un article absent ; aucun avis donné |
+| `GET /api/customization/config/{variantId}`, `/api/booking/check/{id}`, `/api/booking/calendar/{id}` | la réponse d'un article absent |
+| `GET /api/products/by-category` (recherche comprise) | absent : `isWeb=true` forcé pour le public, quel que soit le paramètre ; l'équipe garde le paramètre, et sans lui tout le catalogue (la caisse l'appelle ainsi) |
+| `GET /api/landingpage` | absent (articles « page d'accueil » en ligne seulement ; aucun site concerné, mesuré) |
+| `POST /api/cart/quote` (sans poste de caisse), `POST /api/stripe/create-intent` | refus de la ligne `NOT_SELLABLE` (422) ; aucune intention ouverte |
+| Devis de caisse (`cashRegisterId`), vente en caisse | inchangés (règle `isPos` de la caisse) |
+
+La création de la commande (`/api/order/create`, `create-guest`) n'ajoute pas de refus : elle exige une intention de paiement
+VÉRIFIÉE, qui ne se crée plus pour un article hors ligne, une fois le lot CHECKOUT-PANIER livré (la commande se créera alors toujours
+depuis le panier gardé avec l'intention ; d'ici là, le corps de la commande n'est lié à l'intention que par son montant). Un article
+passé hors ligne APRÈS l'intention donne sa commande au client qui a payé (jamais de paiement sans commande). Le devis
+`POST /api/cart/quote` applique la règle à toute la route, même avec un `cashRegisterId` (un visiteur peut en poser un ; le caissier
+est un compte d'équipe). Les lectures dont le corps dépend de qui lit (fiche, by-slug, by-category, avis) portent
+`Vary: Authorization, Cookie` (`PublicReadCacheSubscriber::VIEWER_DEPENDENT`). Les listes `GET /api/products/{offer}` filtraient déjà `isWeb`.
+
 ## Le coût ne sort pas des routes ouvertes (lot COST-1, 16/11/2026)
 
 Jusqu'à ce lot, les fiches produit publiques rendaient le **prix d'achat** et le **coefficient** (`purchasePrice`,

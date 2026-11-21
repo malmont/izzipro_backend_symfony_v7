@@ -38,6 +38,13 @@ final class PublicReadCacheSubscriber implements EventSubscriberInterface
     ];
 
     /**
+     * Lectures dont le CORPS dépend de qui lit (lot FICHES-HORS-LIGNE, 21/11/2026 : un article hors ligne est servi à l'équipe,
+     * absent pour le public) : `Vary` nomme aussi `Authorization` et `Cookie`, pour qu'un cache partagé ne resserve jamais la
+     * réponse du public à un compte d'équipe (la caisse, la gestion), ni l'inverse.
+     */
+    public const VIEWER_DEPENDENT = ['get_products_by_category', 'get_product_by_slug', 'get_product_detail', 'api_product_reviews'];
+
+    /**
      * Délai pendant lequel un cache intermédiaire peut encore servir la réponse périmée en la revalidant en arrière-plan.
      * 600 s jusqu'au 28/10/2026 : une écriture pouvait rester invisible jusqu'à 11 min pour un visiteur anonyme, alors que
      * le cache applicatif est désormais vidé à l'écriture ; ramené à 60 s, le temps d'une revalidation.
@@ -62,6 +69,9 @@ final class PublicReadCacheSubscriber implements EventSubscriberInterface
 
         $response->setEtag(hash('xxh128', (string) $response->getContent()), true);
         $response->setVary(['X-Tenant-Host', 'Accept-Language'], false);
+        if (in_array((string) $request->attributes->get('_route'), self::VIEWER_DEPENDENT, true)) {
+            $response->setVary(['Authorization', 'Cookie'], false);
+        }
         if (self::isAuthenticated($request)) {
             $response->setPrivate();
             $response->headers->addCacheControlDirective('no-cache');

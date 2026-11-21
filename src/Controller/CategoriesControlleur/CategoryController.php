@@ -26,7 +26,8 @@ class CategoryController extends AbstractController
         private readonly GetCategoriesUseCase $getCategoriesUseCase,
         private readonly TenantCacheService $cache,
         private readonly TenantCurrencyProvider $currency,
-        private readonly ?MediaUrlResolver $mediaUrlResolver = null
+        private readonly ?MediaUrlResolver $mediaUrlResolver = null,
+        private readonly ?\App\Services\Storefront\PublicProductVisibility $visibility = null, // lot FICHES-HORS-LIGNE (21/11/2026)
     ) {
     }
 
@@ -48,6 +49,11 @@ class CategoryController extends AbstractController
         $isWeb = $request->query->has('isWeb')
             ? filter_var($request->query->get('isWeb'), FILTER_VALIDATE_BOOLEAN)
             : null;
+        // lot FICHES-HORS-LIGNE : le public ne lit que les articles en ligne, quel que soit le paramètre ; l'équipe (caisse, gestion,
+        // MAUI) garde le paramètre, et sans lui tout le catalogue (articles de caisse seule compris). La clé de cache suit $isWeb.
+        if ($this->visibility !== null && !$this->visibility->viewerIsTeam()) {
+            $isWeb = true;
+        }
         $isPos = $request->query->has('isPos')
             ? filter_var($request->query->get('isPos'), FILTER_VALIDATE_BOOLEAN)
             : null;
