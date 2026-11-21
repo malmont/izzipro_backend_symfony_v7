@@ -237,7 +237,8 @@ Un nombre rond sort en entier dans le JSON (`100`, pas `100.0`), comme dans S1.
 ### `charges` : les charges financières des prêts (lot FIS-1, 19/11/2026)
 
 Lot FIS-2 : `charges.operatingAids: { current, previous, lastYear }`, les aides d'exploitation en produit (`{ received, pending, repaid,
-total, aids }`, `docs/aides-gestion.md` § 5).
+total, aids }`), et `charges.net: { current, previous, lastYear }`, charges moins aides ; `financial`, `previous` et `lastYear` restent
+les charges seules (`docs/aides-gestion.md` § 5).
 
 `charges: { financial: { interest, insurance, fees, total, loans }, previous, lastYear, capitalRepaid }` : intérêts, assurance et frais
 des prêts dans la devise du site, au prorata des jours de la plage (même calcul que le bloc `charges` du résultat de période) ; `previous`

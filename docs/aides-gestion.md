@@ -138,12 +138,16 @@ Pour le directeur d'un groupe entré dans une boutique, les aides sont en **lect
   - le **rapprochement bancaire** compte les mêmes flux dans l'attendu.
 - **Résultat d'une période** (`GET /api/periodes/{id}/resultat`) :
   - `charges.operatingAids: { received, pending, repaid, total, aids, estimated }` ;
-  - `result.netAfterCharges` = `netAfterFixed` − `charges.financial.total` + `charges.operatingAids.total` ;
-  - **`charges.total` est le solde des charges**, aides déduites : `financial.total − operatingAids.total`. Il peut donc être négatif. Sans aide, il ne change pas ;
-  - une période figée après les prêts mais avant les aides garde son instantané, avec `charges.operatingAids: null` ;
+  - **`charges.total` garde son sens** (décision du chef, 21/11/2026 : la gestion web le lit) : les charges seules, comme avant FIS-2 ;
+  - **`charges.net`** = `total` − `operatingAids.total` : les charges moins les aides d'exploitation. Il peut être négatif ; sans aide, il vaut `total` ;
+  - `result.netAfterCharges` = `netAfterFixed` − `charges.net`, inchangé sans aide ;
+  - une période figée après les prêts mais avant les aides garde son instantané, avec `charges.operatingAids: null` et `charges.net` = `total` (l'instantané a compté `netAfterCharges` sans aide) ;
   - une période figée avant les prêts reste `charges: null` (`CLOSED_BEFORE_LOANS`).
-- **Statistiques** (`sections=charges`) : `charges.operatingAids: { current, previous, lastYear }`, chacun de la forme `{ received, pending, repaid, total, aids }`.
-- **Année** (`GET /api/gestion/statistiques/annee`) : par période, `operatingAids` (le total, ou `null` pour une période figée avant le lot).
+- **Statistiques** (`sections=charges`) :
+  - `charges.operatingAids: { current, previous, lastYear }`, chacun de la forme `{ received, pending, repaid, total, aids }` ;
+  - `charges.net: { current, previous, lastYear }` : charges moins aides, sur chaque plage ;
+  - `financial`, `previous` et `lastYear` restent les charges financières seules.
+- **Année** (`GET /api/gestion/statistiques/annee`) : par période, `financialCharges` inchangé, `operatingAids` (le total) et `netCharges` (charges moins aides), `null` pour une période figée avant le lot.
 - **Groupe** (« Toutes les boutiques ») :
   - le résultat réunit `netAfterCharges` et `charges.operatingAids` par devise ;
   - `estimated`, un drapeau, n'est pas réuni ;
