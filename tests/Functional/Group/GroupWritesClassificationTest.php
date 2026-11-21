@@ -51,6 +51,7 @@ class GroupWritesClassificationTest extends KernelTestCase
         // lot ABO-3a : « fait » et suivi (le directeur entré lit, il ne marque rien : ses routes sont fermées, famille « droits »)
         'get_today' => 'lecture', 'get_contestations' => 'lecture', 'propose_mark_done' => 'droits', 'propose_mark_session_done' => 'droits',
         'get_subscription_thread' => 'lecture', 'propose_reply' => 'commande', // lot ABO-3b : une réponse à un client, comme un courriel d'une commande
+        'get_waitlist' => 'lecture', 'propose_promote_waitlist' => 'droits', // lot ABO-4 : l'offre d'une place, comme la route « proposer » (fermée au directeur)
     ];
 
     public function testEveryWriteEveryScreenAndEveryAssistantToolIsClassifiedForTheDirector(): void
