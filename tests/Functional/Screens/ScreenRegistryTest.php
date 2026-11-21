@@ -189,7 +189,7 @@ class ScreenRegistryTest extends KernelTestCase
 
         // le rangement d'une route : lecture et écriture n'ont pas toujours le même propriétaire ; une route inconnue n'est rangée nulle part
         $this->assertSame(['@public', 'pages.contenus', 'pages.contenus'], [ScreenRegistry::classify('get', '/api/bannieres'), ScreenRegistry::classify('POST', '/api/bannieres'), ScreenRegistry::classify('DELETE', '/api/bannieres/12')]);
-        $this->assertSame(['catalogue', '@public', 'catalogue'], [ScreenRegistry::classify('GET', '/api/products'), ScreenRegistry::classify('GET', '/api/products/12'), ScreenRegistry::classify('DELETE', '/api/products/12')]);
+        $this->assertSame(['@public', 'catalogue'], [ScreenRegistry::classify('GET', '/api/products/12'), ScreenRegistry::classify('DELETE', '/api/products/12')]);
         $this->assertNull(ScreenRegistry::classify('GET', '/api/route-inconnue'));
         $this->assertNull(ScreenRegistry::classify('PATCH', '/api/ressource-inconnue/12'), 'la route générique de contenu ne range que ses ressources connues');
         // … et CHACUNE de ses ressources, par son vrai chemin, est une écriture de la construction (jamais « site public »)

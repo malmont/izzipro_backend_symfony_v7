@@ -260,9 +260,9 @@ rendrait un jeton ordinaire : 403 `MODE_FORBIDDEN` (`reason` : `account`).
    clients et des commandes (`kind`) ; un import du catalogue confirmé en entrée n'écrit pas le coût d'achat du fichier. Comptes et
    rôles du site, Stripe et paiements, exports, pertes sont d'autres familles : fermés par la règle 1. `HEAD` suit la règle de `GET`.
 4. La réponse d'un écran de construction perd ses **champs sensibles** (§ 5, par suffixe du chemin du champ) ; la liste des imports ne
-   garde que les imports du catalogue ; une réponse JSON illisible ne part pas (500). Les écritures d'API Platform (article, catégorie)
-   rendent toute l'entité et ses relations, jusqu'aux commandes et aux clients : pour l'opérateur, leur sortie reçoit le groupe de lecture
-   borné de la ressource (`product:list`, `category:list`), ou aucun champ pour une autre ressource (`EntrySerializerContextBuilder`).
+   garde que les imports du catalogue ; une réponse JSON illisible ne part pas (500). Les écritures d'API Platform (article, catégorie),
+   qui rendaient toute l'entité et ses relations, n'existent plus depuis le retrait d'API Platform (lot APIP-RETRAIT, 20/11/2026) ;
+   `EntrySerializerContextBuilder`, qui en bornait la sortie pour l'opérateur, est retiré avec elles.
 5. Chaque écriture réussie de l'opérateur laisse une ligne `external_access` / `write` (méthode, chemin, statut) au journal du site, à
    son nom, même là où la route n'écrit pas elle-même au journal.
 
@@ -281,10 +281,10 @@ de la liste d'ouverture n'existe pas encore (AG-3d) : elle sera réservée au co
 ### 7.5 Limites connues
 
 - EasyAdmin n'est pas ouvert à l'entrée (AG-3c).
-- `/api/team`, `/api/vehicles` et `/api/vehicle_products` figurent dans la liste figée mais sont hors du pare-feu de l'API : le jeton
-  n'y est pas lu, l'opérateur y reçoit 401. `GET /api/me/contexts` est fermé en entrée : le front lit les écrans d'un site client dans
-  les contextes du site d'attache. La lecture d'administrateur d'API Platform (`GET /api/categories`) est servie comme à un visiteur
-  (401) ; la lecture publique `/api/category` reste ouverte.
+- `/api/team` et `/api/vehicle_products` (lecture publique) figurent dans la liste figée mais sont hors du pare-feu de l'API : le jeton
+  n'y est pas lu, l'opérateur y est servi comme un visiteur. `GET /api/me/contexts` est fermé en entrée : le front lit les écrans d'un
+  site client dans les contextes du site d'attache. API Platform est retiré (20/11/2026) : `/api/categories` et `/api/vehicles` rendent
+  404 ; la lecture publique `/api/category` reste ouverte.
 - Le jeton d'entrée est rendu dans le corps de la réponse (le front l'envoie en `Authorization` à l'hôte du site visé) ; il vit 15 minutes.
 - Le domaine propre du site reste réglable par l'agence (plan du propriétaire) ; la construction lui laisse aussi les pixels, les
   contenus intégrés et le texte des pages : une agence malveillante pourrait y capter les visiteurs (risque signalé au propriétaire).

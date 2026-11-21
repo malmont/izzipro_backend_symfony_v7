@@ -96,16 +96,16 @@ prochain PUT du site concerné. `app:landingpage:check-reglable` suit la même l
 restauration, accès) ; `tests/Functional/LandingPage/LandingSiteModelApiTest.php` (modèles des deux applications).
 Essais réels : site `demo` uniquement.
 
-## Liste générique des produits : `GET /api/products` fermée (S8, 26/10/2026)
+## Liste générique des produits : `GET /api/products` fermée (S8, 26/10/2026 ; API Platform retiré le 20/11/2026)
 
-La liste générée par API Platform (`GET /api/products`, `/api/products.json`, `/api/products/{id}.{format}`) est **réservée à
-l'administrateur** (401 sans connexion, 403 pour un client, refus avant toute requête), avec des champs simples (groupe `product:list`,
-aucune relation) et 30 produits par page (`itemsPerPage` jusqu'à 100). Avant, elle était publique et imbriquait toutes les relations :
-une requête occupait un processus du serveur plusieurs minutes (incident du 26/10/2026). **Le site et les applications lisent les routes
+Depuis le retrait d'API Platform (lot APIP-RETRAIT, `docs/architecture.md`, « API Platform retiré »), `GET /api/products`
+n'existe plus pour personne (ni la liste d'API Platform, ni la route maison `get_all_products` qu'elle masquait : décision du
+20/11/2026, aucun front ne l'appelle), pas plus que `/api/products.json` et `/api/products/{id}.{format}`. Historique : la liste
+générée par API Platform était publique et imbriquait toutes les relations, une requête occupait un processus du serveur plusieurs
+minutes (incident du 26/10/2026), puis réservée à l'administrateur (S8). **Le site et les applications lisent les routes
 dédiées, inchangées** : `/api/products/{id}` (fiche, DTO), `/api/products/by-slug/{slug}`, `/api/products/by-category`,
 `/api/products/{bestsellers|newarrivals|…}`, `/api/productsid/{id}`, avis et éligibilité, variantes ; catégories : `/api/category`.
-Le site ne relit plus jamais la liste complète en repli d'une fiche en erreur (correction côté Next.js). Détail des ressources API
-Platform : `docs/architecture.md`.
+Le site ne relit plus jamais la liste complète en repli d'une fiche en erreur (correction côté Next.js). Véhicules de la boutique : `GET /api/vehicle_products` et `/{id}` (tableau simple, routes maison).
 
 ## Le coût ne sort pas des routes ouvertes (lot COST-1, 16/11/2026)
 
@@ -123,8 +123,8 @@ Jusqu'à ce lot, les fiches produit publiques rendaient le **prix d'achat** et l
 - Ces réponses sont gardées en cache sous une clé qui ne dépend pas du lecteur : une entrée écrite avant le lot perd son coût à la
   relecture (`__wakeup` des deux objets), sans attendre la fin de sa durée ; le cache des sites est tout de même vidé à la bascule.
 - La documentation d'API Platform, ses contextes JSON-LD et son point d'entrée (`/api/docs`, `/api/contexts/…`, `/api`,
-  `/api/index.html` : la page Swagger), qui nomment tous les champs des entités, sont réservés à l'administrateur (un simple compte
-  client les lisait).
+  `/api/index.html` : la page Swagger), qui nomment tous les champs des entités, étaient réservés à l'administrateur (un simple
+  compte client les lisait) ; ils n'existent plus depuis le retrait d'API Platform (20/11/2026, 404).
 - Trouvé par la relecture du lot : un caissier lisait les statistiques de vente du SITE ENTIER en collant un saut de ligne à sa source
   (`/api/statistiques/chiffre-affaires/pos%0A`, de même `nombre-commandes`, `panier-moyen` et `/api/payments/statistics/`). La règle
   d'accès de la caisse finit maintenant par `\z` (un `$` accepte un saut de ligne final), et la source d'une route de statistiques

@@ -13,13 +13,6 @@ use App\Services\BarcodeService\CatalogBarcode;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\Common\Collections\ArrayCollection;
 use App\Entity\TranslatableInterface;
-use ApiPlatform\Metadata\ApiResource;
-use ApiPlatform\Metadata\Delete;
-use ApiPlatform\Metadata\Get;
-use ApiPlatform\Metadata\GetCollection;
-use ApiPlatform\Metadata\Patch;
-use ApiPlatform\Metadata\Post;
-use ApiPlatform\Metadata\Put;
 use Symfony\Component\Serializer\Annotation\Groups;
 
 #[ORM\Entity(repositoryClass: ProductRepository::class)]
@@ -35,18 +28,8 @@ use Symfony\Component\Serializer\Annotation\Groups;
 #[ORM\Index(name: 'idx_product_is_web', fields: ['isWeb'])]
 #[ORM\Index(name: 'idx_product_is_pos', fields: ['isPos'])]
 #[ORM\Index(name: 'idx_product_is_accessory', fields: ['isAccessory'])]
-// Lecture API Platform (S8, incident du 26/10/2026) : réservée à l'administrateur, champs simples (groupe product:list, aucune relation
-// imbriquée), 30 par page, 100 au plus (itemsPerPage). Avant : publique, toutes les relations imbriquées sans limite (requêtes de plusieurs
-// minutes et gigaoctets). Les fronts lisent les routes dédiées (/api/products/{id}, by-slug, by-category…), inchangées. Écritures inchangées.
-#[ApiResource(operations: [
-    new GetCollection(security: "is_granted('ROLE_ADMIN')", normalizationContext: ['groups' => ['product:list']],
-        paginationItemsPerPage: 30, paginationMaximumItemsPerPage: 100, paginationClientItemsPerPage: true),
-    new Get(security: "is_granted('ROLE_ADMIN')", normalizationContext: ['groups' => ['product:list']]),
-    new Post(),
-    new Put(),
-    new Patch(),
-    new Delete(),
-])]
+// Plus d'exposition API Platform depuis le lot APIP-RETRAIT (20/11/2026) : les fronts lisent les routes dédiées (/api/products/{id},
+// by-slug, by-category…, /api/vehicle_products) ; la suppression passe par DELETE /api/products/{id} (ProductController).
 // Lot CB-1 (15/11/2026, `docs/codes-barres.md`) : le code-barres ne désigne rien d'autre sur le site (refus sous le champ, avant la base)
 #[\App\Validator\CatalogBarcodeFree]
 class Product implements TranslatableInterface, DemoContentInterface

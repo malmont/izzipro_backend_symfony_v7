@@ -408,10 +408,11 @@ class CatalogBarcodeAdminTest extends WebTestCase
         $this->assertSame(403, $this->status());
     }
 
-    public function testTheProductApiResourceDoesNotWriteABarcode(): void
+    public function testTheLandingContentPatchOfAProductDoesNotWriteABarcode(): void
     {
-        // La ressource d'API de l'article n'est pas un chemin d'écriture du code-barres : elle n'accepte qu'une liste de champs, dont il
-        // n'est pas. Gardé par ce test : le jour où le champ y serait ouvert, il devra passer par la règle
+        // PATCH /api/products/{id} arrive sur le PATCH générique des contenus (`api_landing_content_patch`, à priorité : il passait déjà
+        // avant la ressource d'API Platform, retirée au lot APIP-RETRAIT). Il n'accepte qu'une liste de champs, dont le code-barres n'est
+        // pas. Gardé par ce test : le jour où le champ y serait ouvert, il devra passer par la règle
         $bottle = $this->article('Gourde', 0);
         $this->em()->clear();
         $token = static::getContainer()->get('lexik_jwt_authentication.jwt_manager')->create($this->user(['ROLE_ADMIN']));
@@ -424,36 +425,24 @@ class CatalogBarcodeAdminTest extends WebTestCase
         $this->assertNull($this->codeOf('product', (int) $bottle->getId()));
     }
 
-    public function testTheVehicleApiResourceCannotBreakTheRule(): void
+    public function testTheOldVehicleApiResourceNoLongerWritesABarcode(): void
     {
-        // La ressource d'API des véhicules (API Platform, écriture réservée à l'administrateur) laisse écrire le code-barres : la même
-        // contrainte s'y applique (un véhicule est un article)
+        // La ressource d'API Platform des véhicules laissait une SESSION d'administrateur (EasyAdmin : l'adresse est hors du pare-feu des
+        // jetons) écrire le code-barres par PATCH /api/vehicle_products/{id}. Retirée au lot APIP-RETRAIT : plus aucune écriture par ce
+        // chemin, le code d'un véhicule s'écrit par sa fiche (EasyAdmin, règle commune)
         static::getContainer()->get(\App\Services\BoutiqueDemoService\BoutiqueDemoSeeder::class)->seed('client-codes@example.invalid', false, false);
         $vehicle = (int) $this->db()->fetchOne("SELECT id FROM product WHERE product_type = 'vehicle' ORDER BY id LIMIT 1");
         $this->assertGreaterThan(0, $vehicle, 'le jeu de démonstration porte un véhicule');
-        $cap = $this->article('Casquette', 0);
-        $this->db()->executeStatement('UPDATE product SET barcode = ? WHERE id = ?', ["PRIS-$this->s", $cap->getId()]);
         $this->db()->executeStatement('UPDATE product SET barcode = NULL WHERE id = ?', [$vehicle]);
         $this->em()->clear();
-        // Cette adresse est hors du pare-feu des jetons de l'API : seule une session d'administrateur (celle d'EasyAdmin) peut y écrire
         $this->loginAs(['ROLE_ADMIN']);
-        $patch = function (array $body) use ($vehicle): int {
-            $this->client->request('PATCH', 'https://' . MV_TEST_TENANT_HOST . '/api/vehicle_products/' . $vehicle, [], [], [
-                'HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST, 'CONTENT_TYPE' => 'application/merge-patch+json', 'HTTP_ACCEPT' => 'application/ld+json',
-            ], json_encode($body));
-
-            return $this->status();
-        };
-        try {
-            $this->assertSame(422, $patch(['barcode' => strtolower("PRIS-$this->s")]), $this->text());
-            $this->assertStringContainsString('Ce code-barres est déjà celui de « ' . $cap->getName() . ' »', (string) (json_decode((string) $this->client->getResponse()->getContent(), true)['message'] ?? ''));
-            $this->assertSame(422, $patch(['barcode' => 'IZ-T-1-000001']), $this->text());
-            $this->assertNull($this->codeOf('product', $vehicle), 'aucun refus n\'a rien écrit');
-            $this->assertSame(200, $patch(['barcode' => ' libre-' . $this->suffix]), $this->text());
-            $this->assertSame("LIBRE-$this->s", $this->codeOf('product', $vehicle), 'un code libre est écrit en forme canonique');
-        } finally {
-            $this->db()->executeStatement('UPDATE product SET barcode = NULL WHERE id = ?', [$vehicle]);
+        foreach (['PATCH', 'PUT'] as $method) {
+            $this->client->request($method, 'https://' . MV_TEST_TENANT_HOST . '/api/vehicle_products/' . $vehicle, [], [], [
+                'HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST, 'CONTENT_TYPE' => 'application/merge-patch+json', 'HTTP_ACCEPT' => 'application/json',
+            ], json_encode(['barcode' => 'libre-' . $this->suffix]));
+            $this->assertContains($this->status(), [404, 405], "$method : plus de route d'écriture");
         }
+        $this->assertNull($this->codeOf('product', $vehicle), 'rien n\'est écrit');
     }
 
     /** Ouvre la fiche de l'article et l'envoie avec ces valeurs en plus de celles qu'elle porte */

@@ -2,12 +2,8 @@
 
 namespace App\Tests\Functional\Boutique;
 
-use ApiPlatform\Metadata\GetCollection;
-use ApiPlatform\Metadata\Resource\Factory\ResourceMetadataCollectionFactoryInterface;
-use App\Entity\Categories;
 use App\Entity\Product;
 use App\Entity\User;
-use App\Entity\Vehicle;
 use App\Services\BoutiqueDemoService\BoutiqueDemoSeeder;
 use App\Services\TenantEntityManagerProvider;
 use App\Tests\Fake\SqlRecorderMiddleware;
@@ -17,15 +13,15 @@ use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 
 /**
- * Lectures API Platform bornées (S8, incident PHP-FPM du 26/10/2026) : listes Product et Categories réservées à l'administrateur
- * (401 anonyme, 403 client, refusées avant toute requête sur les produits), champs simples, pagination 30 / 100 ; Vehicle : champs simples,
- * pagination 24 / 50 ; statut de paiement sans fausse relation vers les commandes (la liste répondait 500 dès qu'une commande payée existait) ;
+ * Lectures du catalogue bornées (S8, incident PHP-FPM du 26/10/2026), reprises au retrait d'API Platform (lot APIP-RETRAIT,
+ * 20/11/2026) : la liste complète des articles (`GET /api/products`) et les anciennes routes d'API Platform (catégories, véhicules,
+ * formats `.json`) n'existent plus, refusées avant toute requête sur les produits ;
  * routes des fronts (/api/products/{id}, /api/category, /api/vehicle_products) bornées quel que soit le nombre de commandes.
+ * La forme exacte de /api/vehicle_products est figée par RoutesGardeesApresApiPlatformTest.
  */
-class ApiPlatformBoundedReadsTest extends WebTestCase
+class CatalogueBoundedReadsTest extends WebTestCase
 {
     private const PASSWORD = 'Mot-de-passe-de-test-1!';
-    private const PRODUCT_FIELDS = ['@id', '@type', 'id', 'name', 'description', 'price', 'isbestseller', 'isnewarrival', 'isfeatured', 'isspecialoffer', 'image', 'quantity', 'createdAt', 'code', 'slug', 'barcode', 'isWeb', 'isPos', 'specialPrice', 'mode', 'saleEnabled', 'rentalEnabled', 'subscriptionEnabled'];
     private KernelBrowser $client;
     private \Doctrine\DBAL\Connection $db;
     private ?string $token = null;
@@ -49,7 +45,7 @@ class ApiPlatformBoundedReadsTest extends WebTestCase
         $this->db->executeStatement('UPDATE product_variant SET stock_quantity = 100, price = NULL WHERE id = ?', [$this->cap]);
     }
 
-    public function testProductAndCategoryListsAreAdminOnlyBoundedAndPaidOrdersNoLongerBreakThem(): void
+    public function testTheFullProductListAndOldApiPlatformRoutesAreGone(): void
     {
         // Deux ventes payées ; une commande prend pour statut l'identifiant du statut de paiement (situation qui faisait planter la liste)
         $this->loginAs(['ROLE_USER_POS', 'ROLE_POS_MANAGER']);
@@ -61,61 +57,35 @@ class ApiPlatformBoundedReadsTest extends WebTestCase
         $productId = (int) $this->db->fetchOne('SELECT product_id FROM product_variant WHERE id = ?', [$this->cap]);
         $productQueries = fn (array $q) => array_values(array_filter($q, fn ($s) => preg_match('/\b(FROM|JOIN)\s+"?(product|categories|product_variant)"?\b/i', $s)));
 
-        // Anonyme : 401 ; client : 403 ; avant toute requête sur les produits ou les catégories
-        $this->token = null;
-        foreach (['/api/products', '/api/products.json', "/api/products/$productId.json", '/api/categories', '/api/categories/1'] as $path) {
+        // Liste complète des articles (API Platform, puis `get_all_products` qu'il masquait) : retirée au lot APIP-RETRAIT, plus de
+        // route pour personne, refusée avant toute requête sur les produits
+        foreach ([null, 'client', 'admin'] as $who) {
+            $this->token = null;
+            if ($who !== null) {
+                $who === 'client' ? $this->loginAs(['ROLE_USER_INTERNET'], 'mobile') : $this->loginAs(['ROLE_ADMIN', 'ROLE_USER_POS']);
+            }
             SqlRecorderMiddleware::start();
-            $this->assertSame(401, $this->request('GET', $path)->getStatusCode(), "$path anonyme");
-            $this->assertSame([], $productQueries(SqlRecorderMiddleware::stop()), "$path : aucune requête sur les produits");
+            $this->assertContains($this->request('GET', '/api/products')->getStatusCode(), [404, 405], '/api/products (' . ($who ?? 'anonyme') . ')');
+            $this->assertSame([], $productQueries(SqlRecorderMiddleware::stop()), 'aucune requête sur les produits');
         }
-        $this->loginAs(['ROLE_USER_INTERNET'], 'mobile');
-        foreach (['/api/products', "/api/products/$productId.json", '/api/categories'] as $path) {
-            SqlRecorderMiddleware::start();
-            $this->assertSame(403, $this->request('GET', $path)->getStatusCode(), "$path client");
-            $this->assertSame([], $productQueries(SqlRecorderMiddleware::stop()), "$path : aucune requête sur les produits");
+
+        // Anciennes routes d'API Platform : plus de route, pour tous
+        foreach ([null, 'admin'] as $who) {
+            $this->token = null;
+            if ($who === 'admin') {
+                $this->loginAs(['ROLE_ADMIN', 'ROLE_USER_POS']);
+            }
+            foreach (['/api/products.json', "/api/products/$productId.json", '/api/categories', '/api/categories/1', '/api/vehicles', '/api/vehicles/1'] as $path) {
+                $this->assertSame(404, $this->request('GET', $path)->getStatusCode(), "$path (" . ($who ?? 'anonyme') . ')');
+            }
         }
 
         // Routes des fronts : toujours publiques
         $this->token = null;
         $this->assertSame(200, $this->request('GET', "/api/products/$productId?locale=fr")->getStatusCode(), 'fiche produit (site Next.js)');
         $this->assertSame(200, $this->request('GET', '/api/category?locale=fr')->getStatusCode(), 'catégories de la boutique');
+        $this->assertSame(200, $this->request('GET', '/api/vehicle_products?page=1&locale=fr')->getStatusCode(), 'véhicules de la boutique');
 
-        // Administrateur : 200 malgré les commandes payées, champs simples, 30 par page, itemsPerPage du client plafonné à 100
-        $this->loginAs(['ROLE_ADMIN', 'ROLE_USER_POS']);
-        $list = $this->json($this->request('GET', '/api/products'));
-        $members = $this->members($list);
-        $this->assertNotEmpty($members);
-        $this->assertLessThanOrEqual(30, count($members));
-        foreach ($members as $m) {
-            $this->assertSame([], array_values(array_diff(array_keys($m), self::PRODUCT_FIELDS)), 'aucune relation imbriquée : ' . json_encode(array_keys($m)));
-        }
-        $this->assertCount(2, $this->members($this->json($this->request('GET', '/api/products?itemsPerPage=2'))));
-        $op = $this->operation(Product::class);
-        $this->assertSame([30, 100, true], [$op->getPaginationItemsPerPage(), $op->getPaginationMaximumItemsPerPage(), $op->getPaginationClientItemsPerPage()]);
-        $item = $this->json($this->request('GET', "/api/products/$productId.json"));
-        $this->assertSame([], array_values(array_diff(array_keys($item), self::PRODUCT_FIELDS)));
-        $cats = $this->json($this->request('GET', '/api/categories'));
-        foreach ($this->members($cats) as $c) {
-            $this->assertSame([], array_values(array_diff(array_keys($c), ['@id', '@type', 'id', 'name', 'description', 'image', 'externalShippingClassId', 'isRentalCategory', 'categoryType', 'syncWeb', 'isVisible'])), 'catégorie sans produits imbriqués');
-        }
-        $this->assertSame([30, 100], [$this->operation(Categories::class)->getPaginationItemsPerPage(), $this->operation(Categories::class)->getPaginationMaximumItemsPerPage()]);
-    }
-
-    public function testVehiclesAreBoundedLikeVehicleProducts(): void
-    {
-        $em = static::getContainer()->get(TenantEntityManagerProvider::class)->getEntityManager();
-        $product = $em->getRepository(Product::class)->findOneBy(['code' => 'DEMO-CASQUETTE']);
-        $vehicle = (new Vehicle())->setTitle('Véhicule de test')->setYear(2024)->setProduct($product);
-        $em->persist($vehicle);
-        $em->flush();
-        $list = $this->json($this->request('GET', '/api/vehicles'));
-        $members = $this->members($list);
-        $this->assertNotEmpty($members);
-        foreach ($members as $m) {
-            $this->assertSame([], array_values(array_diff(array_keys($m), ['@id', '@type', 'id', 'title', 'description', 'picture', 'year', 'color', 'transmission', 'gasType', 'newVehicle', 'featuredVehicle', 'webDisplay', 'slug'])), 'ni produit ni traductions imbriqués');
-        }
-        $op = $this->operation(Vehicle::class);
-        $this->assertSame([24, 50], [$op->getPaginationItemsPerPage(), $op->getPaginationMaximumItemsPerPage()]);
     }
 
     public function testFrontReadsStayBoundedWhateverTheNumberOfOrders(): void
@@ -164,18 +134,6 @@ class ApiPlatformBoundedReadsTest extends WebTestCase
     private function sale(): int
     {
         return (int) $this->json($this->request('POST', '/api/order/create-multi-payment', ['items' => [['productVariantId' => $this->cap, 'quantity' => 1]], 'paymentMethods' => [['type' => 2, 'amount' => 33.35]], 'cashRegisterId' => $this->register]), 201)['orderId'];
-    }
-
-    private function operation(string $class): GetCollection
-    {
-        foreach (static::getContainer()->get(ResourceMetadataCollectionFactoryInterface::class)->create($class) as $resource) {
-            foreach ($resource->getOperations() as $op) {
-                if ($op instanceof GetCollection) {
-                    return $op;
-                }
-            }
-        }
-        $this->fail("Aucune GetCollection pour $class");
     }
 
     private function json(Response $response, int $expected = 200): array

@@ -1,0 +1,214 @@
+{
+    "delete": {
+        "anonyme": [
+            401,
+            {
+                "code": 401,
+                "message": "JWT Token not found",
+                "error": "JWT_NOT_FOUND"
+            }
+        ],
+        "client": [
+            403,
+            {
+                "error": "Accès refusé.",
+                "code": "FORBIDDEN",
+                "message": "Accès refusé.",
+                "title": "An error occurred",
+                "status": 403,
+                "detail": "Accès refusé."
+            }
+        ],
+        "absent": [
+            404,
+            {
+                "error": "Not Found",
+                "code": "NOT_FOUND",
+                "message": "Not Found",
+                "title": "An error occurred",
+                "status": 404,
+                "detail": "Not Found"
+            }
+        ]
+    },
+    "perf": {
+        "list": {
+            "ms": 90.96,
+            "queries": 26
+        },
+        "page2": {
+            "ms": 72.52,
+            "queries": 10
+        },
+        "item": {
+            "ms": 64.53,
+            "queries": 2
+        }
+    },
+    "reads": {
+        "contentType": "application/json",
+        "itemContentType": "application/json",
+        "list": true,
+        "listShape": {
+            "bookingConfiguration": {
+                "bufferTime": "int",
+                "granularity": "string",
+                "id": "int",
+                "minDuration": "int",
+                "stockQuantity": "int"
+            },
+            "brand": "string",
+            "color": "string",
+            "description": "string",
+            "enginePower": "string",
+            "gasType": "string",
+            "hoursOrMileage": "int",
+            "id": "int",
+            "image": "string",
+            "isRental": "bool",
+            "isbestseller": "bool",
+            "mode": "string",
+            "model": "string",
+            "name": "string",
+            "price": "float",
+            "quantity": "int",
+            "slug": "string",
+            "transmission": "string",
+            "vehicleCondition": "string",
+            "year": "int"
+        },
+        "own": {
+            "year": 2024,
+            "brand": "Marque",
+            "model": "Modèle",
+            "transmission": "auto",
+            "gasType": "essence",
+            "enginePower": "150 ch",
+            "hoursOrMileage": 1200,
+            "vehicleCondition": "neuf",
+            "color": "rouge",
+            "id": "<id>",
+            "name": "Véhicule CONTRAT-VP-01",
+            "description": "Description CONTRAT-VP-01",
+            "price": 1234500,
+            "isbestseller": false,
+            "quantity": 0,
+            "slug": "contrat-vp-01",
+            "mode": "retail",
+            "isRental": false
+        },
+        "item": {
+            "year": 2024,
+            "brand": "Marque",
+            "model": "Modèle",
+            "transmission": "auto",
+            "gasType": "essence",
+            "enginePower": "150 ch",
+            "hoursOrMileage": 1200,
+            "vehicleCondition": "neuf",
+            "color": "rouge",
+            "id": "<id>",
+            "name": "Véhicule CONTRAT-VP-01",
+            "description": "Description CONTRAT-VP-01",
+            "price": 1234500,
+            "isbestseller": false,
+            "quantity": 0,
+            "slug": "contrat-vp-01",
+            "mode": "retail",
+            "isRental": false
+        },
+        "missing": {
+            "status": 404,
+            "body": {
+                "error": "Not Found",
+                "code": "NOT_FOUND",
+                "message": "Not Found",
+                "title": "An error occurred",
+                "status": 404,
+                "detail": "Not Found"
+            }
+        }
+    },
+    "readsAxiosAvant": {
+        "contentType": "application/ld+json",
+        "itemContentType": "application/ld+json",
+        "list": false,
+        "listShape": {
+            "@id": "string",
+            "@type": "string",
+            "bookingConfiguration": {
+                "@id": "string",
+                "@type": "string",
+                "bufferTime": "int",
+                "granularity": "string",
+                "id": "int",
+                "minDuration": "int",
+                "stockQuantity": "int"
+            },
+            "brand": "string",
+            "color": "string",
+            "description": "string",
+            "enginePower": "string",
+            "gasType": "string",
+            "hoursOrMileage": "int",
+            "id": "int",
+            "image": "string",
+            "isRental": "bool",
+            "isbestseller": "bool",
+            "mode": "string",
+            "model": "string",
+            "name": "string",
+            "price": "int",
+            "quantity": "int",
+            "slug": "string",
+            "transmission": "string",
+            "vehicleCondition": "string",
+            "year": "int"
+        },
+        "own": {
+            "@id": "<id>",
+            "@type": "VehicleProduct",
+            "year": 2024,
+            "brand": "Marque",
+            "model": "Modèle",
+            "transmission": "auto",
+            "gasType": "essence",
+            "enginePower": "150 ch",
+            "hoursOrMileage": 1200,
+            "vehicleCondition": "neuf",
+            "color": "rouge",
+            "id": "<id>",
+            "name": "Véhicule CONTRAT-VP-01",
+            "description": "Description CONTRAT-VP-01",
+            "price": 1234500,
+            "isbestseller": false,
+            "quantity": 0,
+            "slug": "contrat-vp-01",
+            "mode": "retail",
+            "isRental": false
+        },
+        "item": {
+            "@context": "/api/contexts/VehicleProduct",
+            "@id": "<id>",
+            "@type": "VehicleProduct",
+            "year": 2024,
+            "brand": "Marque",
+            "model": "Modèle",
+            "transmission": "auto",
+            "gasType": "essence",
+            "enginePower": "150 ch",
+            "hoursOrMileage": 1200,
+            "vehicleCondition": "neuf",
+            "color": "rouge",
+            "id": "<id>",
+            "name": "Véhicule CONTRAT-VP-01",
+            "description": "Description CONTRAT-VP-01",
+            "price": 1234500,
+            "isbestseller": false,
+            "quantity": 0,
+            "slug": "contrat-vp-01",
+            "mode": "retail",
+            "isRental": false
+        }
+    }
+}

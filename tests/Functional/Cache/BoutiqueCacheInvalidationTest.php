@@ -52,7 +52,7 @@ class BoutiqueCacheInvalidationTest extends WebTestCase
         yield 'category read through the product lists' => [Categories::class, '/api/products/by-category?locale=fr', $byCategory, false];
         yield 'sale unit read through the product lists' => [SaleUnit::class, '/api/products/by-category?locale=fr', $byCategory, false];
         yield 'products by offer' => [Product::class, '/api/products/bestsellers?locale=fr', 'products_by_offer_bestsellers_fr', false];
-        // GET /api/products est servi par API Platform (la route du contrôleur, et son cache all_products_*, ne sont jamais atteints)
+        // GET /api/products n'existe plus (lot APIP-RETRAIT, 20/11/2026)
         yield 'categories' => [Categories::class, '/api/category?locale=fr', 'categories_all_fr', false];
         yield 'colors' => [Color::class, '/api/colors', 'colors_all_en', true];
         yield 'sizes' => [Size::class, '/api/sizes', 'sizes_all_en', true];

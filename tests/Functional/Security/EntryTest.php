@@ -113,10 +113,12 @@ class EntryTest extends WebTestCase
             $this->assertSame([403, 'MODE_FORBIDDEN', $reason], [$response->getStatusCode(), $body['code'] ?? null, $body['reason'] ?? null], "$method $path");
         }
         // le coût d'un article ne s'écrit pas ; un import de clients ne se dépose pas
-        $this->assertSame([403, 'cost'], $this->reason('POST', '/api/products', $token, ['name' => 'Article', 'purchasePrice' => 12]));
         $this->assertSame([403, 'cost'], $this->reason('PATCH', '/api/products/1', $token, ['variants' => [['coefficientMultiplier' => 2]]]));
-        foreach (['commandeCostCents', 'commandeQuantity', 'commandeAttachedAt', 'commandeCostEstimated', 'commande'] as $field) {
-            $this->assertSame([403, 'cost'], $this->reason('PUT', '/api/products/1', $token, ['name' => 'Article', $field => 1]), $field);
+        // POST /api/products et PUT /api/products/{id} étaient des écritures d'API Platform, retiré au lot APIP-RETRAIT : la
+        // route n'existe plus, pour l'opérateur comme pour tous
+        foreach ([['POST', '/api/products'], ['PUT', '/api/products/1']] as [$method, $path]) {
+            $status = $this->request($method, $path, $token, MV_TEST_TENANT2_HOST, ['name' => 'Article', 'purchasePrice' => 12, 'commandeCostCents' => 1])->getStatusCode();
+            $this->assertContains($status, [404, 405], "$method $path : plus de route");
         }
         $this->client->getCookieJar()->clear();
         $this->client->request('POST', 'https://' . MV_TEST_TENANT2_HOST . '/api/site/imports', ['kind' => 'customers', 'source' => 'shopify'], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT2_HOST, 'HTTP_ACCEPT' => 'application/json', 'HTTP_AUTHORIZATION' => 'Bearer ' . $token]);
@@ -355,32 +357,6 @@ class EntryTest extends WebTestCase
         $specs = [['purchasePrice'], ['steps', '[]', 'description'], ['uses', 'sales']];
         $data = json_decode('{"purchasePrice":1,"name":"a","items":[{"purchasePrice":2,"price":3}],"steps":[{"description":"x","title":"t"}],"description":"gardée","uses":{"sales":4,"stock":5},"empty":{}}');
         $this->assertSame('{"name":"a","items":[{"price":3}],"steps":[{"title":"t"}],"description":"gardée","uses":{"stock":5},"empty":{}}', json_encode(EntryModeGuardSubscriber::strip($data, $specs), \JSON_UNESCAPED_UNICODE));
-    }
-
-    /** Les écritures d'API Platform rendent toute l'entité : pour l'opérateur seulement, la sortie reçoit le groupe de lecture borné */
-    public function testTheOutputOfApiPlatformWritesIsBoundedForTheOperatorOnly(): void
-    {
-        $inner = new class () implements \ApiPlatform\Serializer\SerializerContextBuilderInterface {
-            public array $context = [];
-
-            public function createFromRequest(\Symfony\Component\HttpFoundation\Request $request, bool $normalization, ?array $extractedAttributes = null): array
-            {
-                return $this->context;
-            }
-        };
-        $builder = new \App\Security\Entry\EntrySerializerContextBuilder($inner);
-        $operator = new \Symfony\Component\HttpFoundation\Request();
-        $operator->attributes->set(EntryModeGuardSubscriber::ATTRIBUTE, 'catalogue');
-        $cases = [[\App\Entity\Product::class, ['product:list']], [\App\Entity\VehicleProduct::class, ['product:list']], [\App\Entity\Categories::class, ['category:list']],
-            [\App\Entity\ProductVariant::class, [\App\Security\Entry\EntrySerializerContextBuilder::NONE]]];
-        foreach ($cases as [$class, $groups]) {
-            $inner->context = ['resource_class' => $class];
-            $this->assertSame($groups, $builder->createFromRequest($operator, true)['groups'], $class);
-            $this->assertArrayNotHasKey('groups', $builder->createFromRequest($operator, false), 'l\'entrée (dénormalisation) ne change pas');
-            $this->assertArrayNotHasKey('groups', $builder->createFromRequest(new \Symfony\Component\HttpFoundation\Request(), true), 'un compte du site garde la réponse d\'avant');
-        }
-        $inner->context = ['resource_class' => \App\Entity\Product::class, 'groups' => ['vehicle_product:read']];
-        $this->assertSame(['vehicle_product:read'], $builder->createFromRequest($operator, true)['groups'], 'un groupe déjà posé reste');
     }
 
     /** @return array<string, mixed> */

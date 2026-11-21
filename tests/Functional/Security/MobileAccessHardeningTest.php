@@ -47,28 +47,21 @@ class MobileAccessHardeningTest extends WebTestCase
         $this->assertSame('FORBIDDEN', json_decode($customer->getContent(), true)['error']);
     }
 
-    public function testCategoriesApiPlatformWritesAreReservedToAdmins(): void
+    public function testCategoriesApiPlatformRoutesAreGone(): void
     {
+        // Les écritures et la lecture de /api/categories étaient des opérations d'API Platform, retiré au lot APIP-RETRAIT (20/11/2026) :
+        // plus de route, pour un client comme pour l'administrateur ; la boutique lit /api/category (route dédiée, publique, inchangée)
         $ld = ['CONTENT_TYPE' => 'application/ld+json', 'HTTP_ACCEPT' => 'application/ld+json'];
         $body = json_encode(['name' => 'Catégorie test ' . bin2hex(random_bytes(2))]);
-
-        $this->loginAs(['ROLE_USER_INTERNET'], 'mobile');
-        // Lecture réservée à l'administrateur depuis S8 (26/10/2026) : avant, tout client connecté lisait les catégories avec leurs produits
-        // imbriqués sans limite ; la boutique lit /api/category (route dédiée, publique, inchangée)
-        $this->assertSame(403, $this->request('GET', '/api/categories', null, $ld)->getStatusCode(), 'client : lecture refusée (S8)');
-        $this->assertSame(403, $this->request('POST', '/api/categories', $body, $ld)->getStatusCode(), 'client : création refusée');
-
-        $this->loginAs(['ROLE_ADMIN']);
-        $created = $this->request('POST', '/api/categories', $body, $ld);
-        $this->assertSame(201, $created->getStatusCode(), $created->getContent());
-        $id = json_decode($created->getContent(), true)['id'];
-
-        $this->loginAs(['ROLE_USER_INTERNET'], 'mobile');
-        $this->assertSame(403, $this->request('DELETE', "/api/categories/$id", null, $ld)->getStatusCode(), 'client : suppression refusée');
-        $this->assertSame(403, $this->request('PUT', "/api/categories/$id", $body, $ld)->getStatusCode(), 'client : modification refusée');
-
-        $this->loginAs(['ROLE_ADMIN']);
-        $this->assertSame(204, $this->request('DELETE', "/api/categories/$id", null, $ld)->getStatusCode(), 'admin : suppression');
+        $count = fn () => (int) static::getContainer()->get(\App\Services\TenantEntityManagerProvider::class)->getEntityManager()->getConnection()->fetchOne('SELECT COUNT(*) FROM categories');
+        $before = $count();
+        foreach ([['ROLE_USER_INTERNET'], ['ROLE_ADMIN']] as $roles) {
+            $this->loginAs($roles, $roles === ['ROLE_ADMIN'] ? 'pos' : 'mobile');
+            foreach ([['GET', '/api/categories'], ['POST', '/api/categories'], ['PUT', '/api/categories/1'], ['DELETE', '/api/categories/1']] as [$method, $path]) {
+                $this->assertContains($this->request($method, $path, $method === 'GET' || $method === 'DELETE' ? null : $body, $ld)->getStatusCode(), [404, 405], "$method $path (" . $roles[0] . ')');
+            }
+        }
+        $this->assertSame($before, $count(), 'aucune catégorie créée ni supprimée');
     }
 
     public function testKnownPlatformsLogInAsBeforeAndUnknownOnesAreRefused(): void

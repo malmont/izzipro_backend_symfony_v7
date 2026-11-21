@@ -162,7 +162,10 @@ security:
         # 🔹 VideoApiController répond aussi sous /videos (sans /api, hors pare-feu JWT) : jusqu'au 29/09/2026, n'importe qui
         #    pouvait y créer, modifier ou supprimer les vidéos d'un site. Écritures fermées (lecture publique inchangée).
         - { path: ^/videos(/|$), methods: [POST, PUT, PATCH, DELETE], roles: ROLE_ADMIN }
-        # 🔹 Ressources API Platform Product et Categories (S8, 26/10/2026) : lecture réservée à l'administrateur, refusée AVANT toute requête
+        # 🔹 API Platform est RETIRÉ (lot APIP-RETRAIT, 20/11/2026) : ses routes (documentation, contextes, point d'entrée, formats `.json`,
+        #    /api/categories) n'existent plus (404). Les règles ci-dessous sont gardées en défense : elles refermeraient d'avance une route qui
+        #    reviendrait à ces chemins (la liste complète `GET /api/products` et la route maison qu'elle masquait sont retirées aussi).
+        # Historique : ressources API Platform Product et Categories (S8, 26/10/2026) : lecture réservée à l'administrateur, refusée AVANT toute requête
         #    (401 anonyme, 403 client). Avant : liste des produits publique, relations imbriquées sans limite (incident PHP-FPM du 26/10/2026).
         #    Les fronts lisent les routes dédiées, toujours publiques : /api/products/{id}, /api/products/by-slug|by-category|…, /api/category.
         # Lot COST-1 (16/11/2026) : la documentation d'API Platform et ses contextes JSON-LD nomment tous les champs des entités (coût

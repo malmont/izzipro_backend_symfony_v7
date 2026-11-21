@@ -261,7 +261,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (764)
+## Boutique et commun (765)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -830,7 +830,6 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | DELETE | `/api/products/{id}` | ROLE_ADMIN | `Controller\ProductController\ProductController::deleteProduct` |
 | GET | `/api/products/{id}` | PUBLIC_ACCESS | `Controller\ProductController\ProductController::getProductDetail` |
 | GET | `/api/products/{offer}` | PUBLIC_ACCESS | `Controller\ProductController\ProductController::getProductsByOffer` |
-| GET | `/api/products` | ROLE_ADMIN | `Controller\ProductController\ProductController::getAllProducts` |
 | GET | `/api/productsid/{id}` | PUBLIC_ACCESS | `Controller\ProductController\ProductController::getProductById` |
 | GET | `/api/profile` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\Account\ProfileApiController::getProfile` |
 | PATCH, PUT | `/api/profile` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\Account\ProfileApiController::updateProfile` |
@@ -995,6 +994,8 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | POST | `/api/transporteurs` | ROLE_ADMIN | `Controller\TransporteurController\TransporteurController::createTransporteur` |
 | GET | `/api/type-fournisseurs` | ROLE_ADMIN | `Controller\TypeFournisseurController\TypeFournisseurController::list` |
 | GET | `/api/type-note-de-frais` | ROLE_ADMIN | `Controller\TypeNoteDeFraisController\TypeNoteDeFraisController::list` |
+| GET | `/api/vehicle_products/{id}` | PUBLIC_ACCESS | `Controller\VehicleProductController\VehicleProductController::item` |
+| GET | `/api/vehicle_products` | PUBLIC_ACCESS | `Controller\VehicleProductController\VehicleProductController::list` |
 | GET | `/api/vehicles/carousel` | PUBLIC_ACCESS | `Controller\Api\VehicleApiController::getCarouselVehicles` |
 | DELETE | `/api/{app}-site-models/{id}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\LandingSiteModelController\LandingSiteModelController::delete` |
 | GET | `/api/{app}-site-models/{id}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\LandingSiteModelController\LandingSiteModelController::getOne` |
@@ -1205,36 +1206,3 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | POST | `/admin/workers/restart` | ROLE_SUPER_ADMIN | `Controller\Admin\WorkerAdminController::restart` |
 | GET | `/admin/workers` | ROLE_SUPER_ADMIN | `Controller\Admin\WorkerAdminController::index` |
 | ANY | `/admin` | ROLE_ADMIN | `Controller\Admin\DashboardController::index` |
-
-## API Platform (28)
-
-| Méthodes | Route | Accès | Contrôleur |
-|---|---|---|---|
-| GET | `/api/categories.{_format}` | ROLE_ADMIN | API Platform (Categories) |
-| POST | `/api/categories.{_format}` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | API Platform (Categories) |
-| DELETE | `/api/categories/{id}.{_format}` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | API Platform (Categories) |
-| GET | `/api/categories/{id}.{_format}` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | API Platform (Categories) |
-| PATCH | `/api/categories/{id}.{_format}` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | API Platform (Categories) |
-| PUT | `/api/categories/{id}.{_format}` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | API Platform (Categories) |
-| GET, HEAD | `/api/errors/{status}` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | API Platform (?) |
-| GET | `/api/products.{_format}` | ROLE_ADMIN | API Platform (Product) |
-| POST | `/api/products.{_format}` | ROLE_ADMIN | API Platform (Product) |
-| DELETE | `/api/products/{id}.{_format}` | ROLE_ADMIN | API Platform (Product) |
-| GET | `/api/products/{id}.{_format}` | PUBLIC_ACCESS | API Platform (Product) |
-| PATCH | `/api/products/{id}.{_format}` | ROLE_ADMIN | API Platform (Product) |
-| PUT | `/api/products/{id}.{_format}` | ROLE_ADMIN | API Platform (Product) |
-| GET | `/api/validation_errors/{id}` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | API Platform (ValidationException) |
-| GET | `/api/validation_errors/{id}` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | API Platform (ValidationException) |
-| GET | `/api/validation_errors/{id}` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | API Platform (ValidationException) |
-| GET | `/api/vehicle_products.{_format}` | PUBLIC_ACCESS | API Platform (VehicleProduct) |
-| POST | `/api/vehicle_products.{_format}` | ROLE_ADMIN | API Platform (VehicleProduct) |
-| DELETE | `/api/vehicle_products/{id}.{_format}` | ROLE_ADMIN | API Platform (VehicleProduct) |
-| GET | `/api/vehicle_products/{id}.{_format}` | PUBLIC_ACCESS | API Platform (VehicleProduct) |
-| PATCH | `/api/vehicle_products/{id}.{_format}` | ROLE_ADMIN | API Platform (VehicleProduct) |
-| PUT | `/api/vehicle_products/{id}.{_format}` | ROLE_ADMIN | API Platform (VehicleProduct) |
-| GET | `/api/vehicles.{_format}` | PUBLIC_ACCESS | API Platform (Vehicle) |
-| POST | `/api/vehicles.{_format}` | ROLE_ADMIN | API Platform (Vehicle) |
-| DELETE | `/api/vehicles/{id}.{_format}` | ROLE_ADMIN | API Platform (Vehicle) |
-| GET | `/api/vehicles/{id}.{_format}` | PUBLIC_ACCESS | API Platform (Vehicle) |
-| PATCH | `/api/vehicles/{id}.{_format}` | ROLE_ADMIN | API Platform (Vehicle) |
-| PUT | `/api/vehicles/{id}.{_format}` | ROLE_ADMIN | API Platform (Vehicle) |

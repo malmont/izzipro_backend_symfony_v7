@@ -2,7 +2,6 @@
  
 namespace App\MemoiresVivantes\Entity;
  
-use ApiPlatform\Metadata\ApiResource;
 use App\MemoiresVivantes\Repository\BookRepository;
 use App\Entity\User;
 use Doctrine\Common\Collections\ArrayCollection;
@@ -15,10 +14,6 @@ use Symfony\Component\Uid\Uuid;
 #[ORM\Entity(repositoryClass: BookRepository::class)]
 #[ORM\Table(name: 'mv_book')]
 #[ORM\HasLifecycleCallbacks]
-#[ApiResource(
-    normalizationContext: ['groups' => ['book:read']],
-    denormalizationContext: ['groups' => ['book:write']]
-)]
 class Book
 {
     /** Origine d'un livre : outil web de gestion des projets biographiques, ou application mobile Living Memory */

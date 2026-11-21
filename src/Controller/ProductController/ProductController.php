@@ -11,7 +11,6 @@ use App\UseCase\ProductUseCase\GetLandingPageProductsUseCase;
 use App\UseCase\ProductUseCase\GetProductByIdUseCase; 
 use App\UseCase\ProductUseCase\GetProductBySlugUseCase;
 use App\UseCase\ProductUseCase\DeleteProductUseCase;
-use App\UseCase\ProductUseCase\GetAllProductsUseCase;
 use App\UseCase\ProductUseCase\GetProductsByOfferUseCase;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -30,7 +29,6 @@ class ProductController extends AbstractController
     private GetLandingPageProductsUseCase $getLandingPageProductsUseCase;
     private DeleteProductUseCase $deleteProductUseCase;
     private TenantEntityManagerProvider $emProvider;
-    private GetAllProductsUseCase $getAllProductsUseCase;
     private GetProductsByOfferUseCase $getProductsByOfferUseCase;
     private TenantCacheService $cache;
     private GetProductByIdUseCase $getProductByIdUseCase; 
@@ -43,7 +41,6 @@ class ProductController extends AbstractController
         GetLandingPageProductsUseCase $getLandingPageProductsUseCase,
         DeleteProductUseCase $deleteProductUseCase,
         TenantEntityManagerProvider $emProvider,
-        GetAllProductsUseCase $getAllProductsUseCase,
         GetProductsByOfferUseCase $getProductsByOfferUseCase,
         TenantCacheService $cache,
         GetProductByIdUseCase $getProductByIdUseCase,
@@ -57,7 +54,6 @@ class ProductController extends AbstractController
         $this->getLandingPageProductsUseCase = $getLandingPageProductsUseCase;
         $this->deleteProductUseCase = $deleteProductUseCase;
         $this->emProvider = $emProvider;
-        $this->getAllProductsUseCase = $getAllProductsUseCase;
         $this->getProductsByOfferUseCase = $getProductsByOfferUseCase;
         $this->cache = $cache;
         $this->getProductByIdUseCase = $getProductByIdUseCase;
@@ -121,8 +117,9 @@ class ProductController extends AbstractController
         }
     }
 
-    // Route masquée par l'opération Delete d'API Platform sur Product (même chemin, déclarée avant) : DELETE /api/products/{id} passe par API
-    // Platform. La garde PRODUCT_IN_USE est au niveau de Doctrine (ProductUsageGuardSubscriber, ART-SUPPR, 12/11/2026) et couvre les deux.
+    // Suppression d'un article par l'application de gestion (MAUI). Masquée par l'opération Delete d'API Platform jusqu'à son retrait (lot
+    // APIP-RETRAIT, 20/11/2026), même contrat : 204 sans corps (RoutesGardeesApresApiPlatformTest). La garde PRODUCT_IN_USE est au niveau
+    // de Doctrine (ProductUsageGuardSubscriber, ART-SUPPR, 12/11/2026).
     #[Route('/api/products/{id}', name: 'delete_product', methods: ['DELETE'], requirements: ['id' => '\d+'])]
     public function deleteProduct(int $id): \Symfony\Component\HttpFoundation\Response
     {
@@ -130,27 +127,13 @@ class ProductController extends AbstractController
             $this->deleteProductUseCase->execute($id);
             return new \Symfony\Component\HttpFoundation\Response('', \Symfony\Component\HttpFoundation\Response::HTTP_NO_CONTENT); // 204 sans corps (lot G4, 09/11/2026 ; avant : 200 avec message)
         } catch (\Symfony\Component\HttpKernel\Exception\NotFoundHttpException $e) {
-            throw $e; // 404 via le gestionnaire d'exceptions
+            // 404 via le gestionnaire d'exceptions, au texte que rendait API Platform (contrat de l'application de gestion)
+            throw new \Symfony\Component\HttpKernel\Exception\NotFoundHttpException('Not Found', $e);
+        } catch (\App\Gestion\Services\GestionConflictException|\Symfony\Component\HttpKernel\Exception\HttpExceptionInterface $e) {
+            throw $e; // 409 PRODUCT_IN_USE de la garde Doctrine (ProductUsageGuard) et autres refus : jamais changés en 500
         } catch (\Exception $e) {
             return new JsonResponse($this->safeError->body($e, 'DELETE /api/products/{id}'), JsonResponse::HTTP_INTERNAL_SERVER_ERROR);
         }
-    }
-
-    #[Route('/api/products', name: 'get_all_products', methods: ['GET'])]
-    public function getAllProducts(Request $request): JsonResponse
-    {
-        $host = $this->resolveHost($request);
-        $locale = CacheLocale::normalize($request->query->get('locale'));
-        $cacheKey = 'all_products_' . $locale;
-
-        $products = $this->cache->get(
-            $cacheKey,
-            fn () => $this->getAllProductsUseCase->execute($host, $locale),
-            300,
-            CacheTags::productListTags()
-        );
-
-        return $this->json($products, JsonResponse::HTTP_OK);
     }
 
     #[Route(

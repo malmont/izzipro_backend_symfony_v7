@@ -116,8 +116,8 @@ relit pas la ligne après l'écriture). La variante ne coupe plus en silence un 
 | « Générer un code-barres » (fiche article, liste et détail des variantes) | `generateFor` ; proposé seulement à ce qui n'a pas de code (et, pour un article, pas de variante) ; lien à jeton |
 | « Générer les codes manquants » (`POST /admin/barcode-management/generate-missing`, écran « Gestion des Codes-Barres ») | `generateMissing` ; nombre annoncé avant d'écrire, formulaire à jeton, administrateur |
 | Création d'une fiche par l'IA (`ProductSheetCreator` : `POST /api/products/ai/create`, page « depuis une photo ») | `check` avant de rien créer ; refus 422 `{error, code, message, holder?}` |
-| Ressource d'API de l'article (`POST`, `PUT`, `PATCH /api/products`, administrateur) | n'écrit pas de code-barres : le champ n'est pas dans la liste des champs acceptés (422 « champ non modifiable », gardé par un test) |
-| Ressource d'API des véhicules (`PATCH /api/vehicle_products/{id}`, API Platform ; hors du pare-feu des jetons : seule une session d'administrateur y écrit) | le champ y est inscriptible ; un véhicule est un article : la même contrainte s'y applique (422 pour un code pris ou réservé, forme canonique pour un code libre ; gardé par un test) |
+| `PATCH /api/products/{id}` (PATCH générique des contenus, administrateur ; `POST` et `PUT` d'API Platform retirés le 20/11/2026) | n'écrit pas de code-barres : le champ n'est pas dans la liste des champs acceptés (422 « champ non modifiable »), gardé par `CatalogBarcodeAdminTest` |
+| Ancienne ressource d'API des véhicules (`PATCH /api/vehicle_products/{id}`, API Platform : une session d'administrateur y écrivait) | **retirée** le 20/11/2026 (lot APIP-RETRAIT) : plus aucune écriture par ce chemin (405) ; le code d'un véhicule s'écrit par sa fiche |
 | Application de gestion (lot CB-3, § 8 : `/api/gestion/codes-barres`) | `assign` (poser, retirer), `generateFor`, `generateMissing` ; refus à la forme de la gestion, dans la langue demandée ; une ligne au journal du site par écriture |
 | Tout autre chemin (SQL direct) | la base refuse le doublon et met en forme |
 

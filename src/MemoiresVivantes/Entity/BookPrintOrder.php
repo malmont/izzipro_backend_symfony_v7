@@ -2,7 +2,6 @@
 
 namespace App\MemoiresVivantes\Entity;
 
-use ApiPlatform\Metadata\ApiResource;
 use App\Entity\User;
 use App\MemoiresVivantes\Repository\BookPrintOrderRepository;
 use Doctrine\DBAL\Types\Types;
@@ -13,10 +12,6 @@ use Symfony\Component\Uid\Uuid;
 #[ORM\Entity(repositoryClass: BookPrintOrderRepository::class)]
 #[ORM\Table(name: 'mv_book_print_order')]
 #[ORM\HasLifecycleCallbacks]
-#[ApiResource(
-    normalizationContext: ['groups' => ['book_print:read']],
-    denormalizationContext: ['groups' => ['book_print:write']]
-)]
 class BookPrintOrder
 {
     #[ORM\Id]
