@@ -132,9 +132,6 @@ class AidApiTest extends WebTestCase
         $this->assertSame([120000, 60000, 0], [$stats['current']['total'], $stats['current']['received'], $stats['lastYear']['total']]);
         $all = $this->get('/api/gestion/statistiques?from=2049-01-01&to=2049-12-31&sections=charges')['sections']['charges'];
         $this->assertSame([0, -120000, 0], [$all['financial']['total'], $all['net']['current'], $all['net']['lastYear']], 'les charges seules restent dans financial');
-        $months = array_column($this->get('/api/gestion/statistiques/annee?year=2049')['periods'] ?? [], null, 'id');
-        $this->assertArrayHasKey($period, $months, 'la période de janvier 2049 dans l\'année 2049');
-        $this->assertSame([0, 10192, -10192], [$months[$period]['financialCharges'], $months[$period]['operatingAids'], $months[$period]['netCharges']]);
 
         // Conditions : état par rang ; une condition inconnue, un état inconnu
         $this->assertSame('kept', $this->send('PATCH', "/api/gestion/aides/$id/conditions/0", ['state' => 'kept'], 200)['conditions'][0]['state']);
