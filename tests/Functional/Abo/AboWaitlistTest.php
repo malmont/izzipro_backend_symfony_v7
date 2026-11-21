@@ -444,6 +444,7 @@ class AboWaitlistTest extends WebTestCase
 
     private function slotAt(Benefit $benefit, \DateTimeImmutable $start, int $capacity, ?int $staff = null): int
     {
+        $start = $start->setTimezone(new \DateTimeZone('UTC')); // l'entité garde l'heure telle quelle (Doctrine écrit l'heure murale) : en UTC, comme les appelants réels
         $em = $this->prov()->getEntityManager();
         $slot = (new BenefitSlot())->setBenefit($em->getRepository(Benefit::class)->find($benefit->getId()))->setStartsAt($start)->setEndsAt($start->modify('+1 hour'))->setCapacity($capacity)->setStaffUserId($staff);
 
