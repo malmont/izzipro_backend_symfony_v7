@@ -46,6 +46,8 @@ final class SubscriptionOutputDto
         public readonly bool $doneEmails = true,
         /** Lot ABO-3b : messages de la boutique pas encore lus dans le fil (`GET /api/subscriptions/{id}/fil` les marque lus) */
         public readonly int $unreadMessages = 0,
+        /** Lot ABO-4 : l'abonné reçoit le rappel de la veille (il le coupe par PATCH …/courriels `{ reminders: false }`) */
+        public readonly bool $reminders = true,
     ) {
     }
 
@@ -86,9 +88,10 @@ final class SubscriptionOutputDto
     }
 
     /** @param list<array<string, mixed>> $delivered lot ABO-3a : la vue du client (jamais « par qui » ni la décision interne) */
-    public function withDelivered(array $delivered, bool $doneEmails): self
+    public function withDelivered(array $delivered, bool $doneEmails, bool $reminders = true): self
     {
         $args = get_object_vars($this);
+        $args['reminders'] = $reminders;
         $args['delivered'] = array_map(fn (array $d) => array_intersect_key($d, array_flip(['occurrenceId', 'benefitId', 'name', 'status', 'startsAt', 'doneAt', 'note', 'hasProof', 'customerAck', 'ackUntil'])), $delivered);
         $args['doneEmails'] = $doneEmails;
 

@@ -486,6 +486,9 @@ subscription_notice:
     session_done:
         subject: 'Your service is done'
         message: 'The shop marked a service of your subscription "%plan%" as done (details below). From your account, you can confirm or contest it within 30 days, and turn these emails off.'
+    session_reminder:
+        subject: 'Reminder: %plan%, tomorrow'
+        message: 'A quick reminder: you have an appointment tomorrow for your subscription "%plan%" (details below; the attached file adds it to your calendar). To cancel or move it, use your account, within the allowed time.'
     thread_message:
         subject: 'You have a message from the shop'
         message: 'The shop wrote to you about your subscription "%plan%". Read the message and reply from your account.'
@@ -496,3 +499,12 @@ subscription_team_message:
     message: 'A subscriber wrote to you about their subscription no. %id%.'
     message_plan: 'A subscriber wrote to you about their subscription no. %id% (plan "%plan%").'
     action: 'Read the message and reply from the subscriptions follow-up in your administration space.'
+
+# Lot ABO-4 (21/11/2026): a place opened up on a slot, offered to the subscriber on the waiting list. %benefit%, %date%, %deadline% (shop time), %name%
+waitlist_offer:
+    subject: 'A place opened up: %benefit% on %date%'
+    title: 'A place opened up'
+    greeting: 'Hello %name%,'
+    message: 'A place opened up for "%benefit%" on %date%. It is reserved for you.'
+    deadline: 'Confirm it before %deadline% (shop time) from your account. After that, it is offered to the next person.'
+    action: 'If you no longer want it, leave the waiting list from your account: the place will go to the next person.'

@@ -17,7 +17,7 @@ use Symfony\Contracts\Translation\TranslatorInterface;
  */
 final class SubscriptionMailer
 {
-    public const KINDS = ['payment_failed', 'canceled_unpaid', 'paused', 'canceled', 'cancel_scheduled', 'cancel_at_term_end', 'session_cancelled', 'session_done', 'thread_message'];
+    public const KINDS = ['payment_failed', 'canceled_unpaid', 'paused', 'canceled', 'cancel_scheduled', 'cancel_at_term_end', 'session_cancelled', 'session_done', 'thread_message', 'session_reminder'];
 
     public function __construct(
         private readonly EmailSenderService $mailer,
@@ -42,30 +42,36 @@ final class SubscriptionMailer
 
     /**
      * @param value-of<self::KINDS> $kind
-     * @param array{rows?: array<string, string>, payUrl?: ?string} $details lignes ajoutées au récapitulatif (libellé : une clé
-     *        `subscription_notice.row.*`, traduite ici ; valeur déjà dans la langue de `languageOf`), lien de paiement
+     * @param array{rows?: array<string, string>, payUrl?: ?string, ics?: ?string, icsMethod?: string} $details lignes ajoutées au récapitulatif
+     *        (libellé : une clé `subscription_notice.row.*`, traduite ici ; valeur déjà dans la langue de `languageOf`), lien de paiement ;
+     *        lot ABO-4 : `ics`, la pièce d'agenda (méthode `icsMethod`, REQUEST par défaut, CANCEL pour une séance annulée)
+     * @return bool parti (ou mis en file)
      */
-    public function notify(Subscription $subscription, string $kind, string $host, array $details = []): void
+    public function notify(Subscription $subscription, string $kind, string $host, array $details = []): bool
     {
         $email = $subscription->getUser()?->getEmail();
         if (!$email || !in_array($kind, self::KINDS, true)) {
-            return;
+            return false;
         }
         $language = $this->languageOf($subscription);
-        $subject = $this->text('subscription_notice.' . $kind . '.subject', $language);
+        $subject = $this->text('subscription_notice.' . $kind . '.subject', $language, ['%plan%' => $subscription->getPlan()?->getName($language) ?? '']);
         $rows = [];
         foreach ($details['rows'] ?? [] as $label => $value) {
             $rows[$this->text((string) $label, $language)] = $value;
         }
+        $attachments = ($details['ics'] ?? null) !== null
+            ? [['name' => 'seance.ics', 'body' => $details['ics'], 'contentType' => 'text/calendar; charset=utf-8; method=' . ($details['icsMethod'] ?? 'REQUEST')]] : [];
         try {
-            $this->mailer->sendTemplatedEmail($email, $subject, 'emails/subscription_notice.html.twig', [
+            return $this->mailer->sendTemplatedEmail($email, $subject, 'emails/subscription_notice.html.twig', [
                 'subscription' => $subscription, 'kind' => $kind, 'title' => $subject,
                 'message' => $this->text('subscription_notice.' . $kind . '.message', $language, ['%plan%' => $subscription->getPlan()?->getName($language) ?? '']),
                 'planName' => $subscription->getPlan()?->getName($language),
                 'rows' => $rows, 'payUrl' => $details['payUrl'] ?? null,
-            ], $language, $this->urls->getEmailLogosBaseUrl($host) . '/');
+            ], $language, $this->urls->getEmailLogosBaseUrl($host !== '' ? $host : null) . '/', null, null, $attachments);
         } catch (\Throwable $e) {
             $this->logger->error('[Subscription] Courriel non envoyé : ' . $e->getMessage(), ['kind' => $kind, 'subscription' => $subscription->getId()]);
+
+            return false;
         }
     }
 }

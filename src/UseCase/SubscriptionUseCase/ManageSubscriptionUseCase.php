@@ -43,7 +43,7 @@ class ManageSubscriptionUseCase
             $dto = $dto->withUpcoming($this->agenda->upcoming($subscription, false, $locale));
         }
         if ($this->delivery !== null) {
-            $dto = $dto->withDelivered($this->delivery->delivered($subscription, false, $locale), $subscription->wantsDoneEmails());
+            $dto = $dto->withDelivered($this->delivery->delivered($subscription, false, $locale), $subscription->wantsDoneEmails(), $subscription->wantsReminderEmails());
         }
         if ($this->thread !== null) {
             $dto = $dto->withUnreadMessages($this->thread->unreadForCustomer($subscription));

@@ -23,7 +23,8 @@ use App\Services\TenantEntityManagerProvider;
 class AboAgendaUseCase
 {
     public function __construct(private readonly AboAgendaService $agenda, private readonly AboFollowUpService $followUp, private readonly TenantEntityManagerProvider $emProvider,
-        private readonly ?\App\UseCase\SubscriptionUseCase\ManageSubscriptionUseCase $client = null)
+        private readonly ?\App\UseCase\SubscriptionUseCase\ManageSubscriptionUseCase $client = null,
+        private readonly ?\App\Abo\Services\AboWaitlistService $waitlist = null) // lot ABO-4
     {
     }
 
@@ -123,6 +124,53 @@ class AboAgendaUseCase
 
             return ['cancellation' => $r, 'subscription' => $this->client?->get($id, $user, $locale)];
         });
+    }
+
+    // ---- lot ABO-4 : liste d'attente --------------------------------------------------------------------------------------------------------
+
+    /** @return array{slotId: int, freePlaces: int, waitlist: list<array<string, mixed>>} */
+    public function slotWaitlist(int $slotId): array
+    {
+        return $this->waitlistService()->forSlot($slotId, true);
+    }
+
+    /** @return array{wait: array<string, mixed>} */
+    public function proposeWait(int $waitId, ?string $by, string $host): array
+    {
+        return ['wait' => $this->guard(fn () => $this->waitlistService()->propose($waitId, $by, $host))];
+    }
+
+    /** @return array{waitlist: list<array<string, mixed>>} @throws SubscriptionException */
+    public function myWaits(User $user, int $id): array
+    {
+        return $this->clientRefusal(fn () => ['waitlist' => $this->waitlistService()->mine($this->owned($user, $id))]);
+    }
+
+    /** @return array{wait: array<string, mixed>} @throws SubscriptionException */
+    public function joinWait(User $user, int $id, int $slotId, string $host): array
+    {
+        return $this->clientRefusal(fn () => ['wait' => $this->waitlistService()->join($this->owned($user, $id), $slotId, $host)]);
+    }
+
+    /** @return array{left: true} @throws SubscriptionException */
+    public function leaveWait(User $user, int $id, int $slotId, string $host): array
+    {
+        return $this->clientRefusal(function () use ($user, $id, $slotId, $host) {
+            $this->waitlistService()->leave($this->owned($user, $id), $slotId, $host);
+
+            return ['left' => true];
+        });
+    }
+
+    /** @return array{appointment: array<string, mixed>, subscription: mixed} @throws SubscriptionException */
+    public function acceptWait(User $user, int $id, int $waitId, string $host, string $locale): array
+    {
+        return $this->clientRefusal(fn () => ['appointment' => $this->waitlistService()->accept($this->owned($user, $id), $waitId, $host), 'subscription' => $this->client?->get($id, $user, $locale)]);
+    }
+
+    private function waitlistService(): \App\Abo\Services\AboWaitlistService
+    {
+        return $this->waitlist ?? throw new AboException(503, 'WAITLIST_UNAVAILABLE', 'La liste d\'attente n\'est pas disponible.');
     }
 
     // ---- interne ----------------------------------------------------------------------------------------------------------------------------

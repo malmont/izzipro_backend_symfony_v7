@@ -129,6 +129,13 @@ class Subscription
     public function getThreadEmailedAt(): ?\DateTimeImmutable { return $this->threadEmailedAt; }
 
     public function wantsDoneEmails(): bool { return $this->doneEmails; }
+
+    /** Lot ABO-4 : le rappel de la veille (allumé par défaut) ; l'abonné seul le coupe */
+    #[ORM\Column(name: 'reminder_emails', options: ['default' => true])]
+    private bool $reminderEmails = true;
+
+    public function wantsReminderEmails(): bool { return $this->reminderEmails; }
+    public function setReminderEmails(bool $on): static { $this->reminderEmails = $on; return $this; }
     public function setDoneEmails(bool $on): static { $this->doneEmails = $on; return $this; }
 
     public function getCancelAt(): ?\DateTimeImmutable { return $this->cancelAt; }

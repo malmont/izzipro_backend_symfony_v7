@@ -24,7 +24,9 @@ final class AboPeriodsCommand extends Command
         private readonly ?\App\Services\SubscriptionService\SubscriptionFeeService $fees = null, // lot ABO-CONF C : rattrapage de la commission
         private readonly ?\App\Abo\Services\AboAgendaService $agenda = null, // lot ABO-2 : créneaux 8 semaines devant
         private readonly ?\App\Abo\Services\AboDeliveryService $delivery = null, // lot ABO-3a : photos de preuve de plus de 12 mois effacées
-        private readonly ?\App\Abo\Services\AboThreadService $thread = null) // lot ABO-3b : fils des abonnements terminés depuis 24 mois effacés
+        private readonly ?\App\Abo\Services\AboThreadService $thread = null, // lot ABO-3b : fils des abonnements terminés depuis 24 mois effacés
+        private readonly ?\App\Abo\Services\AboWaitlistService $waitlist = null, // lot ABO-4 : attentes sans objet fermées, places libres offertes
+        private readonly ?\App\Abo\Services\AboReminderService $reminders = null) // lot ABO-4 : rappel de la veille, à partir de 18 h du magasin
     {
         parent::__construct();
     }
@@ -63,6 +65,16 @@ final class AboPeriodsCommand extends Command
                 $f = $this->fees?->catchUp() ?? ['updated' => 0, 'failed' => 0];
                 if ($f['updated'] + $f['failed'] > 0) {
                     $output->writeln(sprintf('%s : commission posée sur %d abonnement(s), %d en échec (repris au passage suivant).', $tenant['code'], $f['updated'], $f['failed']));
+                }
+                // lot ABO-4 : après les droits reportés ou perdus, les attentes sans objet se ferment et les places libres sont offertes (le
+                // filet des promotions : les gestes d'écriture les font d'abord ; à TACHES-1, un passage toutes les 10 minutes)
+                $w = $this->waitlist?->sweep() ?? ['closed' => 0, 'offers' => 0];
+                $reminded = $this->reminders?->sendDue() ?? 0;
+                if ($reminded > 0) {
+                    $output->writeln(sprintf('%s : %d rappel(s) de la veille envoyé(s).', $tenant['code'], $reminded));
+                }
+                if ($w['closed'] + $w['offers'] > 0) {
+                    $output->writeln(sprintf('%s : %d attente(s) fermée(s), %d place(s) offerte(s).', $tenant['code'], $w['closed'], $w['offers']));
                 }
                 if ($r['redispatched'] + $r['carried'] + $r['expired'] > 0) {
                     $output->writeln(sprintf('%s : %d période(s) réémise(s), %d droit(s) reporté(s), %d perdu(s).', $tenant['code'], $r['redispatched'], $r['carried'], $r['expired']));

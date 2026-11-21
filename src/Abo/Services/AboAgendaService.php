@@ -56,6 +56,8 @@ class AboAgendaService
         private readonly LoggerInterface $logger,
         private readonly ?\App\Services\ContentAuditService\ContentAuditRecorder $audit = null,
         private readonly ?\App\Services\SubscriptionService\SubscriptionMailer $mailer = null,
+        private readonly ?\Symfony\Contracts\EventDispatcher\EventDispatcherInterface $events = null, // lot ABO-4 : place libérée
+        private readonly ?AboReminderService $calendar = null, // lot ABO-4 : la pièce .ics d'une séance annulée
     ) {
     }
 
@@ -310,9 +312,11 @@ class AboAgendaService
     {
         $ids = array_map(fn (BenefitSlot $s) => (int) $s->getId(), $rows);
         $taken = $this->takenBySlot($ids);
+        $offers = AboWaitlist::activeOffersBySlot($this->conn(), $ids); // lot ABO-4 : une place offerte n'est plus libre
         $out = [];
         foreach ($rows as $s) {
             $t = $taken[(int) $s->getId()] ?? ['booked' => 0, 'held' => 0];
+            $t['held'] += $offers[(int) $s->getId()] ?? 0;
             $view = ['slotId' => (int) $s->getId(), 'benefitId' => (int) $s->getBenefit()?->getId(), 'benefit' => $s->getBenefit()?->getName('fr'),
                 'startsAt' => $this->at($s->getStartsAt()), 'endsAt' => $this->at($s->getEndsAt()), 'capacity' => $s->getCapacity(),
                 'remaining' => $s->isOpen() ? max(0, $s->getCapacity() - $t['booked'] - $t['held']) : 0, 'location' => $s->getLocation(), 'status' => $s->getStatus()];
@@ -378,6 +382,7 @@ class AboAgendaService
                 }
             }
             $conn->executeStatement('DELETE FROM benefit_slot_hold WHERE slot_id = ?', [$slotId]);
+            AboWaitlist::closeStale($conn, null, $slotId); // lot ABO-4 : le créneau annulé ferme ses attentes (`slot_gone`)
 
             return $released;
         });
@@ -389,8 +394,10 @@ class AboAgendaService
             $em->refresh($slot);
         }
         $bySubscription = [];
+        $occurrencesOf = [];
         foreach ($affected as $r) {
             $bySubscription[(int) $r['subscription_id']] = ($bySubscription[(int) $r['subscription_id']] ?? 0) + 1;
+            $occurrencesOf[(int) $r['subscription_id']][] = (int) $r['id'];
         }
         foreach ($bySubscription as $subscriptionId => $n) {
             $subscription = $em->getRepository(Subscription::class)->find($subscriptionId);
@@ -403,7 +410,7 @@ class AboAgendaService
                 'subscription_notice.row.session' => (string) $slot?->getBenefit()?->getName($this->mailer->languageOf($subscription)),
                 'subscription_notice.row.date' => $slot !== null ? $slot->getStartsAt()->setTimezone($this->clock->timezone())->format('d/m/Y H:i') : '',
                 'subscription_notice.row.reason' => $reason,
-            ]]);
+            ], 'ics' => $this->cancelledIcs($slot, $occurrencesOf[$subscriptionId] ?? [], $this->mailer->languageOf($subscription)), 'icsMethod' => 'CANCEL']);
         }
         $em->flush();
 
@@ -435,9 +442,11 @@ class AboAgendaService
      */
     public function move(Subscription $subscription, int $occurrenceId, ?int $slotId, ?string $startsAt, string $source, ?string $by): array
     {
-        return $this->locked($subscription, function () use ($subscription, $occurrenceId, $slotId, $startsAt, $source, $by) {
-            return $this->conn()->transactional(function (Connection $conn) use ($subscription, $occurrenceId, $slotId, $startsAt, $source, $by) {
+        $freed = null;
+        $out = $this->locked($subscription, function () use ($subscription, $occurrenceId, $slotId, $startsAt, $source, $by, &$freed) {
+            return $this->conn()->transactional(function (Connection $conn) use ($subscription, $occurrenceId, $slotId, $startsAt, $source, $by, &$freed) {
                 $o = $this->scheduledRow($conn, $subscription, $occurrenceId);
+                $freed = $o['slot_id'] !== null && (int) $o['slot_id'] !== $slotId ? (int) $o['slot_id'] : null; // lot ABO-4
                 if ($source === BenefitOccurrence::SOURCE_CLIENT && $this->pastDeadline($o)) {
                     throw new AboException(409, 'CANCEL_DEADLINE_PASSED', sprintf('Le délai pour déplacer ce rendez-vous est passé (%d h avant).', $this->deadlineHours($o)));
                 }
@@ -451,6 +460,9 @@ class AboAgendaService
                 return $view;
             });
         });
+        $this->slotFreed($freed);
+
+        return $out;
     }
 
     /**
@@ -463,9 +475,11 @@ class AboAgendaService
      */
     public function cancelDate(Subscription $subscription, int $occurrenceId, string $source, ?string $by): array
     {
-        return $this->locked($subscription, function () use ($subscription, $occurrenceId, $source, $by) {
-            return $this->conn()->transactional(function (Connection $conn) use ($subscription, $occurrenceId, $source, $by) {
+        $freed = null;
+        $out = $this->locked($subscription, function () use ($subscription, $occurrenceId, $source, $by, &$freed) {
+            return $this->conn()->transactional(function (Connection $conn) use ($subscription, $occurrenceId, $source, $by, &$freed) {
                 $o = $this->scheduledRow($conn, $subscription, $occurrenceId);
+                $freed = $o['slot_id'] !== null ? (int) $o['slot_id'] : null; // lot ABO-4 : la place rendue va à la liste d'attente
                 if ($source === BenefitOccurrence::SOURCE_CLIENT && $this->pastDeadline($o)) {
                     $conn->executeStatement('UPDATE benefit_occurrence SET status = ?, done_at = ? WHERE id = ?', [BenefitOccurrence::STATUS_LATE_CANCELLED, self::utc(new \DateTimeImmutable()), (int) $o['id']]);
                     $this->event($subscription, 'late_cancelled', (int) $o['benefit_id'], $by, $source);
@@ -481,6 +495,9 @@ class AboAgendaService
                 return ['occurrenceId' => (int) $o['id'], 'status' => BenefitOccurrence::STATUS_AVAILABLE];
             });
         });
+        $this->slotFreed($freed);
+
+        return $out;
     }
 
     /**
@@ -611,7 +628,11 @@ class AboAgendaService
     public function releaseHolds(array $ids): void
     {
         if ($ids !== []) {
+            $slots = $this->conn()->fetchFirstColumn('SELECT DISTINCT slot_id FROM benefit_slot_hold WHERE id IN (?) AND subscription_id IS NULL', [$ids], [\Doctrine\DBAL\ArrayParameterType::INTEGER]);
             $this->conn()->executeStatement('DELETE FROM benefit_slot_hold WHERE id IN (?) AND subscription_id IS NULL', [$ids], [\Doctrine\DBAL\ArrayParameterType::INTEGER]);
+            foreach ($slots as $slotId) {
+                $this->slotFreed((int) $slotId); // lot ABO-4 : la place retenue rendue va à la liste d'attente
+            }
         }
     }
 
@@ -737,6 +758,7 @@ class AboAgendaService
             $id = $this->pickOccurrence($conn, $subscription, $benefitId, $occurrenceId, null, $moving);
             $this->writeDate($conn, $id, null, self::utc($start), self::utc($end), $source, $by);
         }
+        AboWaitlist::closeStale($conn, (int) $subscription->getId()); // lot ABO-4 : une attente dont le droit vient d'être daté se ferme
         if ($withEvent) {
             $this->event($subscription, 'scheduled', $benefitId, $by, $source);
             if (!$byClient) {
@@ -791,7 +813,7 @@ class AboAgendaService
 
     private function writeDate(Connection $conn, int $id, ?int $slotId, string $startUtc, string $endUtc, string $source, ?string $by): void
     {
-        $n = $conn->executeStatement("UPDATE benefit_occurrence SET status = 'scheduled', slot_id = ?, scheduled_at = ?, scheduled_end = ?, scheduled_by = ?, scheduled_source = ? WHERE id = ? AND status = 'available'",
+        $n = $conn->executeStatement("UPDATE benefit_occurrence SET status = 'scheduled', slot_id = ?, scheduled_at = ?, scheduled_end = ?, scheduled_by = ?, scheduled_source = ?, reminded_at = NULL WHERE id = ? AND status = 'available'",
             [$slotId, $startUtc, $endUtc, $by !== null ? mb_substr($by, 0, 180) : null, $source, $id]);
         if ($n !== 1) {
             throw new AboException(409, 'OCCURRENCE_NOT_AVAILABLE', 'Ce droit vient d\'être utilisé ou planifié : réessayez.');
@@ -883,7 +905,8 @@ class AboAgendaService
         $held = (int) ($ownSubscription === null
             ? $conn->fetchOne('SELECT COUNT(*) FROM benefit_slot_hold WHERE slot_id = ? AND expires_at > ?', [$slotId, self::utc(new \DateTimeImmutable())])
             : $conn->fetchOne('SELECT COUNT(*) FROM benefit_slot_hold WHERE slot_id = ? AND expires_at > ? AND (subscription_id IS NULL OR subscription_id <> ?)', [$slotId, self::utc(new \DateTimeImmutable()), $ownSubscription]));
-        if ($booked + $held >= $capacity) {
+        // lot ABO-4 : une place offerte à la liste d'attente (et pas encore échue) n'est plus libre
+        if ($booked + $held + AboWaitlist::activeOffers($conn, $slotId) >= $capacity) {
             throw new AboException(409, 'SLOT_FULL', 'Ce créneau est complet.', 'slotId');
         }
     }
@@ -894,7 +917,7 @@ class AboAgendaService
      *
      * @throws AboException 409 SLOT_BUSY
      */
-    private function lockSlot(Connection $conn, int $slotId): void
+    public function lockSlot(Connection $conn, int $slotId): void
     {
         $before = (string) $conn->fetchOne('SHOW lock_timeout'); // le réglage de la session (un essai en pose un) est rendu après
         $conn->executeStatement(sprintf("SET LOCAL lock_timeout = '%dms'", self::LOCK_TIMEOUT_MS));
@@ -1035,6 +1058,81 @@ class AboAgendaService
 
                 return $fn();
             });
+    }
+
+    // ---- lot ABO-4 : liste d'attente ---------------------------------------------------------------------------------------------------
+
+    /**
+     * Lot ABO-4 : la pièce .ics d'annulation (METHOD:CANCEL, même identifiant que le rappel et le flux) pour les dates d'un abonné sur un
+     * créneau annulé ; les dates sont rendues (sans créneau), l'heure est celle du créneau.
+     *
+     * @param list<int> $occurrenceIds
+     */
+    private function cancelledIcs(?BenefitSlot $slot, array $occurrenceIds, string $language): ?string
+    {
+        if ($this->calendar === null || $slot === null || $occurrenceIds === []) {
+            return null;
+        }
+        $events = array_map(fn (int $id) => ['uid' => $this->calendar->uid($id), 'start' => $slot->getStartsAt(), 'end' => $slot->getEndsAt(),
+            'summary' => (string) $slot->getBenefit()?->getName($language), 'location' => $slot->getLocation(), 'cancelled' => true, 'sequence' => 1], $occurrenceIds);
+
+        return \App\Services\Calendar\IcsBuilder::calendar($events, (string) $slot->getBenefit()?->getName($language), \App\Services\Calendar\IcsBuilder::METHOD_CANCEL);
+    }
+
+    /** Une place peut-être libérée sur ce créneau : la liste d'attente la propose (après la transaction, jamais pendant) */
+    public function slotFreed(?int $slotId): void
+    {
+        if ($slotId !== null) {
+            $this->events?->dispatch(new \App\Abo\Event\SlotFreedEvent($slotId));
+        }
+    }
+
+    /** Sous le verrou de l'abonnement (relu), comme tout geste sur ses dates */
+    public function withSubscriptionLock(Subscription $subscription, callable $fn): mixed
+    {
+        return $this->locked($subscription, $fn);
+    }
+
+    /**
+     * Un créneau où cet abonné peut s'inscrire en liste d'attente (ou accepter une place offerte) : abonnement en cours, créneau ouvert et
+     * à venir de cette prestation, dates au choix de l'abonné. Sous le verrou du créneau, pris ici.
+     *
+     * @return array<string, mixed> le créneau
+     * @throws AboException
+     */
+    public function clientSlotIn(Connection $conn, Subscription $subscription, int $slotId): array
+    {
+        if (!in_array($subscription->getStatus(), self::CLIENT_STATUSES, true)) {
+            throw new AboException(409, 'SUBSCRIPTION_NOT_ACTIVE', 'Cet abonnement n\'est pas en cours : aucune date ne se planifie.');
+        }
+        $this->lockSlot($conn, $slotId);
+        $benefitId = (int) $conn->fetchOne('SELECT benefit_id FROM benefit_slot WHERE id = ?', [$slotId]);
+        $slot = $this->assertBookableSlot($conn, $slotId, $benefitId);
+        $pb = $subscription->getPlan() !== null ? $this->planBenefitOf($subscription->getPlan(), $benefitId) : null;
+        if ($pb === null) {
+            throw new AboException(404, 'SLOT_NOT_FOUND', 'Créneau introuvable pour cette prestation.', 'slotId');
+        }
+        if (!self::clientChooses($pb, false)) {
+            throw new AboException(403, 'SCHEDULING_NOT_BY_CLIENT', 'Les dates de cette prestation sont attribuées par la boutique.', 'benefitId');
+        }
+
+        return $slot;
+    }
+
+    /** Les places libres d'un créneau, sous son verrou : capacité moins les dates prises, les places retenues et les places offertes */
+    public function freePlaces(Connection $conn, int $slotId): int
+    {
+        $capacity = (int) $conn->fetchOne('SELECT capacity FROM benefit_slot WHERE id = ?', [$slotId]);
+        $booked = (int) $conn->fetchOne("SELECT COUNT(*) FROM benefit_occurrence WHERE slot_id = ? AND status IN ('scheduled', 'done', 'missed')", [$slotId]);
+        $held = (int) $conn->fetchOne('SELECT COUNT(*) FROM benefit_slot_hold WHERE slot_id = ? AND expires_at > ?', [$slotId, self::utc(new \DateTimeImmutable())]);
+
+        return max(0, $capacity - $booked - $held - AboWaitlist::activeOffers($conn, $slotId));
+    }
+
+    /** La place acceptée devient un rendez-vous de l'abonné (l'offre est déjà marquée acceptée par l'appelant, dans la même transaction) @return array<string, mixed> */
+    public function bookAcceptedIn(Connection $conn, Subscription $subscription, int $benefitId, ?int $occurrenceId, int $slotId): array
+    {
+        return $this->bookIn($conn, $subscription, $benefitId, $occurrenceId, $slotId, null, BenefitOccurrence::SOURCE_CLIENT, null);
     }
 
     private function conn(): Connection

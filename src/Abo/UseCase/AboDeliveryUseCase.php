@@ -105,7 +105,7 @@ class AboDeliveryUseCase
     /** @return array{doneEmails: bool} @throws SubscriptionException */
     public function setDoneEmails(User $user, int $id, array $body): array
     {
-        return $this->clientRefusal(fn () => $this->delivery->setDoneEmails($this->owned($user, $id), $body['doneEmails'] ?? null));
+        return $this->clientRefusal(fn () => $this->delivery->setEmails($this->owned($user, $id), $body)); // lot ABO-4 : `reminders` aussi
     }
 
     // ---- interne ----------------------------------------------------------------------------------------------------------------------------
