@@ -282,7 +282,7 @@ de la liste d'ouverture n'existe pas encore (AG-3d) : elle sera réservée au co
 
 - EasyAdmin n'est pas ouvert à l'entrée (AG-3c).
 - `/api/team` et `/api/vehicle_products` (lecture publique) figurent dans la liste figée mais sont hors du pare-feu de l'API : le jeton
-  n'y est pas lu, l'opérateur y est servi comme un visiteur. `GET /api/me/contexts` est fermé en entrée : le front lit les écrans d'un
+  n'y est pas lu par le pare-feu, l'opérateur y est servi comme un visiteur (la garde de la boutique en construction relit, elle, son jeton). `GET /api/me/contexts` est fermé en entrée : le front lit les écrans d'un
   site client dans les contextes du site d'attache. API Platform est retiré (20/11/2026) : `/api/categories` et `/api/vehicles` rendent
   404 ; la lecture publique `/api/category` reste ouverte.
 - Le jeton d'entrée est rendu dans le corps de la réponse (le front l'envoie en `Authorization` à l'hôte du site visé) ; il vit 15 minutes.

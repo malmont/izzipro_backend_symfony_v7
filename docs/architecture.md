@@ -298,8 +298,8 @@ Décision du propriétaire (voie 2, avant Symfony 8) : API Platform ne servait p
 
 | Route | Contrôleur | Accès | Forme |
 |---|---|---|---|
-| `GET /api/vehicle_products?page=&locale=` | `VehicleProductController::list` | publique (boutique) | tableau JSON simple, 24 par page, ordre des identifiants, `VehicleProductOutputDTO` (liste blanche, valeurs nulles omises) ; une requête SQL par page (API Platform : 26 pour 24) |
-| `GET /api/vehicle_products/{id}` | `VehicleProductController::item` | publique | même objet ; 404 au format des erreurs |
+| `GET /api/vehicle_products?page=&locale=` | `VehicleProductController::list` | publique (boutique) | tableau JSON simple, 24 par page, ordre des identifiants, `VehicleProductOutputDTO` (liste blanche, valeurs nulles omises) ; une requête SQL par page (API Platform : 26 pour 24) ; depuis le lot VEHICULES-PUBLIC (21/11/2026) : véhicules en ligne (`isWeb`) seulement, sans `vin`, `quantity` ni `bookingConfiguration.stockQuantity`, route de la BOUTIQUE (fermée tant que la boutique est en construction) |
+| `GET /api/vehicle_products/{id}` | `VehicleProductController::item` | publique | même objet ; 404 au format des erreurs (un véhicule hors ligne rend le même 404 qu'un identifiant absent) |
 | `DELETE /api/products/{id}` | `ProductController::deleteProduct` (masquée jusque-là) | administrateur | 204 sans corps ; 409 `PRODUCT_IN_USE` de la garde Doctrine |
 
 Contrat figé : `tests/Functional/Boutique/RoutesGardeesApresApiPlatformTest.php` et sa capture « avant »

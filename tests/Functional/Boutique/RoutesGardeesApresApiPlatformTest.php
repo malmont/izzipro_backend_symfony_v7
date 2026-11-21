@@ -4,6 +4,7 @@ namespace App\Tests\Functional\Boutique;
 
 use App\Entity\Product;
 use App\Entity\User;
+use App\Entity\Vehicle;
 use App\Entity\VehicleProduct;
 use App\Services\BoutiqueDemoService\BoutiqueDemoSeeder;
 use App\Services\TenantEntityManagerProvider;
@@ -31,6 +32,10 @@ class RoutesGardeesApresApiPlatformTest extends WebTestCase
     private const FIXTURE = __DIR__ . '/../../Fixtures/contrats/vehicle-products.json';
     private const AXIOS = 'application/json, text/plain, */*';
     private const CODE = 'CONTRAT-VP-';
+    /** Véhicules hors ligne (isWeb faux, puis isWeb vide) : jamais servis au public (lot VEHICULES-PUBLIC) */
+    private const OFFLINE = ['CONTRAT-VPHL-01' => false, 'CONTRAT-VPHL-02' => null];
+    /** Champs retirés de la lecture publique au lot VEHICULES-PUBLIC (21/11/2026) : la capture d'API Platform est comparée sans eux */
+    private const REMOVED = ['vin', 'quantity', 'stockQuantity'];
 
     private KernelBrowser $client;
     private \Doctrine\DBAL\Connection $db;
@@ -52,7 +57,7 @@ class RoutesGardeesApresApiPlatformTest extends WebTestCase
         $em = static::getContainer()->get(TenantEntityManagerProvider::class)->getEntityManager();
         $em->clear();
         foreach ($em->getRepository(VehicleProduct::class)->createQueryBuilder('vp')->andWhere('vp.code LIKE :c')
-            ->setParameter('c', self::CODE . '%')->getQuery()->getResult() as $vehicle) {
+            ->setParameter('c', 'CONTRAT-VP%')->getQuery()->getResult() as $vehicle) {
             $em->remove($vehicle);
         }
         $em->flush();
@@ -115,6 +120,28 @@ class RoutesGardeesApresApiPlatformTest extends WebTestCase
         // Fiche absente : statut et corps
         $missing = $this->get('/api/vehicle_products/999999999?locale=fr', 'application/json');
         $observed['json']['missing'] = ['status' => $missing->getStatusCode(), 'body' => $this->normalize(json_decode($missing->getContent(), true))];
+
+        if (!$apiPlatform) {
+            // lot VEHICULES-PUBLIC : un véhicule hors ligne n'est dans aucune page, et sa fiche rend le 404 d'un identifiant absent
+            $offline = $this->offlineVehicles();
+            // toutes les pages, jusqu'à la première vide (bornée bien au-delà de la base d'essai) : la liste entière est relue
+            $all = [];
+            for ($p = 1; $p <= 1000 && ($rows = json_decode($this->get("/api/vehicle_products?page=$p", 'application/json')->getContent(), true)) !== []; $p++) {
+                $all = array_merge($all, $rows);
+            }
+            $this->assertLessThan(1000, $p, 'la boucle s\'est arrêtée sur une page vide : toute la liste est lue');
+            $online = (int) $this->db->fetchOne("SELECT COUNT(*) FROM vehicle_product vp JOIN product p ON p.id = vp.id WHERE p.is_web = true");
+            $this->assertCount($online, $all, 'la liste rend exactement les véhicules en ligne, sans trou ni doublon');
+            $this->assertContains($first, array_column($all, 'id'), 'véhicule en ligne : présent');
+            foreach ($offline as $code => $id) {
+                $this->assertNotContains($id, array_column($all, 'id'), "$code (hors ligne) : absent de la liste");
+                $hidden = $this->get("/api/vehicle_products/$id", 'application/json');
+                $this->assertSame([404, $missing->getContent()], [$hidden->getStatusCode(), $hidden->getContent()], "$code (hors ligne) : le même 404 qu'un identifiant absent");
+            }
+            foreach ([...$all, json_decode($this->get("/api/vehicle_products/$first", 'application/json')->getContent(), true)] as $row) {
+                $this->assertSame([], array_values(array_intersect(self::REMOVED, array_keys($row + ($row['bookingConfiguration'] ?? [])))), 'ni vin, ni quantity, ni stockQuantity');
+            }
+        }
 
         if (getenv('CONTRAT_CAPTURE') === '1') {
             $this->writeFixture('readsAxiosAvant', $observed['axios']);
@@ -275,9 +302,57 @@ class RoutesGardeesApresApiPlatformTest extends WebTestCase
             ->setIsbestseller(false)->setIsnewarrival(true)->setIsfeatured(false)->setIsspecialoffer(false)
             ->setSaleEnabled(true)->setRentalEnabled(false)->setSubscriptionEnabled(false)->setCustomizable(false);
         $p->setBrand('Marque')->setModel('Modèle')->setYear(2024)->setVehicleCondition('neuf')->setColor('rouge')
-            ->setGasType('essence')->setTransmission('auto')->setEnginePower('150 ch')->setHoursOrMileage(1200);
+            ->setGasType('essence')->setTransmission('auto')->setEnginePower('150 ch')->setHoursOrMileage(1200)
+            ->setVin('VIN' . str_replace('-', '', $code)); // un NIV renseigné : la lecture publique ne le recopie plus (VEHICULES-PUBLIC)
 
         return $p;
+    }
+
+    /** Lot VEHICULES-PUBLIC : le carrousel du bloc « financement » (entité Vehicle, autre lecture) répond, ne sert que les véhicules affichés */
+    public function testTheVehicleCarouselAnswersWithTheDisplayedVehiclesOnly(): void
+    {
+        $em = static::getContainer()->get(TenantEntityManagerProvider::class)->getEntityManager();
+        $shown = (new Vehicle())->setTitle('Carrousel CONTRAT-VP affiché')->setDescription('d')->setWebDisplay(true)->setSlug('contrat-vp-carrousel-1')->setYear(2024);
+        $hidden = (new Vehicle())->setTitle('Carrousel CONTRAT-VP caché')->setDescription('d')->setWebDisplay(false)->setSlug('contrat-vp-carrousel-2')->setYear(2024);
+        $em->persist($shown);
+        $em->persist($hidden);
+        $em->flush();
+        try {
+            $r = $this->get('/api/vehicles/carousel?locale=fr', self::AXIOS);
+            $this->assertSame(200, $r->getStatusCode());
+            $titles = array_column(json_decode($r->getContent(), true), 'title');
+            $this->assertContains('Carrousel CONTRAT-VP affiché', $titles);
+            $this->assertNotContains('Carrousel CONTRAT-VP caché', $titles, 'un véhicule non affiché n\'est pas au carrousel');
+            $this->assertDoesNotMatchRegularExpression('/"(vin|quantity|stockQuantity|purchasePrice)"\s*:/', $r->getContent());
+        } finally {
+            $em->clear();
+            foreach ($em->getRepository(Vehicle::class)->findBy(['slug' => ['contrat-vp-carrousel-1', 'contrat-vp-carrousel-2']]) as $v) {
+                $em->remove($v);
+            }
+            $em->flush();
+        }
+    }
+
+    /** @return array<string, int> les véhicules hors ligne de l'essai, créés au milieu de la liste (avant le dernier véhicule en ligne) */
+    private function offlineVehicles(): array
+    {
+        $em = static::getContainer()->get(TenantEntityManagerProvider::class)->getEntityManager();
+        $ids = [];
+        foreach (self::OFFLINE as $code => $web) {
+            $id = (int) $this->db->fetchOne('SELECT id FROM product WHERE code = ?', [$code]);
+            if ($id === 0) {
+                $v = $this->newVehicleProduct($code)->setIsWeb($web);
+                $em->persist($v);
+                $em->flush();
+                $id = (int) $v->getId();
+            }
+            $ids[$code] = $id;
+        }
+        // un véhicule en ligne APRÈS eux : les hors ligne tombent au milieu de la liste, la pagination doit les sauter sans trou
+        $em->persist($this->newVehicleProduct(self::CODE . 'APRES'));
+        $em->flush();
+
+        return $ids;
     }
 
     private function vehicleId(int $n): int
@@ -340,7 +415,27 @@ class RoutesGardeesApresApiPlatformTest extends WebTestCase
             $this->writeFixture($key, $observed);
             $this->markTestIncomplete("Capture de « $key » écrite");
         }
-        $this->assertSame($this->fixture()[$key] ?? null, json_decode(json_encode($observed), true), "« $key » identique à la capture faite avec API Platform");
+        $expected = $this->fixture()[$key] ?? null;
+        if ($key === 'reads' && !class_exists(\ApiPlatform\Metadata\ApiResource::class)) {
+            $expected = $this->withoutRemoved($expected);
+        }
+        $this->assertSame($expected, json_decode(json_encode($observed), true), "« $key » identique à la capture faite avec API Platform (moins les champs retirés exprès)");
+    }
+
+    /** La capture moins les champs retirés exprès de la lecture publique (REMOVED), à toute profondeur */
+    private function withoutRemoved(mixed $v): mixed
+    {
+        if (!is_array($v)) {
+            return $v;
+        }
+        $out = [];
+        foreach ($v as $k => $x) {
+            if (!in_array($k, self::REMOVED, true)) {
+                $out[$k] = $this->withoutRemoved($x);
+            }
+        }
+
+        return $out;
     }
 
     private function fixture(): array

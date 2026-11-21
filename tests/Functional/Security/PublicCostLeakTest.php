@@ -11,6 +11,7 @@ use App\Entity\Commande;
 use App\Entity\Fournisseur;
 use App\Entity\Product;
 use App\Entity\ProductVariant;
+use App\Entity\VehicleProduct;
 use App\Entity\User;
 use App\Services\TenantEntityManagerProvider;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
@@ -107,6 +108,43 @@ class PublicCostLeakTest extends WebTestCase
         $this->client->request('POST', 'https://' . MV_TEST_TENANT_HOST . '/api/cart/quote', [], [], $this->server(null) + ['CONTENT_TYPE' => 'application/json'],
             json_encode(['items' => [['productId' => $this->productId, 'variantId' => $this->variantId, 'quantity' => 1]]]));
         $this->assertSame([], self::leaks((string) $this->client->getResponse()->getContent()), 'devis du panier');
+    }
+
+    /**
+     * Lot VEHICULES-PUBLIC (21/11/2026, relevé de la vérification des pertes) : un VRAI véhicule, avec un coût, un NIV et du stock, lu
+     * par les deux lectures publiques des véhicules : il est servi, sans coût, sans NIV recopié, sans quantité ni stock de location.
+     */
+    public function testThePublicVehicleReadsShowAnOnlineVehicleWithoutCostVinOrStock(): void
+    {
+        $em = $this->em();
+        $vehicle = (new VehicleProduct())->setName('Vehicule Cost1 ' . $this->tag)->setSlug('vehicule-' . $this->slug)->setIsWeb(true)->setIsPos(false)->setSaleEnabled(true)
+            ->setPurchasePrice(791913.0)->setCoefficientMultiplier(3.14159)->setCommandeCostCents(654321)->setQuantity(7);
+        $vehicle->setBrand('Marque')->setModel('Modele')->setYear(2024)->setVin('VIN-SECRET-COST1')->setEnginePower('90 ch');
+        $em->persist($vehicle);
+        $em->flush();
+        $id = (int) $vehicle->getId();
+        try {
+            $item = $this->read("/api/vehicle_products/$id", null);
+            $this->assertSame(200, $this->client->getResponse()->getStatusCode(), $item);
+            $found = null;
+            for ($page = 1; $page <= 50 && $found === null; $page++) {
+                $rows = json_decode($this->read("/api/vehicle_products?page=$page", null), true);
+                if ($rows === []) {
+                    break;
+                }
+                $found = array_values(array_filter($rows, static fn (array $r): bool => $r['id'] === $id))[0] ?? null;
+            }
+            $this->assertNotNull($found, 'le véhicule en ligne est dans la liste');
+            foreach (['fiche' => $item, 'liste' => json_encode($found)] as $what => $body) {
+                $this->assertStringContainsString('Vehicule Cost1 ' . $this->tag, $body, $what);
+                $this->assertSame([], self::leaks($body), "$what rend un coût");
+                $this->assertStringNotContainsString('VIN-SECRET-COST1', $body, "$what recopie le NIV");
+                $this->assertDoesNotMatchRegularExpression('/"(vin|quantity|stockQuantity)"\s*:/', $body, "$what : ni vin, ni quantity, ni stockQuantity");
+            }
+        } finally {
+            $em->getConnection()->executeStatement('DELETE FROM vehicle_product WHERE id = ?', [$id]);
+            $em->getConnection()->executeStatement('DELETE FROM product WHERE id = ?', [$id]);
+        }
     }
 
     public function testNoReadRouteGivesACostToAVisitorOrToACustomerAccount(): void

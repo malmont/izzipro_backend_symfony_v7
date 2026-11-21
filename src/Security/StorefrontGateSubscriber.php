@@ -92,10 +92,12 @@ class StorefrontGateSubscriber implements EventSubscriberInterface
     /**
      * Le site vitrine : fermé pour un site neuf (`site`), servi quand seule la boutique est en construction (`shop`). Rien de la
      * boutique ici : `/api/landingpage` (les articles de la page d'accueil), `/api/customization` (options et prix d'un article) et
-     * `/api/booking` (disponibilité d'un article en location) sont des routes de la boutique. L'essai écrit ces routes en toutes lettres.
+     * `/api/booking` (disponibilité d'un article en location) sont des routes de la boutique, comme `/api/vehicle_products` (des articles
+     * avec prix, vente ou location : boutique depuis le lot VEHICULES-PUBLIC, 21/11/2026) ; `/api/vehicles/carousel` (bloc « financement »
+     * du site vitrine) reste ici. L'essai écrit ces routes en toutes lettres.
      */
     public const SHOWCASE = [
-        '#^/api/(landingpage-settings|components-config|presentations|presentation-groups|bannieres|baniere-statiques|homeslider|explore-cards|features|videos|shared-media|embeds|multiliens|recherches|service-offers|service-families|team|emplois|candidatures|vehicles|vehicle_products|vehicle-products|financement|offers|admin-settings|contacts|contact|newsletter|form-submissions|reservations|social-networks)(/|\.|$)#',
+        '#^/api/(landingpage-settings|components-config|presentations|presentation-groups|bannieres|baniere-statiques|homeslider|explore-cards|features|videos|shared-media|embeds|multiliens|recherches|service-offers|service-families|team|emplois|candidatures|vehicles|financement|offers|admin-settings|contacts|contact|newsletter|form-submissions|reservations|social-networks)(/|\.|$)#',
         '#^/(videos|shared-media|contact|cgu)(/|$)#',
     ];
 

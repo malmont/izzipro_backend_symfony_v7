@@ -105,7 +105,7 @@ générée par API Platform était publique et imbriquait toutes les relations, 
 minutes (incident du 26/10/2026), puis réservée à l'administrateur (S8). **Le site et les applications lisent les routes
 dédiées, inchangées** : `/api/products/{id}` (fiche, DTO), `/api/products/by-slug/{slug}`, `/api/products/by-category`,
 `/api/products/{bestsellers|newarrivals|…}`, `/api/productsid/{id}`, avis et éligibilité, variantes ; catégories : `/api/category`.
-Le site ne relit plus jamais la liste complète en repli d'une fiche en erreur (correction côté Next.js). Véhicules de la boutique : `GET /api/vehicle_products` et `/{id}` (tableau simple, routes maison).
+Le site ne relit plus jamais la liste complète en repli d'une fiche en erreur (correction côté Next.js). Véhicules de la boutique : `GET /api/vehicle_products` et `/{id}` (tableau simple, routes maison ; véhicules en ligne seulement, sans `vin`, `quantity` ni `stockQuantity` de location, lot VEHICULES-PUBLIC du 21/11/2026 ; le NIV reste sur la fiche, `vehicleDetails.vin` de `/api/products/{id}`, décision du propriétaire). Le carrousel du bloc « financement » est `GET /api/vehicles/carousel` (entité `Vehicle`, véhicules `webDisplay`).
 
 ## Le coût ne sort pas des routes ouvertes (lot COST-1, 16/11/2026)
 

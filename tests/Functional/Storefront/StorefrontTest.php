@@ -318,7 +318,7 @@ class StorefrontTest extends WebTestCase
         $this->assertSame(['state' => 'construction', 'scope' => 'shop'], $state());
         // la boutique est fermée au visiteur et au compte client…
         foreach (['/api/category', '/api/products/by-category', '/api/boutique-settings', '/api/subscription-plans', '/api/productsid/12', '/api/landingpage', '/api/customization/config/1',
-            '/api/booking/check/1', '/api/booking/calendar/1'] as $path) {
+            '/api/booking/check/1', '/api/booking/calendar/1', '/api/vehicle_products', '/api/vehicle_products/1'] as $path) {
             $refused = $this->api('GET', $path);
             $this->assertSame([403, 'STOREFRONT_UNDER_CONSTRUCTION', 'shop'], [$refused->getStatusCode(), $this->json($refused)['code'] ?? null, $this->json($refused)['scope'] ?? null], $path);
             $this->assertSame(403, $this->api('GET', $path, null, $customer)->getStatusCode(), $path);
@@ -330,7 +330,7 @@ class StorefrontTest extends WebTestCase
         $this->assertSame('STOREFRONT_UNDER_CONSTRUCTION', $code($this->api('POST', '/api/register', ['email' => 'vitrine-x@example.invalid', 'password' => self::PASSWORD])));
         $this->assertSame(403, $this->api('GET', '/shop')->getStatusCode());
         // … le site vitrine, ses formulaires et la fiche du site restent servis comme avant
-        foreach (['/api/landingpage-settings', '/api/presentations', '/api/homeslider', '/api/bannieres'] as $path) {
+        foreach (['/api/landingpage-settings', '/api/presentations', '/api/homeslider', '/api/bannieres', '/api/vehicles/carousel'] as $path) {
             $served = $this->api('GET', $path);
             $this->assertSame(200, $served->getStatusCode(), $path);
             $this->assertStringNotContainsString('no-store', (string) $served->headers->get('Cache-Control'), "$path : le site vitrine garde son cache");
@@ -344,6 +344,7 @@ class StorefrontTest extends WebTestCase
         $this->assertSame($sheet, $this->json($this->api('GET', "/api/entreprise/$id", null, $admin)));
         // l'équipe voit la boutique, un lien d'aperçu aussi ; l'administrateur l'ouvre (avec un moyen de paiement), la referme : elle seule se referme
         $this->assertSame(200, $this->api('GET', '/api/category', null, $admin)->getStatusCode());
+        $this->assertSame(200, $this->api('GET', '/api/vehicle_products', null, $admin)->getStatusCode(), 'l\'équipe voit les véhicules de la boutique fermée');
         $token = substr($this->json($this->api('POST', '/api/site/storefront/preview-link', null, $admin))['url'], -64);
         $this->assertSame(200, $this->api('GET', '/api/category', null, null, ['HTTP_X_STOREFRONT_PREVIEW' => $token])->getStatusCode());
         $this->assertSame('STOREFRONT_UNDER_CONSTRUCTION', $code($this->api('POST', '/api/cart/quote', ['x' => 1], null, ['HTTP_X_STOREFRONT_PREVIEW' => $token])));
@@ -500,14 +501,16 @@ class StorefrontTest extends WebTestCase
             'api_service_families_list', 'api_service_families_update', 'api_service_offer_create', 'api_service_offer_delete',
             'api_service_offer_get_one', 'api_service_offer_list', 'api_service_offer_update', 'api_shared_media_get_one',
             'api_shared_media_get_one.1', 'api_shared_media_list', 'api_shared_media_list.1', 'api_social_networks_list', 'api_team_create',
-            'api_team_delete', 'api_team_get', 'api_team_list', 'api_team_update', 'api_vehicle_products_get', 'api_vehicle_products_list', 'api_vehicles_carousel', 'api_video_create', 'api_video_create.1',
+            'api_team_delete', 'api_team_get', 'api_team_list', 'api_team_update', 'api_vehicles_carousel', 'api_video_create', 'api_video_create.1',
             'api_video_delete', 'api_video_delete.1', 'api_video_get_one', 'api_video_get_one.1', 'api_video_list', 'api_video_list.1',
             'api_video_update', 'api_video_update.1', 'app_contact_new', 'cgu_condition', 'delete_admin_preset', 'get_admin_presets',
             'get_admin_settings', 'get_home_slider', 'save_admin_preset', 'update_admin_settings',
         ], $classes['showcase'], 'routes du site vitrine : rien de la boutique (`StorefrontGateSubscriber::SHOWCASE`)');
-        foreach (['/api/landingpage', '/api/customization/config/12', '/api/booking/check/12', '/api/booking/calendar/12'] as $path) {
+        // lot VEHICULES-PUBLIC : les véhicules produits sont des articles de la boutique ; le carrousel des véhicules reste au site vitrine
+        foreach (['/api/landingpage', '/api/customization/config/12', '/api/booking/check/12', '/api/booking/calendar/12', '/api/vehicle_products', '/api/vehicle_products/12'] as $path) {
             $this->assertSame(['shop', true], [StorefrontGateSubscriber::classOf($path), StorefrontGateSubscriber::closed($path, 'shop')], $path);
         }
+        $this->assertSame(['showcase', false], [StorefrontGateSubscriber::classOf('/api/vehicles/carousel'), StorefrontGateSubscriber::closed('/api/vehicles/carousel', 'shop')]);
         // aucune adresse voisine d'une route ouverte n'est ouverte
         foreach (['/api/products/12', '/api/productsid/12', '/api/category', '/api/vehicles.json', '/api/entreprise/12/x', '/api/entreprises', '/api/login/x', '/api/site/storefront/open', '/shop', '/api/tenant/hostsx', '/API/login', '/uploadsx',
             '/administrateur', '/api/memoiresx', '/api/boussoles', '/api/apps/boutique/terms', '/api/profilex', '/api/accounts', '/api/une-route-que-personne-n-a-rangee'] as $path) {
