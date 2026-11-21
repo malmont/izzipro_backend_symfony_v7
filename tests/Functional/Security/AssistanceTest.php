@@ -168,7 +168,6 @@ class AssistanceTest extends WebTestCase
         [$agencyId, $operator, $member] = $this->agencyInside();
         $this->assertSame(201, $this->call('POST', '/api/site/assistance', $merchant, ['section' => 'commandes', 'mode' => 'write'])->getStatusCode());
         $this->assertSame([403, 'assistance_closed'], $this->reason('POST', '/api/order/cancel/1', $operator), 'annuler une vente la rembourse');
-        $this->assertSame([403, 'assistance_closed'], $this->reason('POST', '/api/shipping/buy', $operator, ['orderId' => 1]), 'acheter une étiquette dépense l\'argent du commerçant');
         $parcel = $this->call('POST', '/api/shipping/parcels', $operator, []);
         $this->assertNotSame('MODE_FORBIDDEN', json_decode((string) $parcel->getContent(), true)['code'] ?? null, (string) $parcel->getContent());
 
@@ -254,7 +253,6 @@ class AssistanceTest extends WebTestCase
         $this->assertSame(json_decode((string) file_get_contents($file), true), $computed, 'écriture d\'une section non rangée : la permettre ou la refuser dans AssistanceSections::WRITES, puis régénérer le témoin');
         $this->assertSame([], $computed['pertes']['allowed'] ?? [], 'les pertes : aucune écriture');
         $this->assertNotContains('POST /api/order/cancel/{id}', $computed['commandes']['allowed'] ?? []);
-        $this->assertNotContains('POST /api/shipping/buy', $computed['commandes']['allowed'] ?? []);
     }
 
     /** L'agence créée, le second site rattaché, un membre entré : [agence, jeton d'entrée de l'opérateur, jeton du membre sur son site d'attache] */

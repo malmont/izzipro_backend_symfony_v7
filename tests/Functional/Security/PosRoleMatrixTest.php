@@ -88,8 +88,8 @@ class PosRoleMatrixTest extends WebTestCase
         $this->db->executeStatement('DELETE FROM note_de_frais WHERE id = ?', [$noteId]);
         $this->db->executeStatement('DELETE FROM collections WHERE id = ?', [$collectionId]);
         $this->db->executeStatement('DELETE FROM type_note_de_frais WHERE id = ?', [$typeId]);
-        $refused('POST', '/api/shipping/buy', ['orderId' => $card['issuedOrderId'], 'cartItems' => []], 'FORBIDDEN', 403, 'étiquette pour une commande qui n\'est pas la sienne (vente du responsable)');
-        $this->assertSame([404, 'ORDER_NOT_FOUND'], $this->error($this->request('POST', '/api/shipping/buy', ['orderId' => 999999999, 'cartItems' => []])));
+        // POST /api/shipping/buy retiré (lot CHECKOUT-LIVRAISON) : l'étiquette s'achète par l'administration (/admin/orders/{id}/etiquette)
+        $this->assertSame(404, $this->request('POST', '/api/shipping/buy', ['orderId' => $card['issuedOrderId'], 'cartItems' => []])->getStatusCode());
         $refused('POST', '/api/order/create', ['addressId' => 1, 'items' => [['productVariantId' => $this->cap, 'quantity' => 1]], 'orderSource' => 2], 'POS_ROUTE_REQUIRED', 403, 'vente de caisse par la route web');
         $refused('POST', '/api/order/create', ['addressId' => 1, 'items' => [['productVariantId' => $this->cap, 'quantity' => 1]], 'typeOrder' => 2], 'POS_ROUTE_REQUIRED', 403, 'retour par la route web');
         $today = date('Y-m-d');

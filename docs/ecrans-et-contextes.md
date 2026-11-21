@@ -156,7 +156,7 @@ Sortis de la construction parce que leur réponse ENTIÈRE porte des ventes ou d
 | `site.journal` | `/api/landingpage-audit` | le journal garde l'avant / après de tout le site : coûts, commandes, adresses, comptes |
 | `imports.clients` | `/api/site/imports/{id}/customers`, `/{id}/invitations` | nominatif |
 | `imports.commandes` | `/api/site/imports/archive/orders` | commandes d'avant, lignes et montants |
-| `ventes.commandes` | `GET /api/orders`, `GET /api/payments`, `POST /api/shipping/buy`, `POST /api/order/cancel/{id}` | un client y lit ou annule les siens, un administrateur ceux de tout le site |
+| `ventes.commandes` | `GET /api/orders`, `GET /api/payments`, `POST /api/order/cancel/{id}` (`POST /api/shipping/buy` retirée, lot CHECKOUT-LIVRAISON) | un client y lit ou annule les siens, un administrateur ceux de tout le site |
 | `clients.reservations` | `GET /api/reservations`, `…/{id}/confirm` | tous les rendez-vous du site |
 | `admin.paiement` | Stripe (`/admin/stripe`, `/stripe/connect`…), Square | le commerçant connecte lui-même son compte de paiement |
 | `admin.stock` | mouvements de stock | l'historique des mouvements dit les ventes |

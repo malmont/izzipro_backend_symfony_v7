@@ -305,7 +305,23 @@ d'article**.
   `allowedDates`, `openingHours` ou `eveningSlot` (grille horaire), disponibilité (`remaining` dans l'erreur). Grille `datetime` :
   voir « Prise et retour avec date et heure » ci-dessous (tolérance de retard, pas des heures, heures de prise et de retour).
 - Livraison : 0 sans `carrierId` ; prix fixe du transporteur ; transporteur EasyPost (`carrierAccountId`) : tarif
-  choisi dans `shipping/summary`, envoyé en `shippingPrice`. `GET /api/Carrier` : `isFree`, `estimatedDays`
+  choisi dans `shipping/summary`. **Depuis le lot CHECKOUT-LIVRAISON (21/11/2026), le serveur ne croit jamais un prix de
+  livraison EasyPost du navigateur** : chaque option du résumé porte un `rateToken`, gardé 30 min par le serveur (Redis
+  `cache.state`, clé site + jeton ; `ShippingRateStore`) avec les articles et quantités, la destination (pays, province, code
+  postal), le compte EasyPost et le service, le montant et la devise. Le devis web (`/api/cart/quote`, `create-intent`) exige
+  `shippingRateToken` et prend SON montant (le `shippingPrice` envoyé est ignoré, jamais 0 par défaut) : absent → **422
+  `SHIPPING_RATE_REQUIRED`** ; expiré ou inconnu (Redis vidé compris) → **422 `SHIPPING_RATE_EXPIRED`** (redemander le résumé) ;
+  autre panier, autre destination, autre transporteur → **422 `SHIPPING_RATE_MISMATCH`** ; le jeton d'un site n'existe pas sur un
+  autre. `create-intent` écrit le prix coté dans le panier gardé : la commande et le webhook le reprennent, même après
+  l'expiration du jeton. EasyPost muet → `shipping/summary` **503 `SHIPPING_RATES_UNAVAILABLE`**, aucun tarif (le retrait et les
+  prix fixes restent possibles) ; EasyPost refuse l'adresse ou les colis → **422 `SHIPPING_ADDRESS_INVALID`**. Un jeton n'est émis
+  que pour un tarif de TOUS les colis, d'un seul compte EasyPost, vers un pays et un code postal connus ; la destination est
+  comparée strictement. Le service et le compte PAYÉS sont ceux du jeton, écrits dans le panier gardé (`service`,
+  `carrierAccountId`), jamais ceux du client. Le prix saisi reste permis à l'administration et à la caisse seulement
+  (`ROLE_ADMIN`, `ROLE_SUPER_ADMIN`, `ROLE_USER_POS`, `ROLE_POS_MANAGER`, rôles relus en base ; une entrée d'agence ou de la plateforme
+  dans le site garde les droits d'administration qu'elle porte), jamais hors requête HTTP. Le résumé doit recevoir TOUS les articles du
+  panier, location comprise, sinon `SHIPPING_RATE_MISMATCH`. Essai : `CheckoutLivraisonTest`.
+  `GET /api/Carrier` : `isFree`, `estimatedDays`
   (colonne `carrier.estimated_days`, migration `Version20261008140000`, script
   `scripts/migrate_all_v2_carrier_estimated_days.sh`). `shipping/summary[].totalPrice` est en cents.
 - Taxes : selon l'adresse de livraison (`shippingAddress`), voir « Taxes par région » ci-dessous ; sans adresse,
@@ -406,8 +422,8 @@ intent Stripe) et la commande naît **une seule fois par paiement**, du navigate
   invité ne crée aucune appartenance ; elle naît le jour où ce client choisit son mot de passe.
 - `POST /api/order/create` (client) et `/api/order/create-guest` (invité) : **idempotents**. Depuis le 30/10/2026 (audit S2.7), un
   caissier ou responsable de caisse sans `ROLE_ADMIN` n'y crée qu'une vente web (403 `POS_ROUTE_REQUIRED` pour `orderSource` 2 ou
-  `typeOrder` ≠ 1 : les opérations de caisse passent par `create-multi-payment` et `/api/pos/returns`) ; `POST /api/shipping/buy`
-  exige la commande de l'utilisateur connecté ou `ROLE_ADMIN` (403 `FORBIDDEN`, 404 `ORDER_NOT_FOUND`) ; `PUT`/`DELETE
+  `typeOrder` ≠ 1 : les opérations de caisse passent par `create-multi-payment` et `/api/pos/returns`)  ; (`POST /api/shipping/buy`, retirée
+  par le lot CHECKOUT-LIVRAISON) ; `PUT`/`DELETE
   /api/notes-de-frais/{id}` exigent `ROLE_ADMIN` ou le propriétaire de la collection de la note (403 `FORBIDDEN`) ; les pages HTML `/adress/*` ne montrent que ses adresses. Comportement du
   tunnel web inchangé pour un client. Premier appel : 201
   `{ success, orderId, guestToken? (invité), alreadyCreated: false }`. Appel suivant pour le même paiement : **200** et la
@@ -450,6 +466,26 @@ intent Stripe) et la commande naît **une seule fois par paiement**, du navigate
     la plateforme (`checkout/panier`, avertissement, sans donnée du client) et la commande se crée sur le panier payé.
   - Le tunnel de la boutique envoie les mêmes lignes à `create-intent` et à la commande (vérifié par le chef) : il ne voit jamais
     le refus. Essai : `tests/Functional/Boutique/CheckoutPanierTest.php`.
+- **Le paiement appartient à celui qui l'a ouvert** (lot CHECKOUT-PROPRIETE, 21/11/2026) : la PREUVE est le **`clientSecret`**
+  de l'intention (`pi_…_secret_…`), rendu par `create-intent` au seul navigateur qui l'a ouverte. Le `pi_…` et le courriel ne sont pas
+  des secrets.
+  - `order/create` et `create-guest` exigent `clientSecret` (relu chez Stripe, comparé à temps constant), vérifié AVANT tout le
+    reste (commande déjà créée, statut du paiement) : absent ou faux → **403 `PAYMENT_PROOF_REQUIRED`**, la même réponse, qui ne
+    dit rien du paiement ni de son propriétaire. Stripe muet → **503 `PAYMENT_PROVIDER_UNAVAILABLE`**, jamais d'acceptation par
+    défaut (le webhook reste le filet).
+  - Preuve faite : une session de CLIENT ne sert qu'à ce client (sinon **409 `PAYMENT_ALREADY_USED`**) ; une session d'INVITÉ sert
+    à l'invité, et au client qui s'est connecté entre-temps (jeton expiré à `create-intent`) : la commande est à son compte.
+  - Invité : le courriel et les adresses gardés à `create-intent` l'emportent (un autre courriel → 409 `CART_MISMATCH`) ; le reste
+    (nom, téléphone, permis) vient du corps.
+  - Reprise à `create-intent` (`paymentIntentId` + `clientSecret`) : seulement avec la preuve, et pour une session de client par ce
+    client ; intention encore modifiable chez Stripe ; sinon une NOUVELLE intention (`reused: false`), sans le `clientSecret` ni le
+    corps gardé d'un autre. Avec la preuve, un panier modifié sans renvoyer `order` garde le corps du premier appel.
+  - Le `clientSecret` ne s'écrit nulle part (journal, incident, session gardée : retiré du corps gardé).
+  - Les fronts renvoient le `clientSecret` reçu de `create-intent` à la commande et à la reprise (boutique et application mobile, à
+    leur reprise ; d'ici là, une commande web sans lui est refusée).
+  - Caisse : `create-multi-payment` refuse le `pi_…` d'un panier web (`payment.stripePaymentId`, `paymentMethods[].stripePaymentId`)
+    : **409 `PAYMENT_ALREADY_USED`** ; le chemin `terminalPaymentId` (paiements du terminal de la caisse) ne change pas.
+  - Essai : `tests/Functional/Boutique/CheckoutProprieteTest.php`.
 - **Pays absent** (commandes invité 9 et 10 de demo, hors taxes) : une province canadienne (code ou nom) ou un code
   postal canadien suffit à reconnaître le Canada (`TaxEngine::normalizeAddress`, adresse de l'invité).
 - **Abonnement en double** (`POST /api/subscriptions`) : un abonnement encore `incomplete` à la même formule et quantité
@@ -560,6 +596,11 @@ obligatoires (ajouter une validation refuserait des adresses acceptées aujourd'
 | `PAYMENT_REQUIRED` | 402 | Un paiement en ligne est requis pour cette commande. |
 | `PAYMENT_ALREADY_USED` | 409 | Ce paiement est déjà associé à une commande. |
 | `ORDER_IN_PROGRESS` | 409 | La commande de ce paiement est en cours de création : réessayez dans un instant. |
+| `SHIPPING_RATE_REQUIRED`, `SHIPPING_RATE_EXPIRED`, `SHIPPING_RATE_MISMATCH` | 422 | tarif de livraison EasyPost : jeton du résumé absent, expiré ou d'un autre panier, adresse ou transporteur (`errors[].path` = `shippingRateToken` ; lot CHECKOUT-LIVRAISON) |
+| `SHIPPING_ADDRESS_INVALID` | 422 | `shipping/summary` : le transporteur refuse l'adresse ou les colis (lot CHECKOUT-LIVRAISON) |
+| `RATE_LIMITED` | 429 | `create-intent` : 40 par 10 min par site et IP, 300 par 10 min par IP ; `create-guest` : 60 par 10 min par site et IP ; `shipping/summary` et `shipping/rates` : 40 par 10 min par site et IP (`retryAfterSeconds`) |
+| `PAYMENT_PROOF_REQUIRED` | 403 | La preuve de ce paiement est absente ou invalide (`clientSecret` de l'intention, à renvoyer à la commande ; lot CHECKOUT-PROPRIETE) |
+| `PAYMENT_PROVIDER_UNAVAILABLE` | 503 | Le service de paiement ne répond pas : réessayez dans un instant. |
 | `CART_MISMATCH` | 409 | La commande ne correspond pas au panier payé (ou à payer, à `create-intent`) : corps différent du panier coté (articles, quantités, réservation, transporteur, livraison, adresse) ; lot CHECKOUT-PANIER |
 | `QUOTE_INVALID`, `VARIANT_NOT_FOUND`, `CARRIER_NOT_FOUND`, `BAD_REQUEST` | 400 | commande refusée après le paiement (autorisation annulée) : code, message et `errors[]` du devis repris tels quels |
 | `ORDER_REFUSED` | 400 | Commande refusée. / dernier message d'échec gardé sur la trace du paiement (`checkout_session.last_error`) |
@@ -1723,10 +1764,10 @@ module tel qu'il existe ; aucune de ces routes n'est en production avec de vrais
 |---|---|---|---|
 | `POST /api/shipping/parcels` | colis calculés pour un panier (`PackagingService` : types d'emballage et classes d'expédition des produits) | public | `cartItems` |
 | `POST /api/shipping/rates` | tarifs EasyPost pour ces colis, agrégés par transporteur et service | public | `cartItems`, `to`, `from`, `carriers` |
-| `POST /api/shipping/summary` | résumé des colis et des tarifs en une réponse (écran de livraison du site et de l'application) | public | `cartItems`, `to`, `from`, `carriers` |
-| `POST /api/shipping/buy` | achat des étiquettes d'une commande du client connecté (`ShippingLabel`, `Parcel`, `ShippingOrder`) | connecté | `orderId`, `cartItems`, `to`, `from`, `carrierAccountId`, `service` |
+| `POST /api/shipping/summary` | résumé des colis et des tarifs en une réponse (écran de livraison du site et de l'application) ; chaque option porte `rateToken` (lot CHECKOUT-LIVRAISON) ; EasyPost muet : 503 `SHIPPING_RATES_UNAVAILABLE` ; adresse refusée : 422 `SHIPPING_ADDRESS_INVALID` ; limite : 40 par 10 min, par site et IP | public | `cartItems`, `to`, `from`, `carriers` |
+| ~~`POST /api/shipping/buy`~~ | **retirée** (lot CHECKOUT-LIVRAISON, 21/11/2026) : un client y achetait des étiquettes aux frais du marchand ou de la plateforme (adresse, compte et service du corps, sans débit ni contrôle) ; aucun front ne l'appelait. L'étiquette s'achète par l'administration : `/admin/orders/{id}/etiquette` (`AdminLabelPurchaseService` : solde débité, commande vérifiée) | — | — |
 
-- `/api/shipping/buy` vérifie que la commande appartient à l'utilisateur connecté (`ORDER_NOT_FOUND` 404, `FORBIDDEN` 403) ; chaque
+- (avant le lot CHECKOUT-LIVRAISON, `/api/shipping/buy` ; désormais l'achat passe par l'administration) Chaque
   achat d'étiquette sur une clé de production EasyPost est facturé réellement. Les clés EasyPost du site (`EasyPostConfiguration`,
   sandbox et production chiffrée) ne se modifient plus que par le super administrateur dans EasyAdmin (lot 2b, 03/11/2026) ; les
   adresses d'expédition sont normalisées par `ShipmentAddressBuilder`.

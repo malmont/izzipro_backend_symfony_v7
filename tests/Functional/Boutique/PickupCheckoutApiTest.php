@@ -51,11 +51,11 @@ class PickupCheckoutApiTest extends WebTestCase
 
         $email = 'retrait-' . bin2hex(random_bytes(3)) . '@example.invalid';
         $this->users[] = $email;
-        $noName = $this->request('POST', '/api/order/create-guest', json_encode(['guestInfo' => ['email' => $email], 'items' => $items, 'carrierId' => $pickup, 'paymentIntentId' => $quote['paymentIntentId']]));
+        $noName = $this->request('POST', '/api/order/create-guest', json_encode(['guestInfo' => ['email' => $email], 'items' => $items, 'carrierId' => $pickup, 'paymentIntentId' => $quote['paymentIntentId'], 'clientSecret' => $quote['paymentIntentId'] . '_secret_test']));
         $this->assertSame(400, $noName->getStatusCode());
         $this->assertSame('GUEST_NAME_REQUIRED', json_decode((string) $noName->getContent(), true)['code'], 'retrait sans adresse : prénom et nom obligatoires');
 
-        $created = $this->request('POST', '/api/order/create-guest', json_encode(['guestInfo' => ['email' => $email, 'firstName' => 'Paul', 'lastName' => 'Retrait', 'phone' => '5145550199'], 'items' => $items, 'carrierId' => $pickup, 'paymentIntentId' => $quote['paymentIntentId']]));
+        $created = $this->request('POST', '/api/order/create-guest', json_encode(['guestInfo' => ['email' => $email, 'firstName' => 'Paul', 'lastName' => 'Retrait', 'phone' => '5145550199'], 'items' => $items, 'carrierId' => $pickup, 'paymentIntentId' => $quote['paymentIntentId'], 'clientSecret' => $quote['paymentIntentId'] . '_secret_test']));
         $this->assertSame(201, $created->getStatusCode(), $created->getContent());
         $order = json_decode((string) $created->getContent(), true);
         $row = $this->db->fetchAssociative('SELECT shipping_adress_id, carrier_id, total_tax, shipping_cost FROM "order" WHERE id = ?', [$order['orderId']]);
@@ -67,7 +67,7 @@ class PickupCheckoutApiTest extends WebTestCase
         // Sans transporteur de retrait, l'adresse reste exigée
         $intent2 = json_decode((string) $this->request('POST', '/api/stripe/create-intent', json_encode(['items' => $items, 'carrierId' => $fixed, 'shippingAddress' => ['country' => 'CA', 'province' => 'QC']]))->getContent(), true);
         FakeCheckoutPaymentGateway::confirm($intent2['paymentIntentId']);
-        $refused = $this->request('POST', '/api/order/create-guest', json_encode(['guestInfo' => ['email' => $email, 'firstName' => 'Paul', 'lastName' => 'Retrait'], 'items' => $items, 'carrierId' => $fixed, 'paymentIntentId' => $intent2['paymentIntentId']]));
+        $refused = $this->request('POST', '/api/order/create-guest', json_encode(['guestInfo' => ['email' => $email, 'firstName' => 'Paul', 'lastName' => 'Retrait'], 'items' => $items, 'carrierId' => $fixed, 'paymentIntentId' => $intent2['paymentIntentId'], 'clientSecret' => $intent2['paymentIntentId'] . '_secret_test']));
         $this->assertSame(['GUEST_FIELDS_REQUIRED', 400], [json_decode((string) $refused->getContent(), true)['code'], $refused->getStatusCode()]);
 
         // Client connecté : sans addressId avec un retrait, commande créée ; avec livraison, refusée
@@ -81,7 +81,7 @@ class PickupCheckoutApiTest extends WebTestCase
         $intent3 = json_decode((string) $this->request('POST', '/api/stripe/create-intent', json_encode(['items' => $items, 'carrierId' => $pickup]), $bearer)->getContent(), true);
         $this->assertSame($quote['calculatedAmount'], $intent3['calculatedAmount']);
         FakeCheckoutPaymentGateway::confirm($intent3['paymentIntentId']);
-        $created = $this->request('POST', '/api/order/create', json_encode(['items' => $items, 'carrierId' => $pickup, 'paymentIntentId' => $intent3['paymentIntentId']]), $bearer);
+        $created = $this->request('POST', '/api/order/create', json_encode(['items' => $items, 'carrierId' => $pickup, 'paymentIntentId' => $intent3['paymentIntentId'], 'clientSecret' => $intent3['paymentIntentId'] . '_secret_test']), $bearer);
         $this->assertSame(201, $created->getStatusCode(), $created->getContent());
         $id = (int) json_decode((string) $created->getContent(), true)['orderId'];
         $detail = json_decode((string) $this->request('GET', '/api/orders/' . $id, null, $bearer)->getContent(), true);
@@ -89,7 +89,7 @@ class PickupCheckoutApiTest extends WebTestCase
 
         $intent4 = json_decode((string) $this->request('POST', '/api/stripe/create-intent', json_encode(['items' => $items, 'carrierId' => $fixed, 'shippingAddress' => ['country' => 'CA', 'province' => 'QC']]), $bearer)->getContent(), true);
         FakeCheckoutPaymentGateway::confirm($intent4['paymentIntentId']);
-        $refused = $this->request('POST', '/api/order/create', json_encode(['items' => $items, 'carrierId' => $fixed, 'paymentIntentId' => $intent4['paymentIntentId']]), $bearer);
+        $refused = $this->request('POST', '/api/order/create', json_encode(['items' => $items, 'carrierId' => $fixed, 'paymentIntentId' => $intent4['paymentIntentId'], 'clientSecret' => $intent4['paymentIntentId'] . '_secret_test']), $bearer);
         $this->assertSame(['FIELDS_REQUIRED', 400], [json_decode((string) $refused->getContent(), true)['code'], $refused->getStatusCode()]);
     }
 

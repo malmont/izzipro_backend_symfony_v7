@@ -30,11 +30,12 @@ final class CheckoutSessionService
      * @return array{intent: array, session: CheckoutSession, reused: bool}
      * @throws CheckoutException 502 Stripe
      */
-    public function open(array $cart, int $amount, string $currency, ?User $user, ?array $orderData, string $locale, ?string $host, ?string $reuseIntentId, bool $dropKeptOrderData = false): array
+    /** @param ?CheckoutSession $reuse session déjà reconnue reprenable (reusable(), preuve faite) : relue une seule fois chez Stripe */
+    public function open(array $cart, int $amount, string $currency, ?User $user, ?array $orderData, string $locale, ?string $host, ?CheckoutSession $reuse, bool $dropKeptOrderData = false): array
     {
         $em = $this->emProvider->getEntityManager();
-        $session = $reuseIntentId ? $this->repository()->findOneByPaymentIntent($reuseIntentId) : null;
-        if ($session !== null && $session->getStatus() === CheckoutSession::STATUS_OPEN && $session->getUser()?->getId() === $user?->getId()) {
+        $session = $reuse;
+        if ($session !== null) {
             $intent = $this->payments->updateAmount($session->getPaymentIntentId(), $amount);
             if ($intent !== null) {
                 // $dropKeptOrderData : le corps gardé ne correspond plus au panier (adresse changée), il est abandonné (CHECKOUT-PANIER)
@@ -55,6 +56,38 @@ final class CheckoutSessionService
         $em->flush();
 
         return ['intent' => $intent, 'session' => $session, 'reused' => false];
+    }
+
+    /**
+     * Lot CHECKOUT-PROPRIETE : une intention ne se REPREND qu'avec sa PREUVE (son clientSecret, que seul le navigateur qui l'a ouverte
+     * détient), et une session de client par ce client seulement. Sinon, rien : une nouvelle intention, sans le clientSecret ni le
+     * corps gardé d'un autre. Toujours une session encore ouverte ; Stripe muet : pas de reprise.
+     */
+    public function reusable(string $paymentIntentId, ?User $user, ?string $proof): ?CheckoutSession
+    {
+        $session = $this->find($paymentIntentId);
+        if ($session === null || $session->getStatus() !== CheckoutSession::STATUS_OPEN || !is_string($proof) || $proof === '') {
+            return null;
+        }
+        if ($session->getUser() !== null && $session->getUser()->getId() !== $user?->getId()) {
+            return null;
+        }
+        $intent = $this->payments->retrieve($paymentIntentId);
+
+        return is_string($intent['clientSecret'] ?? null) && hash_equals($intent['clientSecret'], $proof) ? $session : null;
+    }
+
+    /** Le courriel de l'invité gardé dans un corps de commande (normalisé), ou null */
+    public static function guestEmail(?array $orderData): ?string
+    {
+        return self::normalizeEmail($orderData['guestInfo']['email'] ?? null);
+    }
+
+    public static function normalizeEmail(mixed $email): ?string
+    {
+        $email = is_string($email) ? mb_strtolower(trim($email)) : '';
+
+        return $email !== '' ? $email : null;
     }
 
     public function find(string $paymentIntentId): ?CheckoutSession

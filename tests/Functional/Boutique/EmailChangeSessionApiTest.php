@@ -187,7 +187,7 @@ class EmailChangeSessionApiTest extends WebTestCase
         $body = $this->guestBody($variant, $email);
         $pi = $this->json($this->request('POST', '/api/stripe/create-intent', json_encode(['items' => $body['items'], 'carrierId' => 6, 'shippingAddress' => ['province' => 'QC']])))['paymentIntentId'];
         FakeCheckoutPaymentGateway::confirm($pi);
-        $this->assertSame(201, $this->request('POST', '/api/order/create-guest', json_encode($body + ['paymentIntentId' => $pi]))->getStatusCode());
+        $this->assertSame(201, $this->request('POST', '/api/order/create-guest', json_encode($body + ['paymentIntentId' => $pi, 'clientSecret' => $pi . '_secret_test']))->getStatusCode());
         $row = $this->db->fetchAssociative('SELECT password, password_set FROM "user" WHERE email = ?', [$email]);
         $this->assertFalse((bool) $row['password_set'], 'mot de passe jamais choisi');
         $this->assertStringStartsWith('$2y$', $row['password'], 'hachage, plus de valeur en clair');

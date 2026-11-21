@@ -44,14 +44,23 @@ final class PrepareCheckoutUseCase
                 throw new CheckoutException(409, 'La commande ne correspond pas au panier à payer.', [], 'CART_MISMATCH');
             }
             $order = CheckoutCartGuard::withoutCart($order);
+            unset($order['clientSecret'], $order['paymentIntentClientSecret'], $order['paymentIntentId']); // la preuve ne s'écrit jamais (CHECKOUT-PROPRIETE)
         }
         $reuse = is_string($payload['paymentIntentId'] ?? null) ? $payload['paymentIntentId'] : null;
+        // lot CHECKOUT-PROPRIETE : une session ne se reprend qu'avec sa preuve (son clientSecret), et celle d'un client par ce client ;
+        // sinon une nouvelle intention, sans le corps gardé ni le clientSecret d'un autre
+        $proof = $payload['clientSecret'] ?? $payload['paymentIntentClientSecret'] ?? null; // preuve de l'intention reprise
+        $proof = is_string($proof) ? $proof : null;
+        $reusable = $reuse !== null ? $this->sessions->reusable($reuse, $user, $proof) : null;
+        if ($reusable === null) {
+            $reuse = null;
+        }
         // Panier modifié sans renvoyer « order » : le corps gardé au premier appel reste valable, SAUF si l'adresse a changé (lot
         // CHECKOUT-PANIER, vérification des pertes) : il est alors abandonné, pour que le webhook ne crée jamais la commande à l'ancienne
         // adresse ; le navigateur la crée avec son corps (comparé au panier), sinon l'autorisation expire sans débit
         $dropKept = false;
         if ($order === null && $reuse !== null) {
-            $kept = $this->sessions->find($reuse)?->getOrderData();
+            $kept = $reusable?->getOrderData();
             $keptAddress = $kept !== null ? CheckoutCartGuard::orderAddress($kept, $user, $this->emProvider->getEntityManager()->getRepository(Adress::class)) : null;
             if ($kept !== null && !empty($payload['shippingAddress']) && $keptAddress !== null && !CheckoutCartGuard::sameAddress($payload['shippingAddress'], $keptAddress, is_numeric($kept['addressId'] ?? null))) {
                 $dropKept = true;
@@ -74,7 +83,16 @@ final class PrepareCheckoutUseCase
             throw new CheckoutException(400, 'Montant invalide calculé', [], 'AMOUNT_INVALID');
         }
         $cart = array_intersect_key($payload, array_flip(CheckoutCartGuard::CART_KEYS)); // `rental` compris : le devis l'applique
-        $opened = $this->sessions->open($cart, $amount, (string) $quote['currency'], $user, $order, $locale, $host, $reuse, $dropKept);
+        // lot CHECKOUT-LIVRAISON : la livraison gardée est celle que le SERVEUR a cotée (tarif du jeton EasyPost, prix fixe, offerte) ;
+        // la commande et le webhook la reprennent du panier, jamais un prix envoyé, et le jeton peut expirer après le paiement
+        unset($cart['priceShipping'], $cart['service'], $cart['carrierAccountId']);
+        $cart['shippingPrice'] = (int) $quote['shipping'];
+        if (is_array($quote['shippingRate'] ?? null)) {
+            // le service et le compte PAYÉS sont ceux du jeton, jamais ceux du client (l'étiquette se lira sur eux)
+            $cart['service'] = $quote['shippingRate']['service'];
+            $cart['carrierAccountId'] = $quote['shippingRate']['carrierAccountId'];
+        }
+        $opened = $this->sessions->open($cart, $amount, (string) $quote['currency'], $user, $order, $locale, $host, $reusable, $dropKept);
 
         return [
             'success' => true,

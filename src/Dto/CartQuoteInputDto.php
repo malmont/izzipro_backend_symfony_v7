@@ -24,7 +24,9 @@ final class CartQuoteInputDto
         public readonly ?int $shippingPrice = null,
         public readonly ?array $address = null,
         /** Remise de ticket de caisse (F1) {type, value, reasonCode?, reasonText?} ; null pour le web */
-        public readonly ?array $ticketDiscount = null
+        public readonly ?array $ticketDiscount = null,
+        /** Lot CHECKOUT-LIVRAISON : jeton du tarif EasyPost choisi (rateToken de shipping/summary) ; seul prix cru sur le web */
+        public readonly ?string $shippingRateToken = null,
     ) {
     }
 
@@ -63,6 +65,7 @@ final class CartQuoteInputDto
 
         $ticketDiscount = $allowDiscounts && is_array($data['ticketDiscount'] ?? null) && $data['ticketDiscount'] !== [] ? $data['ticketDiscount'] : null;
 
-        return new self($lines, is_numeric($carrierId) && (int) $carrierId > 0 ? (int) $carrierId : null, $shipping !== null ? (int) round((float) $shipping) : null, $address, $ticketDiscount);
+        return new self($lines, is_numeric($carrierId) && (int) $carrierId > 0 ? (int) $carrierId : null, $shipping !== null ? (int) round((float) $shipping) : null, $address, $ticketDiscount,
+            is_string($data['shippingRateToken'] ?? null) && $data['shippingRateToken'] !== '' ? $data['shippingRateToken'] : null);
     }
 }

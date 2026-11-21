@@ -1367,7 +1367,6 @@
         "GET /api/site/commandes/a-traiter",
         "GET /api/site/commandes/{id}",
         "POST /api/order/cancel/{id}",
-        "POST /api/shipping/buy",
         "POST /api/shipping/parcels"
     ],
     "voyages": [

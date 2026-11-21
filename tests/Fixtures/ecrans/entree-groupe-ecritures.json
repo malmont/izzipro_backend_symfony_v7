@@ -678,7 +678,6 @@
     "POST /api/reservations/1/confirm": "permise",
     "POST /api/service-families": "permise",
     "POST /api/service-offers": "permise",
-    "POST /api/shipping/buy": "payment",
     "POST /api/shipping/parcels": "permise",
     "POST /api/shipping/rates": "permise",
     "POST /api/shipping/summary": "permise",

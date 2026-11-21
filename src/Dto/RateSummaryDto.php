@@ -11,6 +11,8 @@ class RateSummaryDto
     public string $currency;
     public int    $parcelCount;
     public int    $estimatedDays; 
+    /** Lot CHECKOUT-LIVRAISON : jeton du tarif, à renvoyer (shippingRateToken) au devis, à create-intent et à la commande */
+    public ?string $rateToken = null;
 
     public function __construct(
         string $carrier,

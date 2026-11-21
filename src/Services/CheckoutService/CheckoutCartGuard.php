@@ -29,12 +29,8 @@ final class CheckoutCartGuard
         if (self::lines($body, $storeTimezone) !== self::lines($cart, $storeTimezone)) {
             return false;
         }
-        if (array_key_exists('carrierId', $body) && self::carrier($body) !== self::carrier($cart)) {
-            return false;
-        }
-        $shipping = self::shipping($body);
-
-        return $shipping === null || self::shipping($cart) === null || $shipping === self::shipping($cart);
+        // les frais de livraison ne se comparent plus : ils appartiennent au serveur (panier gardé, lot CHECKOUT-LIVRAISON)
+        return !array_key_exists('carrierId', $body) || self::carrier($body) === self::carrier($cart);
     }
 
     /**
@@ -168,12 +164,6 @@ final class CheckoutCartGuard
         return is_numeric($data['carrierId'] ?? null) && (int) $data['carrierId'] > 0 ? (int) $data['carrierId'] : null;
     }
 
-    private static function shipping(array $data): ?int
-    {
-        $shipping = $data['shippingPrice'] ?? $data['priceShipping'] ?? null;
-
-        return is_numeric($shipping) ? (int) round((float) $shipping) : null;
-    }
 
     /** @return array{country: ?string, province: ?string, postalCode: ?string}|null */
     private static function address(?array $raw): ?array

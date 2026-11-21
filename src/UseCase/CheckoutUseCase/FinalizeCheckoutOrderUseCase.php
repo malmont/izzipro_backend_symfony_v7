@@ -103,12 +103,16 @@ final class FinalizeCheckoutOrderUseCase
     /** @return array{created: bool, order: Order, body: array<string, mixed>} */
     private function finalize(string $mode, string $paymentIntentId, array $data, ?User $user, string $locale, string $host, bool $webhook = false): array
     {
+        $proved = $webhook ? null : $this->proveOwnership($paymentIntentId, $data); // en PREMIER : rien du paiement ni de son propriétaire avant la preuve
         $existing = $this->sessions->existingOrder($paymentIntentId);
         if ($existing !== null) {
-            return $this->existing($existing, $mode, $data, $user);
+            // preuve faite sur une session d'INVITÉ : le client connecté entre-temps retrouve la commande que le webhook a créée
+            $guestSession = $proved !== null && $this->sessions->find($paymentIntentId)?->getUser() === null;
+
+            return $this->existing($existing, $mode, $data, $user, $guestSession);
         }
         try {
-            return $this->create($mode, $paymentIntentId, $data, $user, $locale, $host, $webhook);
+            return $this->create($mode, $paymentIntentId, $data, $user, $locale, $host, $webhook, $proved);
         } catch (CheckoutException $e) {
             // Tout 400 (et le 402 d'un intent devenu impayable) dit si l'autorisation est annulée (01/11/2026) : l'application n'a
             // plus à relire l'intent chez Stripe. Commande refusée : résultat de l'annulation ; données invalides ou second appel
@@ -122,14 +126,17 @@ final class FinalizeCheckoutOrderUseCase
     }
 
     /** @return array{created: bool, order: Order, body: array<string, mixed>} */
-    private function create(string $mode, string $paymentIntentId, array $data, ?User $user, string $locale, string $host, bool $webhook = false): array
+    private function create(string $mode, string $paymentIntentId, array $data, ?User $user, string $locale, string $host, bool $webhook = false, ?array $proved = null): array
     {
-        $intent = $this->payments->retrieve($paymentIntentId);
+        $intent = $proved ?? $this->payments->retrieve($paymentIntentId); // l'intention déjà relue par la preuve : pas de seconde lecture
         if ($intent === null || !in_array($intent['status'], self::PAID, true)) {
             throw new CheckoutException(402, 'Payment verification failed or payment not completed', [], 'PAYMENT_NOT_VERIFIED');
         }
 
         $session = $this->sessions->find($paymentIntentId);
+        if (!$webhook) {
+            $data = $this->owned($mode, $session, $data, $user);
+        }
         $data = $this->paidCart($session, $data, $user, $webhook);
         if ($session !== null && !$this->sessions->claim($session)) {
             // Un autre appel (navigateur ou webhook) crée la commande : on l'attend, puis on la renvoie
@@ -210,11 +217,11 @@ final class FinalizeCheckoutOrderUseCase
     }
 
     /** Commande déjà créée pour ce paiement : renvoyée à son client (jeton compris pour l'invité à la même adresse) */
-    private function existing(Order $order, string $mode, array $data, ?User $user): array
+    private function existing(Order $order, string $mode, array $data, ?User $user, bool $guestSession = false): array
     {
         $owner = $order->getUserId();
         $allowed = $mode === self::MODE_CUSTOMER
-            ? $user !== null && $owner?->getId() === $user->getId()
+            ? $user !== null && ($owner?->getId() === $user->getId() || $guestSession) // sans guestToken en mode client
             : $owner !== null && mb_strtolower(trim((string) ($data['guestInfo']['email'] ?? ''))) === mb_strtolower((string) $owner->getEmail());
         if (!$allowed) {
             throw new CheckoutException(409, 'Ce paiement est déjà associé à une commande.', [], 'PAYMENT_ALREADY_USED');
@@ -261,6 +268,70 @@ final class FinalizeCheckoutOrderUseCase
         } catch (\Throwable $e) {
             $this->logger->error('[Checkout] Courriels de la commande non envoyés : ' . $e->getMessage(), ['orderId' => $order->getId()]);
         }
+    }
+
+    /**
+     * Lot CHECKOUT-PROPRIETE : la PREUVE du paiement est son clientSecret (pi_…_secret_…), que seul le navigateur qui a ouvert
+     * l'intention détient (rendu par create-intent). Relu chez Stripe, comparé à temps constant ; jamais écrit nulle part. Absent ou
+     * faux : 403 PAYMENT_PROOF_REQUIRED, le même pour les deux, avant tout le reste (il ne dit rien du paiement ni de son
+     * propriétaire). Stripe muet : 503 PAYMENT_PROVIDER_UNAVAILABLE, jamais une acceptation par défaut (le webhook reste le filet).
+     *
+     * @throws CheckoutException
+     */
+    private function proveOwnership(string $paymentIntentId, array $data): array
+    {
+        $proof = $data['clientSecret'] ?? $data['paymentIntentClientSecret'] ?? null;
+        // forme d'un secret de CETTE intention (pi_…_secret_…) : sinon refusé sans appeler Stripe (pas d'épuisement de son quota)
+        $shaped = is_string($proof) && preg_match('/^pi_[A-Za-z0-9_]+$/', $paymentIntentId) === 1 && str_starts_with($proof, $paymentIntentId . '_secret_');
+        $intent = $shaped ? $this->payments->retrieveStrict($paymentIntentId) : null;
+        if ($intent === null || !is_string($intent['clientSecret'] ?? null) || !hash_equals($intent['clientSecret'], (string) $proof)) {
+            throw new CheckoutException(403, 'La preuve de ce paiement est absente ou invalide.', [], 'PAYMENT_PROOF_REQUIRED');
+        }
+
+        return $intent;
+    }
+
+    /**
+     * Lot CHECKOUT-PROPRIETE : le paiement appartient à celui qui l'a ouvert. Route client : la session doit être celle du client
+     * connecté ; route invité : une session d'invité. Sinon 409 PAYMENT_ALREADY_USED (le code existant, sans dire à qui elle est).
+     * Invité : le courriel et l'adresse de la commande viennent du corps gardé à create-intent, jamais du corps reçu ; un autre
+     * courriel donne 409 CART_MISMATCH. Un tiers qui connaît le pi_… ne change donc ni le destinataire, ni l'adresse, ni les avis.
+     * Refusé avant la réservation du paiement : le webhook reste le filet.
+     *
+     * @return array<string, mixed> le corps, l'identité de l'invité reprise du corps gardé
+     * @throws CheckoutException
+     */
+    private function owned(string $mode, ?CheckoutSession $session, array $data, ?User $user): array
+    {
+        if ($session === null) {
+            return $data; // sans session : refusé plus loin (CART_MISMATCH, aucun panier gardé)
+        }
+        $owner = $session->getUser();
+        // preuve faite (clientSecret) : une session de client ne sert qu'à CE client ; une session d'invité sert à l'invité, et au
+        // client qui s'est connecté entre-temps (jeton expiré à create-intent) : la commande est alors à son compte
+        $allowed = $owner === null || ($mode === self::MODE_CUSTOMER && $user !== null && $owner->getId() === $user->getId());
+        if (!$allowed) {
+            throw new CheckoutException(409, 'Ce paiement est déjà associé à une commande.', [], 'PAYMENT_ALREADY_USED');
+        }
+        if ($mode !== self::MODE_GUEST || $session->getOrderData() === null) {
+            return $data;
+        }
+        $kept = $session->getOrderData();
+        $email = CheckoutSessionService::guestEmail($kept);
+        if ($email !== null && CheckoutSessionService::normalizeEmail($data['guestInfo']['email'] ?? null) !== $email) {
+            throw new CheckoutException(409, 'La commande ne correspond pas au panier payé.', [], 'CART_MISMATCH');
+        }
+        // le COURRIEL et les ADRESSES gardés l'emportent ; le reste de l'invité (nom, téléphone, permis saisi à la fin) vient du corps
+        if ($email !== null) {
+            $data['guestInfo'] = ['email' => $kept['guestInfo']['email']] + (is_array($data['guestInfo'] ?? null) ? $data['guestInfo'] : []);
+        }
+        foreach (['shippingAddress', 'billingAddress'] as $key) {
+            if (is_array($kept[$key] ?? null)) {
+                $data[$key] = $kept[$key];
+            }
+        }
+
+        return $data;
     }
 
     /**

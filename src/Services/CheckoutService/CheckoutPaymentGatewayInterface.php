@@ -14,6 +14,14 @@ interface CheckoutPaymentGatewayInterface
 
     public function retrieve(string $id): ?array;
 
+    /**
+     * Lot CHECKOUT-PROPRIETE : relecture qui DISTINGUE une intention inconnue (null) d'un Stripe qui ne répond pas
+     * (CheckoutException 503 PAYMENT_PROVIDER_UNAVAILABLE) : la preuve du paiement n'est jamais acceptée par défaut.
+     *
+     * @throws CheckoutException 503
+     */
+    public function retrieveStrict(string $id): ?array;
+
     /** Nouveau montant d'un intent pas encore confirmé ; null si l'intent ne se modifie plus */
     public function updateAmount(string $id, int $amount): ?array;
 

@@ -244,7 +244,7 @@ class PosPinApiTest extends WebTestCase
         FakeCheckoutPaymentGateway::reset();
         $intent = $this->json($this->request('POST', '/api/stripe/create-intent', ['items' => $order['items'], 'carrierId' => 6, 'order' => $order]));
         FakeCheckoutPaymentGateway::confirm($intent['paymentIntentId']);
-        $webOrder = $this->json($this->request('POST', '/api/order/create', $order + ['paymentIntentId' => $intent['paymentIntentId']]), 201)['orderId'];
+        $webOrder = $this->json($this->request('POST', '/api/order/create', $order + ['paymentIntentId' => $intent['paymentIntentId'], 'clientSecret' => $intent['paymentIntentId'] . '_secret_test']), 201)['orderId'];
         $cancel = $this->request('POST', "/api/order/cancel/$webOrder", ['paymentMethod' => 1]);
         $this->assertSame(200, $cancel->getStatusCode(), 'commande web : inchangé ' . $cancel->getContent());
         $this->assertSame(['message' => 'Order canceled and refunded successfully'], $this->json($cancel));

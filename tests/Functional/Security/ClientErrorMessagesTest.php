@@ -17,7 +17,6 @@ use App\UseCase\Booking\CheckAvailabilityUseCase;
 use App\UseCase\Booking\GetCalendarAvailabilityUseCase;
 use App\UseCase\ProductUseCase\CreateProductByCommandeUseCase;
 use App\UseCase\ProductUseCase\GetProductByIdUseCase;
-use App\UseCase\ShippingUseCase\PurchaseShippingForCart;
 use Doctrine\ORM\EntityManagerInterface;
 use Psr\Log\AbstractLogger;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
@@ -76,16 +75,10 @@ class ClientErrorMessagesTest extends WebTestCase
 
     public function testBuyingALabelNoLongerAnswersADebugMessage(): void
     {
-        $order = $this->create(Order::class, [], function (Order $o, EntityManagerInterface $em): void {
-            $o->setStatus($em->getRepository(StatusCommande::class)->findOneBy([]));
-            $o->setOrderSource($em->find(OrderSource::class, 2));
-        });
-        $this->endOfWrite();
+        // POST /api/shipping/buy retiré (lot CHECKOUT-LIVRAISON, 21/11/2026) : l'étiquette s'achète par l'administration ; plus de route
         $token = $this->token(['ROLE_ADMIN']);
-        $this->replace(PurchaseShippingForCart::class);
-        [$status, $body] = $this->call('POST', '/api/shipping/buy', ['orderId' => $order->getId(), 'cartItems' => [], 'to' => [], 'from' => [], 'carrierAccountId' => 'ca_x', 'service' => 'Ground'], $token);
-        $this->assertNeutral([$status, $body], 500, 'POST /api/shipping/buy');
-        $this->assertStringNotContainsString('DEBUG', json_encode($body), 'avant : « DEBUG ERROR: » suivi du message');
+        [$status] = $this->call('POST', '/api/shipping/buy', ['orderId' => 1, 'cartItems' => [], 'to' => [], 'from' => [], 'carrierAccountId' => 'ca_x', 'service' => 'Ground'], $token);
+        $this->assertSame(404, $status, 'la route n\'existe plus');
     }
 
     public function testBookingReadsHideTheFailureAndRefuseABadDate(): void

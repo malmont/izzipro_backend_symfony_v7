@@ -265,7 +265,7 @@ class CustomerEmailLanguageTest extends WebTestCase
         $this->assertSame(200, $intent->getStatusCode(), $intent->getContent());
         $pi = json_decode($intent->getContent(), true)['paymentIntentId'];
         FakeCheckoutPaymentGateway::confirm($pi);
-        $created = $this->request('POST', '/api/order/create-guest' . $query, json_encode($body + ['paymentIntentId' => $pi]));
+        $created = $this->request('POST', '/api/order/create-guest' . $query, json_encode($body + ['paymentIntentId' => $pi, 'clientSecret' => $pi . '_secret_test']));
         $this->assertSame(201, $created->getStatusCode(), $created->getContent());
     }
 

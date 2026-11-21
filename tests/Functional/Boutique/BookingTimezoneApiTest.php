@@ -150,7 +150,7 @@ class BookingTimezoneApiTest extends WebTestCase
         FakeCheckoutPaymentGateway::confirm($pi);
         $body = [
             'guestInfo' => ['email' => $email, 'firstName' => 'Invité', 'lastName' => 'Fuseau', 'phone' => '5145550100', 'licenseNumber' => 'T1234-567890-12', 'licenseExpirationDate' => '2029-12-31'], // permis exigé pour une location
-            'items' => $items, 'paymentIntentId' => $pi,
+            'items' => $items, 'paymentIntentId' => $pi, 'clientSecret' => $pi . '_secret_test',
             'shippingAddress' => ['firstname' => 'Invité', 'lastname' => 'Fuseau', 'address' => '1 rue du Test', 'city' => 'Québec', 'province' => 'QC', 'postalCode' => 'G1R 4P5'],
         ];
         $created = $this->request('POST', '/api/order/create-guest', json_encode($body));

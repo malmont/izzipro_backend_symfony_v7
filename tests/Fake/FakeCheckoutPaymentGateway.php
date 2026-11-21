@@ -12,12 +12,15 @@ final class FakeCheckoutPaymentGateway implements CheckoutPaymentGatewayInterfac
     /** @var list<array{id: string, intent: string, amount: ?int, key: string}> remboursements simulés (lot 3 Opérations, 07/11/2026) */
     public static array $refunds = [];
     public static bool $refundFails = false;
+    /** Stripe qui ne répond pas (lot CHECKOUT-PROPRIETE) : retrieveStrict lève le 503 */
+    public static bool $unavailable = false;
 
     public static function reset(): void
     {
         self::$intents = [];
         self::$refunds = [];
         self::$refundFails = false;
+        self::$unavailable = false;
     }
 
     public function refund(string $id, ?int $amountCents, string $idempotencyKey): ?array
@@ -49,6 +52,15 @@ final class FakeCheckoutPaymentGateway implements CheckoutPaymentGatewayInterfac
 
         return self::$intents[$id] = ['id' => $id, 'status' => 'requires_payment_method', 'amount' => $amount, 'currency' => strtolower($currency),
             'clientSecret' => $id . '_secret_test', 'metadata' => $metadata, 'receiptUrl' => null, 'cardBrand' => null, 'last4' => null, 'riskLevel' => null];
+    }
+
+    public function retrieveStrict(string $id): ?array
+    {
+        if (self::$unavailable) {
+            throw new \App\Services\CheckoutService\CheckoutException(503, 'Le service de paiement ne répond pas : réessayez dans un instant.', [], 'PAYMENT_PROVIDER_UNAVAILABLE');
+        }
+
+        return self::$intents[$id] ?? null;
     }
 
     public function retrieve(string $id): ?array
