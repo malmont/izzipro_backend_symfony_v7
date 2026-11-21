@@ -97,7 +97,7 @@ class AboCarrierTest extends WebTestCase
         $refused = $this->json('PATCH', "/api/site/abonnements/produits/$id", ['subscriptionEnabled' => false], 'admin', 409);
         $this->assertSame('PRODUCT_HAS_SUBSCRIBERS', $refused['code']);
         $row = $this->rowOf($this->json('GET', '/api/site/abonnements/produits?porteurs=oui&q=abo-conf-b', null, 'admin', 200), $id);
-        $this->assertSame([true, false, 'PRODUCT_HAS_SUBSCRIBERS', ['active' => 1, 'archived' => 0, 'withSubscribers' => 1]], [$row['subscriptionEnabled'], $row['canDisable'], $row['reason'], $row['plans']]);
+        $this->assertSame([true, false, 'PRODUCT_HAS_SUBSCRIBERS', ['active' => 1, 'archived' => 0, 'withSubscribers' => 1, 'activeNames' => ['Formule abo-conf-b']]], [$row['subscriptionEnabled'], $row['canDisable'], $row['reason'], $row['plans']]);
 
         // Le porteur d'une formule branchée (plateforme, agence) ne se règle pas ici
         $branched = $this->product('abo-conf-b Branché', 900.0, true);
@@ -186,7 +186,8 @@ class AboCarrierTest extends WebTestCase
         $this->assertSame(12, $row['plans']['active']);
         $this->assertSame(['Matin abo-conf-b', 'Soir 01 abo-conf-b', 'Soir 02 abo-conf-b', 'Soir 03 abo-conf-b', 'Soir 04 abo-conf-b', 'Soir 05 abo-conf-b',
             'Soir 06 abo-conf-b', 'Soir 07 abo-conf-b', 'Soir 08 abo-conf-b', 'Soir 09 abo-conf-b'], $row['plans']['activeNames'], 'les actives seulement, par création, 10 au plus');
-        $this->assertSame([], $this->rowOf($this->json('GET', '/api/site/abonnements/produits?q=abo-conf-b', null, 'admin', 200), $this->product('abo-conf-b Sans formule', 10.0, true))['plans']['activeNames']);
+        $bare = $this->product('abo-conf-b Sans formule', 10.0, true); // créé AVANT la lecture de la liste
+        $this->assertSame([], $this->rowOf($this->json('GET', '/api/site/abonnements/produits?q=abo-conf-b', null, 'admin', 200), $bare)['plans']['activeNames']);
     }
 
     public function testDeletingTheLastFormulaOfANewCarrierHidesItAndReenablingShowsItAgain(): void
