@@ -31,8 +31,8 @@ class AppMembershipListsTest extends WebTestCase
         $this->membership($member, 'boutique', 'join', '2026-11-10 14:00:00', 'v-abc', '2026-11-10 14:00:05');
         $this->membership($member, 'livingmemory', 'register', '2026-11-09 03:00:00'); // entré d'abord dans Living Memory
         $profile = $this->ok('/api/profile', $member);
-        $this->assertSame(['id', 'email', 'firstName', 'lastName', 'username', 'roles', 'licenseNumber', 'licenseExpirationDate', 'phone', 'otpEnabled', 'passwordSet', 'memberships', 'teamRoles'], array_keys($profile),
-            'deux champs en plus, rien d\'autre ne change');
+        $this->assertSame(['id', 'email', 'firstName', 'lastName', 'username', 'roles', 'licenseNumber', 'licenseExpirationDate', 'phone', 'otpEnabled', 'passwordSet', 'memberships', 'teamRoles', 'locale'], array_keys($profile),
+            'deux champs en plus (lot ABO-LANG : et la langue des courriels), rien d\'autre ne change');
         $this->assertSame([[['app' => 'livingmemory', 'joinedAt' => '2026-11-09T03:00:00+00:00', 'termsVersion' => null], ['app' => 'boutique', 'joinedAt' => '2026-11-10T14:00:00+00:00', 'termsVersion' => 'v-abc']], []],
             [$profile['memberships'], $profile['teamRoles']], 'de la plus ancienne à la plus récente ; un client n\'a aucun rôle d\'équipe');
 
