@@ -226,6 +226,15 @@ class AboWaitlistTest extends WebTestCase
         $this->json('POST', '/api/subscriptions/' . $b->getId() . '/rendez-vous', ['benefitId' => $yoga->getId(), 'slotId' => $s2], 201, 'abo4-b@example.invalid');
         $this->assertSame(['status' => 'left', 'closed_reason' => 'already_booked'], $status($wb2));
 
+        // une offre en cours garde la place, même sans personne derrière dans la file : C ne la prend pas, B l'accepte
+        $s3 = $this->slot($yoga, '+5 days', 1);
+        $first = $this->json('POST', '/api/subscriptions/' . $a->getId() . '/rendez-vous', ['benefitId' => $yoga->getId(), 'slotId' => $s3], 201, 'abo4-a@example.invalid')['appointment'];
+        $wb3 = $this->json('POST', $this->join($b, $s3), null, 201, 'abo4-b@example.invalid')['wait']['waitId'];
+        $this->json('DELETE', '/api/subscriptions/' . $a->getId() . '/rendez-vous/' . $first['occurrenceId'], null, 200, 'abo4-a@example.invalid');
+        $this->assertSame('offered', $status($wb3)['status']);
+        $this->assertSame('SLOT_FULL', $this->json('POST', '/api/subscriptions/' . $c->getId() . '/rendez-vous', ['benefitId' => $yoga->getId(), 'slotId' => $s3], 409, 'abo4-c@example.invalid')['code'], 'la place offerte à B');
+        $this->json('POST', '/api/subscriptions/' . $b->getId() . '/attente/' . $wb3 . '/accepter', null, 201, 'abo4-b@example.invalid');
+
         // le droit porté est daté ailleurs, un autre droit vaut encore au début du créneau : l'attente passe sur lui, au lieu de se fermer
         $pilates = $this->benefit('Pilates droits');
         [$e] = $this->subscriptions($pilates, ['abo4-c@example.invalid'], 2);
