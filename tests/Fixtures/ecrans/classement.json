@@ -659,6 +659,16 @@
         "POST /api/agency/sites/{code}/storefront/preview-link",
         "PUT /api/agency/sites/{code}/modules/{feature}"
     ],
+    "aides": [
+        "DELETE /api/gestion/aides/{id}",
+        "DELETE /api/gestion/aides/{id}/justificatifs/{documentId}",
+        "GET /api/gestion/aides",
+        "GET /api/gestion/aides/{id}",
+        "PATCH /api/gestion/aides/{id}",
+        "PATCH /api/gestion/aides/{id}/conditions/{index}",
+        "POST /api/gestion/aides",
+        "POST /api/gestion/aides/{id}/justificatifs"
+    ],
     "apparence": [
         "DELETE /api/admin-settings/presets/{id}",
         "DELETE /api/site/charter/document",

@@ -261,7 +261,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (787)
+## Boutique et commun (795)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -411,6 +411,14 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/api/frais/total` | ROLE_ADMIN | `Controller\StatistiqueDashboard\FraisController::getTotalFrais` |
 | POST | `/api/gestion/accueil/vignettes/{id}/ecarter` | ROLE_ADMIN | `Gestion\Controller\HomeTilesController::dismiss` |
 | GET | `/api/gestion/accueil/vignettes` | ROLE_ADMIN | `Gestion\Controller\HomeTilesController::list` |
+| PATCH | `/api/gestion/aides/{id}/conditions/{index}` | ROLE_ADMIN | `Gestion\Controller\GestionAidController::condition` |
+| DELETE | `/api/gestion/aides/{id}/justificatifs/{documentId}` | ROLE_ADMIN | `Gestion\Controller\GestionAidController::detachDocument` |
+| POST | `/api/gestion/aides/{id}/justificatifs` | ROLE_ADMIN | `Gestion\Controller\GestionAidController::attachDocument` |
+| DELETE | `/api/gestion/aides/{id}` | ROLE_ADMIN | `Gestion\Controller\GestionAidController::delete` |
+| GET | `/api/gestion/aides/{id}` | ROLE_ADMIN | `Gestion\Controller\GestionAidController::get` |
+| PATCH | `/api/gestion/aides/{id}` | ROLE_ADMIN | `Gestion\Controller\GestionAidController::update` |
+| GET | `/api/gestion/aides` | ROLE_ADMIN | `Gestion\Controller\GestionAidController::list` |
+| POST | `/api/gestion/aides` | ROLE_ADMIN | `Gestion\Controller\GestionAidController::create` |
 | GET | `/api/gestion/articles` | ROLE_ADMIN | `Gestion\Controller\GestionSequenceController::articles` |
 | GET | `/api/gestion/campagnes/{id}/rentabilite` | ROLE_ADMIN | `Gestion\Controller\MarketingCampaignController::profitability` |
 | DELETE | `/api/gestion/campagnes/{id}` | ROLE_ADMIN | `Gestion\Controller\MarketingCampaignController::delete` |
