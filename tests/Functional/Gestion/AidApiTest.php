@@ -186,6 +186,7 @@ class AidApiTest extends WebTestCase
         $granted = $this->send('PATCH', "/api/gestion/aides/$id", ['status' => 'granted'], 200);
         $loanId = $granted['loanId'];
         $this->assertNotNull($loanId);
+        $this->assertSame(['id' => $loanId, 'label' => 'Prêt d\'honneur'], $granted['loan'], 'le libellé du prêt lié, pour l\'écran');
         $loan = $this->get("/api/gestion/prets/$loanId");
         $this->assertSame([1200000, 0, '2049-03-01', '2049-04-01', 0, 100000, 'Réseau Témoin'], [$loan['amount'], $loan['ratePpm'], $loan['disbursedOn'], $loan['firstDueOn'], $loan['totals']['creditCost'], $loan['schedule'][0]['total'], $loan['lender']]);
         $this->assertSame($id, (int) $conn->fetchOne('SELECT aid_id FROM gestion_loan WHERE id = ?', [$loanId]));

@@ -109,7 +109,7 @@ Pour le directeur d'un groupe entré dans une boutique, les aides sont en **lect
 | `advance` | exigé pour une avance, voir § 3 | `AID_ADVANCE_INVALID` |
 
 **Résumé**, dans la liste et la fiche : les champs de la fiche, plus :
-- `loanId` : le prêt lié, ou `null` ;
+- `loanId` : le prêt lié, ou `null` ; `loan` : `{ id, label }` du prêt lié, ou `null` ;
 - `receivedTotal` : la somme des versements reçus ;
 - `toReceive` : accordé moins reçu, pour une aide acquise et pas close ;
 - `conditionsDue` : les conditions `todo` dont l'échéance est passée ;
@@ -125,7 +125,7 @@ Pour le directeur d'un groupe entré dans une boutique, les aides sont en **lect
   "payments": [{ "date": "2049-02-10", "amount": 60000, "received": true }, { "date": "2049-09-10", "amount": 60000, "received": false }],
   "conditions": [{ "label": "Garder deux emplois", "dueOn": "2049-12-31", "state": "todo" }],
   "documents": [42], "repayment": null, "advance": null, "notes": null,
-  "loanId": null, "receivedTotal": 60000, "toReceive": 60000, "conditionsDue": 0, "documentsMissing": false, "inCalculations": true
+  "loanId": null, "loan": null, "receivedTotal": 60000, "toReceive": 60000, "conditionsDue": 0, "documentsMissing": false, "inCalculations": true
 }
 ```
 

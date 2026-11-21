@@ -295,7 +295,7 @@ class GestionAidService
     /**
      * Résumé d'une aide : reçu, encore à recevoir, conditions échues, justificatif manquant, prêt lié.
      *
-     * @param array<int, int> $loans aide → prêt lié
+     * @param array<int, array{id: int, label: string}> $loans aide → prêt lié
      * @return array<string, mixed>
      */
     private function summary(array $aid, string $today, array $loans): array
@@ -303,8 +303,11 @@ class GestionAidService
         $received = array_sum(array_map(static fn (array $p): int => $p['received'] ? $p['amount'] : 0, $aid['payments']));
         $due = array_values(array_filter($aid['conditions'], static fn (array $c): bool => $c['state'] === 'todo' && $c['dueOn'] <= $today));
 
+        $loan = $loans[$aid['id']] ?? null;
+
         return $this->publicAid($aid) + [
-            'loanId' => $loans[$aid['id']] ?? null,
+            'loanId' => $loan['id'] ?? null,
+            'loan' => $loan, // { id, label } du prêt lié (avance remboursable), ou null
             'receivedTotal' => $received,
             'toReceive' => in_array($aid['status'], [AidCalculator::STATUS_GRANTED, AidCalculator::STATUS_RECEIVED, AidCalculator::STATUS_TO_REPAY], true) ? max(0, $aid['amount'] - $received) : 0,
             'conditionsDue' => count($due),
@@ -495,12 +498,12 @@ class GestionAidService
         return $id === false ? null : (int) $id;
     }
 
-    /** @return array<int, int> aide → prêt lié */
+    /** @return array<int, array{id: int, label: string}> aide → prêt lié (le plus récent) */
     private function linkedLoans(): array
     {
         $out = [];
-        foreach ($this->conn()->fetchAllAssociative('SELECT id, aid_id FROM gestion_loan WHERE aid_id IS NOT NULL ORDER BY id DESC') as $r) {
-            $out[(int) $r['aid_id']] = (int) $r['id'];
+        foreach ($this->conn()->fetchAllAssociative('SELECT id, aid_id, label FROM gestion_loan WHERE aid_id IS NOT NULL ORDER BY id') as $r) {
+            $out[(int) $r['aid_id']] = ['id' => (int) $r['id'], 'label' => (string) $r['label']];
         }
 
         return $out;
