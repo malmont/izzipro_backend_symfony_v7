@@ -71,9 +71,11 @@ class AboStaffTest extends WebTestCase
         $this->db = $em->getConnection();
         $this->planId = (int) $this->db->fetchOne('SELECT sp.id FROM subscription_plan sp JOIN product p ON p.id = sp.product_id WHERE p.code = ? ORDER BY sp.id LIMIT 1', ['DEMO-PANIER']);
         $this->tzBefore = $this->db->fetchOne('SELECT pos_timezone FROM entreprise ORDER BY id LIMIT 1') ?: null;
-        $this->db->executeStatement('UPDATE entreprise SET pos_timezone = ?, is_boutique_active = TRUE', [self::TZ]);
+        $this->db->executeStatement('UPDATE entreprise SET pos_timezone = ?', [self::TZ]);
         $this->db->executeStatement('DELETE FROM ai_usage');
         static::getContainer()->get(EntitlementService::class)->free(MV_TEST_TENANT_CODE, 'ai.full', 'test');
+        // après free() : le droit recopie les interrupteurs des modules sur la fiche (comme AboDeliveryTest)
+        $this->db->executeStatement('UPDATE entreprise SET is_boutique_active = TRUE');
         static::getContainer()->get(TenantCacheService::class)->invalidateTenant();
         $em->clear();
     }
@@ -107,7 +109,9 @@ class AboStaffTest extends WebTestCase
         $team = '/api/site/abonnements/intervenants';
         $invited = $this->json('POST', $team, ['email' => 'abo3b-nouveau@example.invalid', 'firstName' => 'Nina', 'lastName' => 'Nouvelle'], 200);
         $this->assertSame([true, true, 168], [$invited['changed'], $invited['staff']['pending'], $invited['invitation']['validHours']]);
-        $this->assertEmailCount(1, null, 'le lien de 7 jours');
+        // le courriel du droit d'IA ouvert par setUp part aussi : seuls ceux de l'invitée comptent
+        $toInvitee = static fn (array $ms): int => count(array_filter($ms, static fn ($m): bool => in_array('abo3b-nouveau@example.invalid', array_map(static fn ($a): string => $a->getAddress(), $m->getTo()), true)));
+        $this->assertSame(1, $toInvitee($this->getMailerMessages()), 'le lien de 7 jours');
         $roles = json_decode((string) $this->db->fetchOne('SELECT roles FROM "user" WHERE email = ?', ['abo3b-nouveau@example.invalid']), true);
         sort($roles);
         $this->assertSame([TeamRoles::STAFF_PROVIDER, 'ROLE_USER_INTERNET'], $roles);
