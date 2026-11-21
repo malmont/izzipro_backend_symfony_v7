@@ -188,6 +188,24 @@ class AboStaffWorkService
      * @param list<mixed> $params
      * @return list<array<string, mixed>>
      */
+    /**
+     * Lot ABO-4 : les dates de l'intervenant pour son lien d'agenda, dans la fenêtre de son écran (30 jours en arrière, 14 devant) et avec
+     * les mêmes champs (prénom et adresse de la visite seulement).
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function feedRows(int $staffId, string $locale): array
+    {
+        $now = new \DateTimeImmutable();
+
+        return $this->rows($staffId, 'o.scheduled_at >= ? AND o.scheduled_at < ?', [self::utcText($now->modify('-' . self::BACK_DAYS . ' days')), self::utcText($now->modify('+' . self::AHEAD_DAYS . ' days'))], $locale);
+    }
+
+    private static function utcText(\DateTimeImmutable $at): string
+    {
+        return $at->setTimezone(new \DateTimeZone('UTC'))->format('Y-m-d H:i:s');
+    }
+
     private function rows(int $staffId, string $where, array $params, string $locale): array
     {
         $rows = $this->conn()->fetchAllAssociative('SELECT o.id, o.benefit_id, o.slot_id, o.scheduled_at, o.scheduled_end, o.status, o.done_at, o.proof_path, b.at_customer, b.location AS benefit_location,

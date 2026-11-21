@@ -261,7 +261,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (781)
+## Boutique et commun (791)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -336,6 +336,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/api/caisse/transactions` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\CaisseController\CaisseController::getOpenCaisseTransactions` |
 | POST | `/api/caisse/withdraw` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\CaisseController\CaisseController::withdraw` |
 | GET | `/api/caisse` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\CaisseController\CaisseController::getCaisse` |
+| GET | `/api/calendrier/{token}.ics` | PUBLIC_ACCESS | `Abo\Controller\AboCalendarController::feed` |
 | GET | `/api/carrier/statistics` | ROLE_ADMIN | `Controller\StatistiqueDashboard\CarrierStatisticsController::getCarrierStatistics` |
 | POST | `/api/cart/quote` | PUBLIC_ACCESS | `Controller\CartController\CartQuoteController::quote` |
 | PUT | `/api/cash-registers/{id}` | ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\CashRegisterController\CashRegisterController::update` |
@@ -850,9 +851,11 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/api/site-content/demo` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\SiteContentController\SiteContentController::demo` |
 | POST | `/api/site-content/seed` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\SiteContentController\SiteContentController::seed` |
 | GET | `/api/site/abonnements/a-planifier` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Abo\Controller\AboAgendaController::toSchedule` |
+| POST | `/api/site/abonnements/attente/{waitId}/proposer` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Abo\Controller\AboAgendaController::proposeWait` |
 | GET | `/api/site/abonnements/aujourdhui` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Abo\Controller\AboDeliveryController::today` |
 | GET | `/api/site/abonnements/contestations` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Abo\Controller\AboDeliveryController::contestations` |
 | POST | `/api/site/abonnements/creneaux/{slotId}/annulation` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Abo\Controller\AboAgendaController::cancelSlot` |
+| GET | `/api/site/abonnements/creneaux/{slotId}/attente` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Abo\Controller\AboAgendaController::slotWaitlist` |
 | POST | `/api/site/abonnements/creneaux/{slotId}/fait` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Abo\Controller\AboDeliveryController::session` |
 | GET | `/api/site/abonnements/creneaux` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Abo\Controller\AboAgendaController::slots` |
 | GET | `/api/site/abonnements/fils` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Abo\Controller\AboThreadController::unread` |
@@ -955,6 +958,8 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | POST | `/api/sizes` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\LandingContentController\BoutiqueCatalogController::createSize` |
 | GET | `/api/social-networks` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\SocialNetworkController\SocialNetworkController::list` |
 | GET | `/api/staff/abonnements/aujourdhui` | ROLE_STAFF_PROVIDER + `#[IsGranted(ROLE_STAFF_PROVIDER)]` | `Abo\Controller\AboStaffController::today` |
+| GET | `/api/staff/abonnements/calendrier` | ROLE_STAFF_PROVIDER + `#[IsGranted(ROLE_STAFF_PROVIDER)]` | `Abo\Controller\AboCalendarController::staffState` |
+| POST | `/api/staff/abonnements/calendrier` | ROLE_STAFF_PROVIDER + `#[IsGranted(ROLE_STAFF_PROVIDER)]` | `Abo\Controller\AboCalendarController::staffLink` |
 | POST | `/api/staff/abonnements/creneaux/{slotId}/fait` | ROLE_STAFF_PROVIDER + `#[IsGranted(ROLE_STAFF_PROVIDER)]` | `Abo\Controller\AboStaffController::session` |
 | POST | `/api/staff/abonnements/occurrences/{occurrenceId}/absent` | ROLE_STAFF_PROVIDER + `#[IsGranted(ROLE_STAFF_PROVIDER)]` | `Abo\Controller\AboStaffController::missed` |
 | POST | `/api/staff/abonnements/occurrences/{occurrenceId}/fait` | ROLE_STAFF_PROVIDER + `#[IsGranted(ROLE_STAFF_PROVIDER)]` | `Abo\Controller\AboStaffController::done` |
@@ -972,9 +977,14 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/api/subscription-plans/{id}/creneaux` | PUBLIC_ACCESS + `#[IsGranted(ROLE_USER_INTERNET)]` | `Abo\Controller\AboAgendaController::planSlots` |
 | GET | `/api/subscription-plans` | PUBLIC_ACCESS | `Controller\SubscriptionController\SubscriptionController::plans` |
 | POST | `/api/subscriptions/portal-session` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN + `#[IsGranted(ROLE_USER_INTERNET)]` | `Controller\SubscriptionController\SubscriptionController::portal` |
+| POST | `/api/subscriptions/{id}/attente/{waitId}/accepter` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN + `#[IsGranted(ROLE_USER_INTERNET)]` | `Abo\Controller\AboAgendaController::acceptWait` |
+| GET | `/api/subscriptions/{id}/attente` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN + `#[IsGranted(ROLE_USER_INTERNET)]` | `Abo\Controller\AboAgendaController::myWaits` |
+| POST | `/api/subscriptions/{id}/calendrier` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN + `#[IsGranted(ROLE_USER_INTERNET)]` | `Abo\Controller\AboCalendarController::subscriberLink` |
 | POST | `/api/subscriptions/{id}/cancel` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN + `#[IsGranted(ROLE_USER_INTERNET)]` | `Controller\SubscriptionController\SubscriptionController::cancel` |
 | POST | `/api/subscriptions/{id}/change-plan` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN + `#[IsGranted(ROLE_USER_INTERNET)]` | `Controller\SubscriptionController\SubscriptionController::changePlan` |
 | PATCH | `/api/subscriptions/{id}/courriels` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN + `#[IsGranted(ROLE_USER_INTERNET)]` | `Abo\Controller\AboDeliveryController::emails` |
+| DELETE | `/api/subscriptions/{id}/creneaux/{slotId}/attente` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN + `#[IsGranted(ROLE_USER_INTERNET)]` | `Abo\Controller\AboAgendaController::leaveWait` |
+| POST | `/api/subscriptions/{id}/creneaux/{slotId}/attente` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN + `#[IsGranted(ROLE_USER_INTERNET)]` | `Abo\Controller\AboAgendaController::joinWait` |
 | GET | `/api/subscriptions/{id}/creneaux` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN + `#[IsGranted(ROLE_USER_INTERNET)]` | `Abo\Controller\AboAgendaController::clientSlots` |
 | GET | `/api/subscriptions/{id}/fil` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN + `#[IsGranted(ROLE_USER_INTERNET)]` | `Abo\Controller\AboThreadController::clientThread` |
 | POST | `/api/subscriptions/{id}/fil` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN + `#[IsGranted(ROLE_USER_INTERNET)]` | `Abo\Controller\AboThreadController::clientPost` |

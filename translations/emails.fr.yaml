@@ -491,6 +491,9 @@ subscription_notice:
     session_done:
         subject: 'Votre prestation est faite'
         message: 'La boutique a noté comme faite une prestation de votre abonnement « %plan% » (détails ci-dessous). Depuis votre compte, vous pouvez la confirmer ou la contester dans les 30 jours, et couper ces courriels.'
+    session_reminder:
+        subject: 'Rappel : %plan%, demain'
+        message: 'Petit rappel : vous avez rendez-vous demain pour votre abonnement « %plan% » (détails ci-dessous ; le fichier joint l''ajoute à votre agenda). Pour annuler ou déplacer, passez par votre compte, dans le délai prévu.'
     thread_message:
         subject: 'Vous avez un message de la boutique'
         message: 'La boutique vous a écrit au sujet de votre abonnement « %plan% ». Lisez son message et répondez depuis votre compte.'
@@ -501,3 +504,12 @@ subscription_team_message:
     message: 'Un abonné vous a écrit au sujet de son abonnement n° %id%.'
     message_plan: 'Un abonné vous a écrit au sujet de son abonnement n° %id% (formule « %plan% »).'
     action: 'Lisez son message et répondez-lui depuis le suivi des abonnements de votre espace d''administration.'
+
+# Lot ABO-4 (21/11/2026) : une place s'est libérée sur un créneau, offerte à l'abonné en liste d'attente. %benefit%, %date%, %deadline% (heure du magasin), %name%
+waitlist_offer:
+    subject: 'Une place s''est libérée : %benefit% le %date%'
+    title: 'Une place s''est libérée'
+    greeting: 'Bonjour %name%,'
+    message: 'Une place s''est libérée pour « %benefit% » le %date%. Elle vous est réservée.'
+    deadline: 'Confirmez-la avant le %deadline% (heure du magasin) depuis votre compte. Passé ce délai, elle est proposée à la personne suivante.'
+    action: 'Si vous n''en voulez plus, sortez de la liste d''attente depuis votre compte : la place ira à la suite.'

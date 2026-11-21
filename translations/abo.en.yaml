@@ -1,0 +1,4 @@
+# Lot ABO-4 (21/11/2026): subscription texts served by the backend to the screens (web management, apps)
+calendar:
+    # shown to the staff member before adding the calendar link (chef's decision; on the lawyer's list)
+    staff_notice: 'This link adds your appointments to your calendar (Google, Apple…): visit addresses and subscribers'' first names will be copied there, at your calendar provider. Change the link if you shared it by mistake: the old one will stop working.'

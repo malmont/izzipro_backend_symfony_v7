@@ -345,16 +345,31 @@ class AboDeliveryService
         return ['occurrenceId' => $occurrenceId, 'customerAck' => $decision, 'ticket' => $ticket, 'changed' => $changed];
     }
 
-    /** L'abonné coupe ou rallume le courriel « prestation faite » @return array{doneEmails: bool} */
-    public function setDoneEmails(Subscription $subscription, mixed $on): array
+    /**
+     * L'abonné coupe ou rallume ses courriels : « prestation faite » (`doneEmails`, ABO-3a) et le rappel de la veille (`reminders`, ABO-4).
+     *
+     * @param array<string, mixed> $body
+     * @return array{doneEmails: bool, reminders: bool}
+     */
+    public function setEmails(Subscription $subscription, array $body): array
     {
-        if (!is_bool($on)) {
-            throw new AboException(422, 'DONE_EMAILS_INVALID', 'Valeur attendue : true ou false.', 'doneEmails');
+        if (!array_key_exists('doneEmails', $body) && !array_key_exists('reminders', $body)) {
+            throw new AboException(422, 'DONE_EMAILS_INVALID', 'Valeur attendue : doneEmails ou reminders, true ou false.', 'doneEmails');
         }
-        $subscription->setDoneEmails($on);
+        foreach (['doneEmails' => 'DONE_EMAILS_INVALID', 'reminders' => 'REMINDERS_INVALID'] as $key => $code) {
+            if (array_key_exists($key, $body) && !is_bool($body[$key])) {
+                throw new AboException(422, $code, 'Valeur attendue : true ou false.', $key);
+            }
+        }
+        if (array_key_exists('doneEmails', $body)) {
+            $subscription->setDoneEmails($body['doneEmails']);
+        }
+        if (array_key_exists('reminders', $body)) {
+            $subscription->setReminderEmails($body['reminders']);
+        }
         $this->emProvider->getEntityManager()->flush();
 
-        return ['doneEmails' => $on];
+        return ['doneEmails' => $subscription->wantsDoneEmails(), 'reminders' => $subscription->wantsReminderEmails()];
     }
 
     // ---- lectures ----------------------------------------------------------------------------------------------------------------------

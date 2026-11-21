@@ -120,6 +120,56 @@ class AboAgendaController extends AbstractController
         return $this->client(fn () => $this->useCase->clientCancel($this->customer(), $id, $occurrenceId, self::locale($request)));
     }
 
+    // ---- lot ABO-4 : liste d'attente --------------------------------------------------------------------------------------------------------
+
+    /** La liste d'attente d'un créneau (lecture seule : rien n'est promu, une offre échue se montre échue) → 200 { slotId, freePlaces, waitlist } */
+    #[Route('/api/site/abonnements/creneaux/{slotId}/attente', name: 'site_abo_slot_waitlist', requirements: ['slotId' => '\d+'], methods: ['GET'])]
+    #[IsGranted('ROLE_ADMIN')]
+    public function slotWaitlist(int $slotId): JsonResponse
+    {
+        return $this->team(fn () => $this->useCase->slotWaitlist($slotId));
+    }
+
+    /** L'équipe propose la place libre à cette personne (même à moins d'1 h) → 200 { wait } ; 409 SLOT_FULL ; 404 WAITLIST_NOT_FOUND */
+    #[Route('/api/site/abonnements/attente/{waitId}/proposer', name: 'site_abo_waitlist_propose', requirements: ['waitId' => '\d+'], methods: ['POST'])]
+    #[IsGranted('ROLE_ADMIN')]
+    public function proposeWait(Request $request, int $waitId): JsonResponse
+    {
+        return $this->team(fn () => $this->useCase->proposeWait($waitId, $this->by(), $request->getHost()));
+    }
+
+    /** Les attentes ouvertes de l'abonnement (lecture seule) → 200 { waitlist } */
+    #[Route('/api/subscriptions/{id}/attente', name: 'api_subscriptions_waitlist', requirements: ['id' => '\d+'], methods: ['GET'])]
+    #[IsGranted('ROLE_USER_INTERNET')]
+    public function myWaits(int $id): JsonResponse
+    {
+        return $this->client(fn () => $this->useCase->myWaits($this->customer(), $id));
+    }
+
+    /** S'inscrire sur la liste d'attente d'un créneau complet → 201 { wait } ; 409 SLOT_NOT_FULL | ALREADY_WAITING | WAITLIST_LIMIT | BALANCE_EMPTY */
+    #[Route('/api/subscriptions/{id}/creneaux/{slotId}/attente', name: 'api_subscriptions_waitlist_join', requirements: ['id' => '\d+', 'slotId' => '\d+'], methods: ['POST'])]
+    #[IsGranted('ROLE_USER_INTERNET')]
+    public function joinWait(Request $request, int $id, int $slotId): JsonResponse
+    {
+        return $this->client(fn () => $this->useCase->joinWait($this->customer(), $id, $slotId, $request->getHost()), 201);
+    }
+
+    /** Sortir de la liste d'attente (une place offerte passe à la suite) → 200 { left } ; 404 WAITLIST_NOT_FOUND */
+    #[Route('/api/subscriptions/{id}/creneaux/{slotId}/attente', name: 'api_subscriptions_waitlist_leave', requirements: ['id' => '\d+', 'slotId' => '\d+'], methods: ['DELETE'])]
+    #[IsGranted('ROLE_USER_INTERNET')]
+    public function leaveWait(Request $request, int $id, int $slotId): JsonResponse
+    {
+        return $this->client(fn () => $this->useCase->leaveWait($this->customer(), $id, $slotId, $request->getHost()));
+    }
+
+    /** Accepter la place offerte → 201 { appointment, subscription } ; 409 OFFER_EXPIRED ; 404 WAITLIST_NOT_FOUND */
+    #[Route('/api/subscriptions/{id}/attente/{waitId}/accepter', name: 'api_subscriptions_waitlist_accept', requirements: ['id' => '\d+', 'waitId' => '\d+'], methods: ['POST'])]
+    #[IsGranted('ROLE_USER_INTERNET')]
+    public function acceptWait(Request $request, int $id, int $waitId): JsonResponse
+    {
+        return $this->client(fn () => $this->useCase->acceptWait($this->customer(), $id, $waitId, $request->getHost(), self::locale($request)), 201);
+    }
+
     // ---- interne ----------------------------------------------------------------------------------------------------------------------------
 
     private function team(callable $fn, int $status = 200): JsonResponse

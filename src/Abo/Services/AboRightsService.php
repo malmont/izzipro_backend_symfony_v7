@@ -255,6 +255,7 @@ class AboRightsService
                     throw new AboException(409, 'BALANCE_EMPTY', 'Plus aucun droit disponible pour cette prestation.', 'benefitId');
                 }
             }
+            AboWaitlist::closeStale($conn, (int) $subscription->getId()); // lot ABO-4 : une attente dont le droit vient d'être utilisé se ferme
             $em->persist((new SubscriptionAboEvent($subscription, 'used', $benefitId, 1, $note, $by))->setOccurrenceId($id));
             $em->flush();
 
@@ -331,7 +332,8 @@ class AboRightsService
     {
         $this->pauseUntil($subscription, $untilDate); // refus rapide, sans attendre le verrou
 
-        return $this->locked($subscription, function () use ($subscription, $untilDate, $by) {
+        $freed = [];
+        $out = $this->locked($subscription, function () use ($subscription, $untilDate, $by, &$freed) {
             // relu sous le verrou (la fiche vient d'être relue) : deux pauses simultanées ne prolongent jamais deux fois
             ['until' => $until, 'days' => $days] = $this->pauseUntil($subscription, $untilDate);
             $now = new \DateTimeImmutable();
@@ -344,6 +346,9 @@ class AboRightsService
             // lot ABO-2 (décision 3) : les dates planifiées PENDANT la pause sont annulées sans perte (elles redeviennent à planifier, puis sont
             // prolongées comme les autres) ; celles d'après la reprise restent
             // relecture neuve : une date de l'équipe au-delà de la validité reste due (même plancher que AboAgendaService::returnToPlan)
+            // lot ABO-4 : les créneaux de ces dates libèrent une place pour leur liste d'attente
+            $freed = $em->getConnection()->fetchFirstColumn("SELECT DISTINCT slot_id FROM benefit_occurrence WHERE subscription_id = ? AND status = 'scheduled' AND slot_id IS NOT NULL AND scheduled_at >= ? AND scheduled_at < ?",
+                [$subscription->getId(), gmdate('Y-m-d H:i:s', $now->getTimestamp()), gmdate('Y-m-d H:i:s', $until->getTimestamp())]);
             $released = $em->getConnection()->executeStatement("UPDATE benefit_occurrence SET status = 'available', slot_id = NULL, scheduled_at = NULL, scheduled_end = NULL, scheduled_by = NULL, scheduled_source = NULL,
                 valid_until = CASE WHEN valid_until <= ? THEN ? ELSE valid_until END
                 WHERE subscription_id = ? AND status = 'scheduled' AND scheduled_at >= ? AND scheduled_at < ?", [gmdate('Y-m-d H:i:s', $now->getTimestamp()), AboAgendaService::floor($em->getConnection(), (int) $subscription->getId()),
@@ -361,6 +366,11 @@ class AboRightsService
 
             return $subscription;
         });
+        foreach ($freed as $slotId) {
+            $this->agenda?->slotFreed((int) $slotId);
+        }
+
+        return $out;
     }
 
     /**

@@ -44,6 +44,9 @@ final class NotificationCatalog
     public const WEEKLY_DIGEST = 'weekly_digest';
     /** Lot ABO-3b : un abonné a écrit dans le fil de son abonnement (à l'adresse du site) */
     public const SUBSCRIPTION_MESSAGE = 'subscription_message';
+    /** Lot ABO-4 : « une place s'est libérée » à l'abonné en liste d'attente (échéance de 2 h au plus) ; le rappel de la veille */
+    public const SUBSCRIPTION_WAITLIST_OFFER = 'subscription_waitlist_offer';
+    public const SUBSCRIPTION_REMINDER = 'subscription_reminder';
     /** Le courriel qui réunit les courriels de suivi retenus d'un sujet ; son sujet est celui des courriels qu'il porte */
     public const FOLLOWUP_SUMMARY = 'followup_summary';
 
@@ -93,6 +96,11 @@ final class NotificationCatalog
         'subscription_thread' => [self::INDISPENSABLE, null],
         'abo_staff_invitation' => [self::INDISPENSABLE, null],
         self::SUBSCRIPTION_MESSAGE => [self::FOLLOWUP, self::TOPIC_SUPPORT],
+        // lot ABO-4 (décision du chef du 21/11/2026) : INDISPENSABLES, comme tout courriel au client. Les niveaux NOTIF sont ceux du
+        // COMMERÇANT : un site à « Aucune » ne doit jamais couper l'offre (l'abonné s'est inscrit lui-même sur la liste d'attente) ni le
+        // rappel de la veille (que seul l'abonné coupe : `subscription.reminder_emails`, PATCH /api/subscriptions/{id}/courriels)
+        self::SUBSCRIPTION_WAITLIST_OFFER => [self::INDISPENSABLE, null],
+        self::SUBSCRIPTION_REMINDER => [self::INDISPENSABLE, null],
         'pos_receipt' => [self::INDISPENSABLE, null],
         'booking_customer' => [self::INDISPENSABLE, null], // accusé de réservation, réservation confirmée, annulée ou modifiée
         'customer_message' => [self::INDISPENSABLE, null], // message écrit par un client : contact, formulaire à étapes, financement (décision A du propriétaire)
@@ -149,9 +157,10 @@ final class NotificationCatalog
         'src/Services/Platform/PlatformAlertRecipient.php' => ['platform_alert_test'],
         'src/Incident/Services/BugReportMailer.php' => ['platform_bug_report_answer'],
         'src/Services/ReservationService/ReservationMailerService.php' => ['booking_customer', self::BOOKING_NEW, 'customer_message'], // customer_message : demande d'un formulaire à étapes
-        'src/Services/SubscriptionService/SubscriptionMailer.php' => ['subscription_notice', 'subscription_done', 'subscription_thread'],
+        'src/Services/SubscriptionService/SubscriptionMailer.php' => ['subscription_notice', 'subscription_done', 'subscription_thread', self::SUBSCRIPTION_REMINDER],
         'src/Abo/Services/AboStaffService.php' => ['abo_staff_invitation'],
         'src/Abo/Services/AboThreadService.php' => [self::SUBSCRIPTION_MESSAGE],
+        'src/Abo/Services/AboWaitlistService.php' => [self::SUBSCRIPTION_WAITLIST_OFFER],
         'src/Support/Services/SupportAgentService.php' => ['support_agent_invitation'],
         'src/Support/Services/SupportMailer.php' => ['support_reply'],
         'src/UseCase/AccountUseCase/AdminEraseCustomerAccountUseCase.php' => ['account_deleted_notice'],

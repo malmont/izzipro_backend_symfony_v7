@@ -134,6 +134,8 @@ class EntryModeGuardSubscriber implements EventSubscriberInterface
         ['#^/api/site/abonnements/intervenants(/|$)#', [], 'accounts'],
         // ... et les routes de l'intervenant, que son rôle ne porte de toute façon pas (fermées ici aussi, par prudence)
         ['#^/api/staff/abonnements(/|$)#', [], 'rights'],
+        // lot ABO-4 : le directeur lit la liste d'attente d'un créneau (comme l'agenda) ; il n'offre pas de place (un courriel à l'abonné)
+        ['#^/api/site/abonnements/attente/[^/]+/proposer(/|$)#', [], 'rights'],
         ['#^/admin/taxes/verifier(/|$)#', ['POST'], 'rights'],
         ['#^/api/(apps/join|app/activate)(/|$)#', [], 'keys'],
         // le boîtier réel de la prévention des pertes (jumelage, clé, révocation, appareils) ; l'exercice simulé reste ouvert

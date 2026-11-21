@@ -1,0 +1,4 @@
+# Lot ABO-4 (21/11/2026) : textes des abonnements servis par le backend aux écrans (gestion web, applications)
+calendar:
+    # montrée à l'intervenant avant qu'il ajoute son lien d'agenda (décision du chef ; sur la liste de l'avocat)
+    staff_notice: 'Ce lien ajoute vos interventions à votre agenda (Google, Apple…) : les adresses des visites et le prénom des abonnés y seront copiés, chez le fournisseur de votre agenda. Changez le lien si vous l''avez partagé par erreur : l''ancien ne fonctionnera plus.'

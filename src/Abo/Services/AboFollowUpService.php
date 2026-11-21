@@ -111,6 +111,7 @@ class AboFollowUpService
             // lot ABO-3a : les prestations faites ou manquées (90 jours) ; « par qui », la note et l'avis de l'abonné pour l'équipe, jamais pour le modèle
             'delivered' => array_map(fn (array $d) => $withIdentity ? $d : ['ack' => $d['customerAck']] + array_diff_key($d, ['note' => 1, 'customerAck' => 1]), $this->delivery?->delivered($s, $withIdentity, $locale) ?? []),
             'doneEmails' => $s->wantsDoneEmails(),
+            'reminders' => $s->wantsReminderEmails(), // lot ABO-4
             'unreadMessages' => $this->thread?->unreadForTeam($s) ?? 0,
             // lot ABO-DATES : les dates des pauses, rangées en UTC, rendues à l'heure du magasin
             'pauses' => array_map(fn (array $p) => $this->pauseAt($withIdentity ? $p : array_intersect_key($p, array_flip(['from', 'until', 'resumedAt']))), $s->getPauses()),

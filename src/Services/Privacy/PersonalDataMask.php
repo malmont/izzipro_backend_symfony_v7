@@ -40,8 +40,18 @@ final class PersonalDataMask
      * remplacés. Un nom ne se reconnaît pas dans un texte libre : les champs d'un nom ne sont jamais acceptés (liste blanche).
      * Espaces réduits, `$max` caractères au plus.
      */
+    /** Lot ABO-4 : début du chemin des liens d'agenda, dont la suite est un jeton */
+    public const CALENDAR_PREFIX = '/api/calendrier/';
+
+    /** Lot ABO-4 (décision du chef) : `/api/calendrier/{jeton}…` devient `/api/calendrier/***` (journaux, anomalies) */
+    public static function calendarPaths(string $text): string
+    {
+        return (string) preg_replace('~/api/calendrier/[^/?\s"\'<>#]+~', '/api/calendrier/***', $text);
+    }
+
     public static function text(string $text, int $max = 300): string
     {
+        $text = self::calendarPaths($text); // lot ABO-4 : le jeton d'un lien d'agenda, jamais dans une anomalie
         $text = (string) preg_replace('/\beyJ[A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]+(?:\.[A-Za-z0-9_\-]+)?/', '[jeton]', $text);
         $text = (string) preg_replace('/\b(bearer|token|password|passwd|pwd|secret|api[_\-]?key|authorization|cookie|pin|otp)\b(\s*[:=]\s*|\s+)(?!\[jeton\])\S+/i', '$1$2[masqué]', $text);
         $text = (string) preg_replace_callback('/[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}/', fn (array $m): string => (string) self::email($m[0]), $text);

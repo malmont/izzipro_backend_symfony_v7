@@ -84,6 +84,9 @@ class PersonalDataEraser
             [null, 'UPDATE benefit_slot SET staff_user_id = NULL WHERE staff_user_id = ? AND starts_at > NOW()', [$userId]],
             [null, 'UPDATE benefit_slot_rule SET staff_user_id = NULL WHERE staff_user_id = ?', [$userId]],
             [null, 'UPDATE benefit SET default_staff_user_id = NULL WHERE default_staff_user_id = ?', [$userId]],
+            // lot ABO-4 : ses liens d'agenda (ceux de ses abonnements, le sien d'intervenant) ne valent plus ; ses attentes se ferment
+            [null, "DELETE FROM calendar_feed WHERE (owner_type = 'subscription' AND owner_id IN (SELECT id FROM subscription WHERE user_id = ?)) OR (owner_type = 'staff' AND owner_id = ?)", [$userId, $userId]],
+            [null, "UPDATE benefit_waitlist SET status = 'left', closed_at = NOW(), closed_reason = 'erased' WHERE status IN ('waiting', 'offered') AND subscription_id IN (SELECT id FROM subscription WHERE user_id = ?)", [$userId]],
         ];
         foreach ($statements as [$key, $sql, $params]) {
             try {

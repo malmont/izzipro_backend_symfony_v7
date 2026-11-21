@@ -75,6 +75,9 @@ class StorefrontGateSubscriber implements EventSubscriberInterface
         '#^/api/pertes/boitier/#',
         '#^/api/incidents/report$#', // lot INC-1a : une application signale une erreur, même pendant la construction
         '#^/api/incidents/bug-reports$#', // lot INC-3 : le personnel signale un problème, même pendant la construction
+        // lot ABO-4 : le lien d'agenda d'un abonné ou d'un intervenant (des droits payés, une boutique fermée pour travaux n'y change rien) ;
+        // lu sans session ni jeton d'accès, seule la clé de l'adresse compte
+        '#^/api/calendrier/[^/]+\.ics$#', // la route n'accepte qu'un jeton de 64 caractères hexadécimaux
         // outils du développement
         '#^/_(profiler|wdt|error)(/|$)#',
     ];

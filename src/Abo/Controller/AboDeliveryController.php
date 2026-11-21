@@ -133,7 +133,7 @@ class AboDeliveryController extends AbstractController
         }
     }
 
-    /** Couper ou rallumer le courriel « prestation faite » `{ doneEmails: bool }` → 200 { doneEmails } */
+    /** Couper ou rallumer ses courriels `{ doneEmails?: bool, reminders?: bool }` (« prestation faite », rappel de la veille) → 200 { doneEmails, reminders } */
     #[Route('/api/subscriptions/{id}/courriels', name: 'api_subscriptions_emails', requirements: ['id' => '\d+'], methods: ['PATCH'])]
     #[IsGranted('ROLE_USER_INTERNET')]
     public function emails(Request $request, int $id): JsonResponse
