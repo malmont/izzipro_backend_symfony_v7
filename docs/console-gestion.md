@@ -124,6 +124,7 @@ l'analyse. Chaque chiffre a un identifiant unique dans une réponse : `a1.revenu
 | `articles.new` | les articles nouveaux de la période, chacun avec son bilan face à ses semblables et son verdict | lot IA-ACT-5 |
 | `advice.current` | les conseils du guide du jour, tels quels | conseils, `GET /api/gestion/conseils` |
 | `loans.overview` | les prêts : capital restant dû, prochaine échéance, coût total du crédit, déjà couru et à venir ; ni prêteur ni notes (lot FIS-1, `docs/prets-gestion.md`) | prêts, `GET /api/gestion/prets` |
+| `aids.overview` | les aides : accordé, reçu, à recevoir, conditions échues, justificatifs manquants, produit de l'année (estimation) ; ni organisme, ni notes, ni texte des conditions (lot FIS-2, `docs/aides-gestion.md`) | aides, `GET /api/gestion/aides` |
 
 ## 3. Comment une réponse se fabrique
 

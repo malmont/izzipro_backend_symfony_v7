@@ -13,6 +13,8 @@ Codé le 19/11/2026 sur le contrat validé par le chef de projet (plan `docs/pla
   - la **trésorerie** : le déblocage entre, chaque échéance entière sort (capital compris), les frais et les remboursements anticipés sortent ;
   - le **résultat** (période, année, statistiques) : seulement les **charges financières** (intérêts, assurance, frais), au prorata ;
   - le **rapprochement bancaire** : les échéances sont des attendus, comme les mouvements prévus.
+- Lot FIS-2 : une **avance remboursable** (`docs/aides-gestion.md` § 3) crée un prêt à 0 % lié à son aide (`gestion_loan.aid_id`) ; tant
+  qu'il existe, l'aide ne se supprime pas et ses termes ne changent pas (409 `AID_LINKED_LOAN`). Le prêt, lui, se modifie et se supprime ici.
 - **Le capital remboursé n'est jamais une charge** : il ne touche que la trésorerie. Les écrans le montrent à part du coût du crédit
   (décision du chef, 19/11/2026).
 

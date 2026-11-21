@@ -35,6 +35,8 @@ Code : `Services/NotificationService/` (`PushSenderInterface`, `NotConfiguredPus
   `channel` (ajout du 14/11/2026) : `push` (téléphone) ou `email`.
 - `PATCH /api/gestion/notifications/preferences { kinds: { low_stock: false, … } }` → même forme ; 422 `kinds` `MUST_BE_OBJECT`,
   `kinds.<x>` `UNKNOWN_KIND` / `MUST_BE_BOOLEAN` (rien n'est écrit).
+- Lot FIS-2 (21/11/2026) : `aid_reminder`, par COURRIEL de suivi (sujet « gestion »), le rappel des aides : condition échue encore à faire,
+  aide reçue sans justificatif, chaque élément une fois (`docs/aides-gestion.md` § 6) ; toujours disponible.
 - Types : `low_stock`, `duplicate_invoice`, `trip_budget`, `cash_critical` (tous disponibles depuis le lot B1b-1), sur téléphone ; et
   `loss_digest` (14/11/2026, prévention des pertes, lot L1-b), par COURRIEL : le résumé du jour « N nouveaux constats, X en jeu », envoyé par
   le module (`docs/prevention-pertes.md`). `available` seulement si le droit `module.loss_prevention` est accordé au site. Il part à partir de 8 h à l'heure du magasin, au plus une fois par jour, et seulement pour les constats nés depuis le courriel précédent (plus les constats de reprise complétés par une nouvelle preuve, annoncés une fois). Rien ne part quand l'analyse du site est arrêtée

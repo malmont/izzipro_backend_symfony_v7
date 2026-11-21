@@ -100,6 +100,10 @@ Test : `tests/Functional/Gestion/CashApiTest.php`.
   `LOAN_MAY_OVERLAP_MOVEMENTS` (un mouvement prévu `loan` saisi à la main existe à côté d'un prêt : rien n'est supprimé).
 - Prêts (lot FIS-1, `docs/prets-gestion.md`) : déblocage, échéances entières, frais et remboursements anticipés des prêts dans la devise
   du site entrent dans la projection, `cashUntil` et l'attendu du rapprochement ; `byCategory.loan` les compte.
+- Aides (lot FIS-2, `docs/aides-gestion.md`) : versements reçus (et prévus d'une aide accordée) en entrée, remboursement décidé en sortie,
+  dans la projection, `cashUntil` et l'attendu du rapprochement ; `byCategory.aid` (« Aide ») les compte. Une avance remboursable passe
+  par son prêt à 0 % (`byCategory.loan`). Remarque `AID_MAY_OVERLAP_MOVEMENTS` : un mouvement prévu d'entrée saisi à la main, du même
+  montant qu'un versement, le même mois (rien n'est supprimé).
 
 ## 5. Vignettes et notification
 

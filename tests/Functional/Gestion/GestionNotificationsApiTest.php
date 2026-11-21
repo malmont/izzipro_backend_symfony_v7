@@ -116,10 +116,11 @@ class GestionNotificationsApiTest extends WebTestCase
         // lot L5-d : un septième type, l'alerte de sortie de la prévention des pertes (téléphone, disponible avec le droit du module)
         // lot L6-b : un huitième, « votre boîtier est branché », INDISPENSABLE (toujours allumé, sans interrupteur)
         // lot G-4 : un neuvième, « articles copiés dans votre catalogue » par le directeur du groupe, INDISPENSABLE
-        $this->assertSame(['low_stock', 'duplicate_invoice', 'cash_critical', 'trip_budget', 'loss_digest', 'weekly_digest', 'loss_exit', 'loss_box_plugged', 'group_catalog_copied'], array_column($p['kinds'], 'kind'));
-        $this->assertSame([true, true, true, true, true, true, true, true, true], array_column($p['kinds'], 'enabled'), 'tout est actif par défaut');
-        $this->assertSame([true, true, true, true, false, true, false, false, true], array_column($p['kinds'], 'available'), 'trip_budget disponible depuis B1a, cash_critical depuis B1b-1 ; loss_digest, loss_exit et loss_box_plugged seulement si le module Prévention des pertes est accordé');
-        $this->assertSame(['push', 'push', 'push', 'push', 'email', 'email', 'push', 'push', 'push'], array_column($p['kinds'], 'channel'), 'canal de chaque type : le résumé de la prévention des pertes et le point de la semaine partent par courriel');
+        // lot FIS-2 : un dixième, le rappel des aides, par COURRIEL de suivi, toujours disponible
+        $this->assertSame(['low_stock', 'duplicate_invoice', 'cash_critical', 'trip_budget', 'loss_digest', 'weekly_digest', 'loss_exit', 'loss_box_plugged', 'group_catalog_copied', 'aid_reminder'], array_column($p['kinds'], 'kind'));
+        $this->assertSame([true, true, true, true, true, true, true, true, true, true], array_column($p['kinds'], 'enabled'), 'tout est actif par défaut');
+        $this->assertSame([true, true, true, true, false, true, false, false, true, true], array_column($p['kinds'], 'available'), 'trip_budget disponible depuis B1a, cash_critical depuis B1b-1 ; loss_digest, loss_exit et loss_box_plugged seulement si le module Prévention des pertes est accordé');
+        $this->assertSame(['push', 'push', 'push', 'push', 'email', 'email', 'push', 'push', 'push', 'email'], array_column($p['kinds'], 'channel'), 'canal de chaque type : le résumé de la prévention des pertes et le point de la semaine partent par courriel');
         $this->assertSame('indispensable', $p['kinds'][7]['family']);
         $this->request('PATCH', '/api/gestion/notifications/preferences', ['kinds' => ['loss_box_plugged' => false]]);
         $this->assertSame([422, ['kinds.loss_box_plugged' => 'NOT_SWITCHABLE']], [$this->status(), $this->body()['fields']], 'un type indispensable ne se coupe pas');

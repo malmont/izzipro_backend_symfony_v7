@@ -39,7 +39,8 @@ Suivi, par sujet (`NotificationCatalog::TOPICS`) :
 | `payments` | paiement reçu pour un livre (`book_payment_received`) |
 | `loss` | résumé du jour de la prévention des pertes (`loss_digest`) |
 | `entitlements` | essai commencé, droit accordé, fin d'essai dans 7 jours, accès rétabli, demande enregistrée ou refusée (`entitlement_followup`) |
-| `support`, `management` | rien aujourd'hui par courriel |
+| `management` | rappel des aides de la gestion : condition échue encore à faire, aide reçue sans justificatif (`aid_reminder`, lot FIS-2, `docs/aides-gestion.md` § 6), chaque élément une fois |
+| `support` | rien aujourd'hui par courriel |
 | aucun | le point de la semaine (`weekly_digest`) : c'est le résumé lui-même |
 
 ## 2. Ce que fait chaque niveau

@@ -22,7 +22,8 @@ enregistré par utilisateur ici.**
 `stock-dormant`, `budget`, `cout-d-achat`, `stock-bas`, `semblables`, `verdict`), et 9 notions de la prévention des pertes (14/11/2026 :
 `constat`, `montant-en-jeu`, `ecart-de-caisse`, `regle-de-detection`, `regle-par-personne`, `notice-salaries`, `preuve`,
 `decision-constat`, et `exercice-pertes` avec le mode exercice, lot EX-1), puis 3 notions des prêts (lot FIS-1, 19/11/2026 :
-`capital-restant-du` et `cout-du-credit`, reliées à l'analyse `loans.overview`, et `charges-financieres`).
+`capital-restant-du` et `cout-du-credit`, reliées à l'analyse `loans.overview`, et `charges-financieres`), puis 2 notions des aides (lot FIS-2,
+21/11/2026 : `aide-exploitation`, reliée à l'analyse `aids.overview`, et `avance-remboursable`) ; guide de l'écran `aides`.
 
 Les notions de la prévention des pertes (`docs/prevention-pertes.md`) sont à la fin de la liste, servies à tous les sites comme les autres
 (mêmes textes pour tous), **sans analyse liée ni illustration** : la console ne lit aucune donnée du module, même sur un site qui l'a ;
