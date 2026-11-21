@@ -55,7 +55,7 @@ class GenerateEndpointsDocCommand extends Command
         '/api/candidatures', '/api/marques', '/api/categories-marque', '/categories-marque', '/api/service-offers', '/service-offers', '/api/team',
         '/api/contacts', '/api/contact', '/api/newsletter', '/api/financement'];
     private const MODULE_ORDER = ['Landing Page', 'Contenus des sites', 'Mémoires Vivantes', 'Boussole ESG', 'Réservations', 'Boutique et commun',
-        'Authentification et comptes', 'Tenants', 'Fichiers et médias', 'Administration (EasyAdmin)', 'API Platform'];
+        'Authentification et comptes', 'Tenants', 'Fichiers et médias', 'Administration (EasyAdmin)'];
 
     public function __construct(
         private readonly RouterInterface $router,
@@ -111,10 +111,10 @@ class GenerateEndpointsDocCommand extends Command
         return Command::SUCCESS;
     }
 
-    /** Outils de développement et routes internes d'API Platform (documentation, contexte JSON-LD) */
+    /** Outils de développement */
     private function ignored(string $name, Route $route): bool
     {
-        return (bool) preg_match('/^(_profiler|_wdt|_preview_error|api_doc|api_entrypoint|api_jsonld_context|api_genid|api_validation_errors)/', $name)
+        return (bool) preg_match('/^(_profiler|_wdt|_preview_error)/', $name)
             || str_starts_with($route->getPath(), '/_error')
             || str_contains((string) $route->getDefault('_controller'), 'NotExposedAction');
     }
@@ -128,9 +128,6 @@ class GenerateEndpointsDocCommand extends Command
         }
         if (str_starts_with($controller, 'App\\ESG\\')) {
             return 'Boussole ESG';
-        }
-        if (str_starts_with($controller, 'api_platform.')) {
-            return 'API Platform';
         }
         foreach (self::PATH_MODULES as $prefix => $module) {
             if (str_starts_with($path, $prefix)) {
@@ -191,9 +188,6 @@ class GenerateEndpointsDocCommand extends Command
     private function controller(Route $route): string
     {
         $controller = (string) $route->getDefault('_controller');
-        if (str_starts_with($controller, 'api_platform.')) {
-            return 'API Platform (' . ($route->getDefault('_api_resource_class') ? substr(strrchr('\\' . $route->getDefault('_api_resource_class'), '\\'), 1) : '?') . ')';
-        }
         if (!str_contains($controller, '::')) {
             return '`' . $controller . '`';
         }

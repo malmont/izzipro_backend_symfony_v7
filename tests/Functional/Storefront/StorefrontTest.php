@@ -87,7 +87,7 @@ class StorefrontTest extends WebTestCase
         $this->assertStringContainsString('noindex', (string) $closed->headers->get('X-Robots-Tag'));
         // la boutique, par toutes ses adresses, et le site vitrine : refusés PAR LE SERVEUR au visiteur et au compte client
         foreach (['/api/category', '/api/products/by-category', '/api/products/12', '/api/productsid/12', '/api/c%61tegory', '/api/subscription-plans', '/api/boutique-settings', '/api/order-statuses', '/api/orders/12', '/api/apps/boutique/terms',
-            '/api/landingpage-settings', '/api/presentations', '/api/homeslider', '/api/vehicles.json', '/api/offers', '/api/admin-settings', '/api/team'] as $path) {
+            '/api/landingpage-settings', '/api/presentations', '/api/homeslider', '/api/vehicle_products', '/api/offers', '/api/admin-settings', '/api/team'] as $path) {
             $refused = $this->api('GET', $path);
             $this->assertSame([403, 'STOREFRONT_UNDER_CONSTRUCTION', $name, 'site'], [$refused->getStatusCode(), $this->json($refused)['code'] ?? null, $this->json($refused)['name'] ?? null, $this->json($refused)['scope'] ?? null], $path);
             $this->assertSame(403, $this->api('GET', $path, null, $customer)->getStatusCode(), "$path : compte client");
@@ -483,11 +483,7 @@ class StorefrontTest extends WebTestCase
         // le site vitrine, servi quand la boutique seule est en construction : en toutes lettres aussi. Une route qui sert un article,
         // un prix ou une disponibilité n'a rien à faire ici (la relecture en avait trouvé trois)
         $this->assertSame([
-            '_api_/vehicle_products/{id}{._format}_delete', '_api_/vehicle_products/{id}{._format}_get',
-            '_api_/vehicle_products/{id}{._format}_patch', '_api_/vehicle_products/{id}{._format}_put',
-            '_api_/vehicle_products{._format}_get_collection', '_api_/vehicle_products{._format}_post', '_api_/vehicles/{id}{._format}_delete',
-            '_api_/vehicles/{id}{._format}_get', '_api_/vehicles/{id}{._format}_patch', '_api_/vehicles/{id}{._format}_put',
-            '_api_/vehicles{._format}_get_collection', '_api_/vehicles{._format}_post', 'api_baniere_statique_get_one', 'api_baniere_statique_list',
+            'api_baniere_statique_get_one', 'api_baniere_statique_list',
             'api_banniere_create', 'api_banniere_delete', 'api_banniere_get_one', 'api_banniere_list', 'api_banniere_update',
             'api_candidature_create', 'api_candidature_get_one', 'api_candidature_list', 'api_components_config', 'api_contact_create',
             'api_contact_create_alias', 'api_contact_delete', 'api_contact_get_one', 'api_contact_list', 'api_contact_submit', 'api_contact_update',
@@ -504,7 +500,7 @@ class StorefrontTest extends WebTestCase
             'api_service_families_list', 'api_service_families_update', 'api_service_offer_create', 'api_service_offer_delete',
             'api_service_offer_get_one', 'api_service_offer_list', 'api_service_offer_update', 'api_shared_media_get_one',
             'api_shared_media_get_one.1', 'api_shared_media_list', 'api_shared_media_list.1', 'api_social_networks_list', 'api_team_create',
-            'api_team_delete', 'api_team_get', 'api_team_list', 'api_team_update', 'api_vehicles_carousel', 'api_video_create', 'api_video_create.1',
+            'api_team_delete', 'api_team_get', 'api_team_list', 'api_team_update', 'api_vehicle_products_get', 'api_vehicle_products_list', 'api_vehicles_carousel', 'api_video_create', 'api_video_create.1',
             'api_video_delete', 'api_video_delete.1', 'api_video_get_one', 'api_video_get_one.1', 'api_video_list', 'api_video_list.1',
             'api_video_update', 'api_video_update.1', 'app_contact_new', 'cgu_condition', 'delete_admin_preset', 'get_admin_presets',
             'get_admin_settings', 'get_home_slider', 'save_admin_preset', 'update_admin_settings',

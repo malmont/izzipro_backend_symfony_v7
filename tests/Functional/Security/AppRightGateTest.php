@@ -135,7 +135,7 @@ class AppRightGateTest extends WebTestCase
             // sans l'en-tête (le web, ou une application ancienne) : servi comme le web (limite écrite dans la fiche)
             $this->assertNotSame('MODULE_INACTIVE', $this->json($this->post('/api/cart/quote', []))['code'] ?? null);
             // une lecture de l'application mobile n'est pas un début de parcours
-            $this->assertNotSame('MODULE_INACTIVE', $this->json($this->get('/api/products', ['HTTP_X_APP' => 'mobile']))['code'] ?? null);
+            $this->assertNotSame('MODULE_INACTIVE', $this->json($this->get('/api/products/bestsellers', ['HTTP_X_APP' => 'mobile']))['code'] ?? null);
             // le droit mobile présent, la boutique éteinte : refusée au nom de la boutique (les deux droits s'appliquent)
             $this->setFlags(true, true);
             $this->setBoutique(false);

@@ -8,13 +8,10 @@ use Doctrine\Common\Collections\Collection;
 use App\Repository\VehicleRepository;
 use App\Entity\TranslatableInterface;
 use Doctrine\DBAL\Types\Types;
-use ApiPlatform\Metadata\ApiResource;
 use Symfony\Component\Serializer\Annotation\Groups;
 
 #[ORM\Entity(repositoryClass: VehicleRepository::class)]
-// Lecture publique inchangée ; champs simples (groupe vehicle:read, sans le produit ni les traductions imbriqués) et pagination comme
-// VehicleProduct : 24 par page, 50 au plus (S8, 26/10/2026). Avant : toutes les relations imbriquées, sans limite.
-#[ApiResource(normalizationContext: ['groups' => ['vehicle:read']], paginationItemsPerPage: 24, paginationMaximumItemsPerPage: 50)]
+// Plus exposée par API Platform depuis le 20/11/2026 (lot APIP-RETRAIT : /api/vehicles rend 404).
 class Vehicle implements TranslatableInterface
 {
     #[ORM\Id]

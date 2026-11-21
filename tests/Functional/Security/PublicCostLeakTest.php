@@ -124,14 +124,14 @@ class PublicCostLeakTest extends WebTestCase
             }
         }
         $this->assertSame([], $leaking, 'Réponse(s) ouverte(s) qui rendent un coût, un coefficient, un coût de commande ou un fournisseur.');
-        // la documentation d'API Platform nomme tous les champs des entités, coût compris : elle n'est plus lue que par l'administrateur
-        // (son point d'entrée aussi : demandé en HTML, il sert la page Swagger avec tout le document dedans)
+        // la documentation d'API Platform nommait tous les champs des entités, coût compris (COST-1 : réservée à l'administrateur) ;
+        // depuis le retrait d'API Platform (lot APIP-RETRAIT, 20/11/2026), ni elle ni son point d'entrée n'existent plus
         foreach (['/api/docs.json', '/api/docs', '/api/docs.jsonld', '/api/docs.html', '/api/contexts/Product.jsonld', '/api', '/api/', '/api/index.html', '/api/index.json'] as $path) {
             foreach (['application/json', 'text/html'] as $accept) {
                 $this->client->request('GET', 'https://' . MV_TEST_TENANT_HOST . $path, [], [], ['HTTP_ACCEPT' => $accept] + $this->server(null));
-                $this->assertSame(401, $this->client->getResponse()->getStatusCode(), "$path ($accept) sans connexion");
+                $this->assertSame(404, $this->client->getResponse()->getStatusCode(), "$path ($accept) sans connexion : la route n'existe plus");
                 $this->client->request('GET', 'https://' . MV_TEST_TENANT_HOST . $path, [], [], ['HTTP_ACCEPT' => $accept] + $this->server($customer));
-                $this->assertSame(403, $this->client->getResponse()->getStatusCode(), "$path ($accept) pour un compte client");
+                $this->assertSame(404, $this->client->getResponse()->getStatusCode(), "$path ($accept) pour un compte client : la route n'existe plus");
                 $this->assertSame([], self::leaks((string) $this->client->getResponse()->getContent()), $path);
             }
         }

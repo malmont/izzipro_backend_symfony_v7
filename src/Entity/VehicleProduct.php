@@ -2,17 +2,12 @@
 
 namespace App\Entity;
 
-use ApiPlatform\Metadata\ApiResource;
 use Doctrine\DBAL\Types\Types;
+use App\Repository\VehicleProductRepository;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Component\Serializer\Annotation\Groups;
 
-#[ORM\Entity]
-#[ApiResource(
-    normalizationContext: ['groups' => ['vehicle_product:read']],
-    paginationItemsPerPage: 24,
-    paginationMaximumItemsPerPage: 50
-)]
+#[ORM\Entity(repositoryClass: VehicleProductRepository::class)]
 class VehicleProduct extends Product
 {
     #[Groups(['vehicle_product:read'])]

@@ -14,13 +14,10 @@ class RouteIdRequirementTest extends KernelTestCase
 {
     /** Préfixes de nom ou de chemin exemptés, avec leur raison */
     private const EXEMPT_PREFIXES = [
-        'name:_api_' => 'routes générées par API Platform : le fournisseur de la ressource relit l\'identifiant',
         'path:/api/memoires/' => 'Mémoires Vivantes, projet à part (décision du 16/11/2026) : fermé à l\'agence et au directeur d\'un groupe',
     ];
     /** Routes exemptées une à une, avec leur raison */
     private const EXEMPT_ROUTES = [
-        'api_genid' => 'API Platform (identifiants générés)',
-        'api_validation_errors' => 'API Platform (erreurs de validation, identifiant textuel)',
         'api_landingpage_ai_job' => 'identifiant TEXTUEL de tâche de fond (chaîne aléatoire), jamais un entier',
     ];
 

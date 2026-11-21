@@ -144,19 +144,6 @@ class ProductService
         return new ProductDetailedOutputDTO($product, $host, $locale, $this->currency->code());
     }
 
-    public function getAllProducts(string $host, string $locale = 'fr'): array
-    {
-        $bestsellers   = $this->repository->findTranslatedByCriteria($locale, ['isbestseller' => true, 'isWeb' => true]);
-        $newArrivals   = $this->repository->findTranslatedByCriteria($locale, ['isnewarrival' => true, 'isWeb' => true]);
-        $specialOffers = $this->repository->findTranslatedByCriteria($locale, ['isspecialoffer' => true, 'isWeb' => true]);
-
-        return [
-            'bestsellers'   => array_map(fn($p) => new ProductDetailedOutputDTO($p, $host, $locale, $this->currency->code()), $bestsellers),
-            'newArrivals'   => array_map(fn($p) => new ProductDetailedOutputDTO($p, $host, $locale, $this->currency->code()), $newArrivals),
-            'specialOffers' => array_map(fn($p) => new ProductDetailedOutputDTO($p, $host, $locale, $this->currency->code()), $specialOffers),
-        ];
-    }
-
     public function getProductsByOffer(string $offer, string $host, string $locale = 'fr'): array
     {
         $criteria = ['isWeb' => true];

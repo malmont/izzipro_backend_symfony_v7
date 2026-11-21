@@ -192,9 +192,6 @@ final class ScreenRegistry
         ['#^/api/(health|webhooks|landingpage-config)(/|$)#', '@technique'],
         ['#^/api/incidents/report$#', '@technique'], // lot INC-1a : le gestionnaire d'erreurs d'une application
         ['#^/api/incidents/bug-reports$#', '@compte'], // lot INC-3 : « Signaler un problème » et « Mes signalements » du personnel
-        // (API Platform : sa documentation, ses erreurs, ses contextes JSON-LD, son point d'entrée)
-        ['#^/api/(\.well-known|errors|validation_errors|docs|contexts)([./]|$)#', '@technique'],
-        ['#^/api/(\{index\}|index)(\.[^/]+)?$#', '@technique'],
         ['#^/(api/)?stripe/webhook$#', '@technique'],
         ['#^/stripe/(connect|disconnect|success)$#', 'admin.paiement'],
         ['#^/(assets|uploads|media|bucket-simulator|setup)(/|$)#', '@technique'],
@@ -280,9 +277,8 @@ final class ScreenRegistry
         // --- construction : catalogue
         ['#^/api/products/ai(/|$)#', 'catalogue.ia'],
         ['#^/api/products/[^/]+/reviews(/|$)#', ['GET' => '@public', '*' => '@compte']],
-        ['#^/api/products(\.[^/]+)?$#', 'catalogue'],
-        // (ressources d'API Platform : le gabarit de leurs routes porte le format, `.{_format}`)
-        ['#^/api/(categories|vehicle_products)([./]|$)#', ['GET' => '@public', '*' => 'catalogue']],
+        // (lecture des véhicules par la boutique ; anciennes ressources d'API Platform, retiré au lot APIP-RETRAIT)
+        ['#^/api/vehicle_products(/|$)#', ['GET' => '@public', '*' => 'catalogue']],
         ['#^/api/vehicles(/|\.|$)#', ['GET' => '@public', '*' => 'catalogue']],
         ['#^/api/products(/|$)#', ['GET' => '@public', '*' => 'catalogue']],
         ['#^/api/(product-variants|customization-combinations|customization-options|customization-values)(/|$)#', 'catalogue'],
@@ -445,8 +441,8 @@ final class ScreenRegistry
     public const SENSITIVE = [
         'catalogue' => ['fields' => ['purchasePrice', 'coefficientMultiplier', 'commande', 'commandeCostCents', 'commandeQuantity', 'commandeAttachedAt', 'commandeCostEstimated',
             'bookings', 'reviewsProducts', 'uses.sales', 'uses.purchaseLines', 'uses.bookings', 'uses.openCheckouts'],
-            'closed' => ['écriture de purchasePrice et de coefficientMultiplier par POST, PUT ou PATCH /api/products (API Platform)'],
-            'why' => 'coût d\'achat, coefficient, commande fournisseur et son coût, locations et avis d\'un article (les écritures d\'API Platform rendent toute l\'entité) ; nombres de ventes, de lignes d\'achat, de locations et de paniers en cours dans le refus de suppression (PRODUCT_IN_USE)'],
+            'closed' => ['écriture de purchasePrice et de coefficientMultiplier par PATCH /api/products/{id} (POST et PUT : routes d\'API Platform retirées)'],
+            'why' => 'coût d\'achat, coefficient, commande fournisseur et son coût, locations et avis d\'un article (les anciennes écritures d\'API Platform rendaient toute l\'entité) ; nombres de ventes, de lignes d\'achat, de locations et de paniers en cours dans le refus de suppression (PRODUCT_IN_USE)'],
         'admin.catalogue' => ['fields' => ['purchasePrice', 'coefficientMultiplier', 'commande'], 'why' => 'colonnes « Prix d\'achat », « Coefficient » et « Dernière commande fournisseur » de l\'écran Produits'],
         // la page d'accueil d'EasyAdmin est un tableau de ventes : elle se FERME (une page de construction la remplacera), et ses variables
         // sont nommées pour qu'aucune ne passe dans cette page-là

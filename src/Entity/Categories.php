@@ -3,14 +3,7 @@
 namespace App\Entity;
 
 use App\Entity\Traits\DemoContentTrait;
-use ApiPlatform\Metadata\ApiResource;
 use Symfony\Component\Serializer\Annotation\Groups;
-use ApiPlatform\Metadata\Delete;
-use ApiPlatform\Metadata\Get;
-use ApiPlatform\Metadata\GetCollection;
-use ApiPlatform\Metadata\Patch;
-use ApiPlatform\Metadata\Post;
-use ApiPlatform\Metadata\Put;
 use App\Repository\CategoriesRepository;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
@@ -19,18 +12,7 @@ use Doctrine\ORM\Mapping as ORM;
 use App\Entity\TranslatableInterface;
 
 #[ORM\Entity(repositoryClass: CategoriesRepository::class)]
-// Écritures réservées aux administrateurs depuis le 15/10/2026. Lectures (S8, 26/10/2026) : réservées à l'administrateur, champs simples
-// (groupe category:list, sans les produits ni les packs imbriqués), 30 par page, 100 au plus ; avant, tout client connecté (création de
-// compte libre) lisait les catégories avec tous leurs produits imbriqués, sans limite. La boutique lit /api/category (autre route, inchangée).
-#[ApiResource(operations: [
-    new GetCollection(security: "is_granted('ROLE_ADMIN')", normalizationContext: ['groups' => ['category:list']],
-        paginationItemsPerPage: 30, paginationMaximumItemsPerPage: 100, paginationClientItemsPerPage: true),
-    new Get(security: "is_granted('ROLE_ADMIN')", normalizationContext: ['groups' => ['category:list']]),
-    new Post(security: "is_granted('ROLE_ADMIN')"),
-    new Put(security: "is_granted('ROLE_ADMIN')"),
-    new Patch(security: "is_granted('ROLE_ADMIN')"),
-    new Delete(security: "is_granted('ROLE_ADMIN')"),
-])]
+// Plus exposée par API Platform depuis le 20/11/2026 (lot APIP-RETRAIT : /api/categories rend 404). La boutique lit /api/category.
 class Categories implements TranslatableInterface, DemoContentInterface
 {
     use DemoContentTrait;

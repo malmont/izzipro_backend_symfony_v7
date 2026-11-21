@@ -76,8 +76,8 @@ période sans vente antérieure à la date de l'achat (seule cause admise : la r
   - Message : « Cet article a des ventes, des achats ou des mouvements de stock : retirez-le de la vente au lieu de le supprimer. »
     Pour une variante : mettre son stock à 0. Retirer un article de la vente : `isWeb`, `isPos` et `saleEnabled` à faux. Il n'y a
     pas encore d'archivage.
-  - La garde est au niveau de Doctrine : elle couvre `DELETE /api/products/{id}` (servie par API Platform, qui masque la route du
-    contrôleur), `DELETE /api/product-variants/{id}` et EasyAdmin (même message à l'écran).
+  - La garde est au niveau de Doctrine : elle couvre `DELETE /api/products/{id}` (route du contrôleur, servie par API Platform jusqu'à son
+    retrait le 20/11/2026), `DELETE /api/product-variants/{id}` et EasyAdmin (même message à l'écran).
   - Un article ou une variante sans histoire se supprime comme avant (204).
   - Avant : la suppression d'un article effaçait en silence ses lignes d'achat (`commande_line.product_id` ON DELETE CASCADE) et
     l'historique de stock de ses variantes ; une variante supprimée perdait son historique de stock.

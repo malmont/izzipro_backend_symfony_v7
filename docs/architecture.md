@@ -5,7 +5,7 @@ Ce qui est commun à tout le backend. Chaque module a sa fiche (voir « Modules 
 
 ## En bref
 
-- **Symfony 7.4 (LTS), PHP 8.4, PostgreSQL 15, Redis 7**, API Platform 3.4, Doctrine ORM 2.20, EasyAdmin 4.29, dans Docker (`docker-compose.yml`). Une seule application sert
+- **Symfony 7.4 (LTS), PHP 8.4, PostgreSQL 15, Redis 7**, Doctrine ORM 2.20, EasyAdmin 4.29, dans Docker (`docker-compose.yml`). Une seule application sert
   **plusieurs clients (tenants)**, chacun avec **sa propre base**.
 - Frontend : autre dépôt (Next.js, `Izzipro_next`) ; il appelle `/api/*` avec l'en-tête `X-Tenant-Host`. Sa doc :
   `AGENTS.md` et `docs/architecture.md` de ce dépôt-là.
@@ -290,22 +290,26 @@ son code à usage unique (envoyé par le serveur d'envoi du site, qu'il règle l
   que les jetons d'activation qui ne venaient pas d'une invitation de la console ; les invitations de la console en attente ont reçu
   une échéance de 7 jours.
 
-### Ressources API Platform (`#[ApiResource]`, audit S8 du 26/10/2026)
+### API Platform retiré (lot APIP-RETRAIT, 20/11/2026)
 
-Une collection API Platform **sans groupes de sérialisation** imbrique toutes les relations des entités qui ne sont pas des ressources
-(variantes, réservations, avis, commandes, utilisateurs…), et ces relations bouclent : une seule requête peut occuper un processus
-PHP-FPM plusieurs minutes et plusieurs gigaoctets (incident du 26/10/2026 sur `GET /api/products`). Règle : **toute ressource exposée
-a un groupe de lecture borné (champs simples, aucune relation imbriquée non bornée) et une pagination plafonnée** ; la lecture
-publique est réservée à ce dont les fronts ont besoin. Les fronts lisent des routes dédiées (DTO à champs explicites).
+Décision du propriétaire (voie 2, avant Symfony 8) : API Platform ne servait plus que trois appels des fronts ; il est retiré
+(paquet, configuration, attributs), avec ses alertes de sécurité, sa documentation qui nommait tous les champs des entités et ses
+écritures qui rendaient toute l'entité et ses relations. Les appels gardés le sont **au même chemin et au même format** :
 
-| Ressource | Opérations | Lecture | Groupes de lecture | Pagination | Remarque |
-|---|---|---|---|---|---|
-| `Product` | liste, fiche (`/api/products/{id}.{format}`), écritures | **administrateur** (401 / 403 avant toute requête) | `product:list` : champs simples | 30, client jusqu'à 100 | S8 ; avant : publique, relations sans limite. La fiche `/api/products/{id}` (sans suffixe) est la route dédiée `get_product_detail` (DTO), publique, inchangée. La route dédiée `get_all_products` (`GET /api/products`, `ProductController::getAllProducts`) est masquée par celle d'API Platform, enregistrée avant elle : elle ne répond jamais (`docs/endpoints.md` l'affiche quand même) |
-| `Categories` | liste, fiche, écritures (administrateur) | **administrateur** | `category:list` : champs simples, sans produits ni packs | 30, client jusqu'à 100 | S8 ; avant : tout client connecté, produits imbriqués. La boutique lit `/api/category` (route dédiée, inchangée) |
-| `Vehicle` | liste, fiche, écritures (administrateur) | publique | `vehicle:read` : champs simples, sans produit ni traductions | 24, plafond 50 | S8 ; aucune donnée en base aujourd'hui |
-| `VehicleProduct` | liste, fiche, écritures (administrateur) | publique (site : `?page=1&pageSize=50`, `pageSize` ignoré, 24 par page) | `vehicle_product:read` | 24, plafond 50 | bornée : champs simples du véhicule et du produit, `bookingConfiguration` (une par produit) ; la liste des réservations n'est pas exposée (vérifié par test) |
-| `Commande` | toutes par défaut | administrateur | aucun | 30 | à traiter plus tard (groupes) ; aucune donnée en base |
-| `Collections` | — | — | — | — | non exposée (attribut en commentaire) |
+| Route | Contrôleur | Accès | Forme |
+|---|---|---|---|
+| `GET /api/vehicle_products?page=&locale=` | `VehicleProductController::list` | publique (boutique) | tableau JSON simple, 24 par page, ordre des identifiants, `VehicleProductOutputDTO` (liste blanche, valeurs nulles omises) ; une requête SQL par page (API Platform : 26 pour 24) |
+| `GET /api/vehicle_products/{id}` | `VehicleProductController::item` | publique | même objet ; 404 au format des erreurs |
+| `DELETE /api/products/{id}` | `ProductController::deleteProduct` (masquée jusque-là) | administrateur | 204 sans corps ; 409 `PRODUCT_IN_USE` de la garde Doctrine |
+
+Contrat figé : `tests/Functional/Boutique/RoutesGardeesApresApiPlatformTest.php` et sa capture « avant »
+(`tests/Fixtures/contrats/vehicle-products.json`). Mesuré à la capture : avec l'en-tête d'axios, API Platform rendait du JSON-LD
+(`hydra:member`) ; la boutique reçoit désormais le tableau simple (elle lit un tableau, `data` ou `hydra:member`). Tout le reste
+(liste `GET /api/products` avec la route maison `get_all_products` qu'elle masquait, écritures sur `/api/products`,
+`/api/categories`, `/api/vehicles`, `/api/vehicle_products`, documentation, contextes JSON-LD, formats `.json`) n'existe plus
+(404 / 405). Règle : **une ressource s'expose par une route maison** (Repository > Service > UseCase >
+Controller > DTO à champs explicites, pagination plafonnée) ; `tests/Functional/Http/NoApiPlatformLeftTest.php` refuse toute
+mention d'API Platform dans le code et la configuration.
 
 Hors API Platform, à surveiller : `GET /api/memoires/admin/users` (administrateur) rend la liste complète des utilisateurs sans
 pagination ; proposition : `?page=` et `?limit=` (défaut 50, plafond 200) avec le total.
@@ -335,7 +339,7 @@ Modules autonomes (mêmes couches dans leur dossier) : `src/MemoiresVivantes/`, 
 `Entity` (mapping Doctrine `AppGestion`), `Repository`, `Message`, `MessageHandler`, `Command`, `EventListener`, `EventSubscriber`).
 Les entités d'achat partagées avec la boutique et la caisse (`Collections`, `Commande`, `CommandeLine`, `NoteDeFrais`,
 `FraisDePort`, `Fournisseur`, `Transporteur`, `RentalPromotion`…) restent dans `src/Entity/`.
-Code plus ancien, à ne pas prendre comme modèle : `src/ApiResource/` (API Platform), contrôleurs Twig de l'ancienne
+Code plus ancien, à ne pas prendre comme modèle : contrôleurs Twig de l'ancienne
 boutique (`templates/`), dépôts qui étendent `ServiceEntityRepository` (45, surtout les traductions).
 
 ### Règles multi-tenant dans le code

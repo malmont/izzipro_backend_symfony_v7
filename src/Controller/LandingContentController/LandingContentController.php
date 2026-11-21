@@ -73,7 +73,7 @@ class LandingContentController extends AbstractController
         }
     }
 
-    // priority : passe avant le PATCH générique d'API Platform sur /api/products/{id} (merge-patch), qui n'applique aucune règle
+    // priority : passait avant le PATCH générique d'API Platform sur /api/products/{id} (retiré le 20/11/2026), gardée sans effet
     #[Route('/api/{resource}/{id}', name: 'api_landing_content_patch', methods: ['PATCH'], priority: 10,
         requirements: ['resource' => 'presentations|presentation-groups|baniere-statiques|bannieres|videos|service-offers|products|category|homeslider|explore-cards|product-variants|customization-options|customization-values|customization-combinations|subscription-plans|features', 'id' => '\d+'])]
     public function patch(string $resource, int $id, Request $request): JsonResponse
