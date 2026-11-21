@@ -95,6 +95,13 @@ $template->exec("INSERT INTO esg_user (id, company_id, email, roles, password, f
 $template->exec("INSERT INTO gestion_stock_snapshot (snapshot_date, sale_value_cents, cost_value_cents, created_at) VALUES ('2026-01-01', 123400, 56700, NOW())");
 $template->exec("UPDATE entreprise SET admin_space_url = 'https://ancien.example.invalid/espace', seo_keywords = 'mots du modèle'");
 $template->exec("INSERT INTO content_audit_log (created_at, user_identifier, tenant, resource, action, fields) VALUES (NOW(), 'plateforme@example.invalid', 'modele', 'platform_access', 'login', 'channel')");
+// PROVISOIRE, lot ABO-LANG (21/11/2026) : la colonne `user.locale` posée aussi sur le modèle des sites créés pendant les tests (un site
+// neuf lit ses comptes par l'entité : l'invitation de son administrateur tombait en INVITATION_FAILED), jusqu'à la pose de la migration
+// sur le modèle des bases de test à la bascule (instructions idempotentes ; ce bloc s'enlève alors avec les autres)
+require_once dirname(__DIR__) . '/migrations/Version20270202300000.php';
+foreach (\DoctrineMigrations\Version20270202300000::STATEMENTS as $sql) {
+    $template->exec($sql);
+}
 $template = null;
 
 $master = new PDO(sprintf('pgsql:host=%s;port=%d;dbname=%s', $u['host'], $u['port'] ?? 5432, MV_TEST_MASTER_DB), urldecode($u['user']), urldecode($u['pass']), [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
@@ -217,6 +224,11 @@ foreach ([MV_TEST_TENANT_DB, MV_TEST_TENANT2_DB] as $db) {
     // PROVISOIRE, lot ABO-3b (20/11/2026) : la migration Version20270202200000 (intervenant et fil de l'abonné), de la même façon
     require_once dirname(__DIR__) . '/migrations/Version20270202200000.php';
     foreach (\DoctrineMigrations\Version20270202200000::STATEMENTS as $sql) {
+        $tenantDb->exec($sql);
+    }
+    // PROVISOIRE, lot ABO-LANG (21/11/2026) : la migration Version20270202300000 (langue du compte), de la même façon
+    require_once dirname(__DIR__) . '/migrations/Version20270202300000.php';
+    foreach (\DoctrineMigrations\Version20270202300000::STATEMENTS as $sql) {
         $tenantDb->exec($sql);
     }
     $tenantDb = null;

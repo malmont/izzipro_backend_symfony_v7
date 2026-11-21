@@ -109,6 +109,11 @@ class AboStaffTest extends WebTestCase
         $team = '/api/site/abonnements/intervenants';
         $invited = $this->json('POST', $team, ['email' => 'abo3b-nouveau@example.invalid', 'firstName' => 'Nina', 'lastName' => 'Nouvelle'], 200);
         $this->assertSame([true, true, 168], [$invited['changed'], $invited['staff']['pending'], $invited['invitation']['validHours']]);
+        // lot ABO-LANG : les échéances d'invitation à l'heure du magasin, comme les autres dates (ABO-DATES)
+        $offset = (new \DateTimeImmutable($invited['invitation']['expiresAt']))->setTimezone(new \DateTimeZone(self::TZ))->format('P');
+        $this->assertStringEndsWith($offset, $invited['invitation']['expiresAt']);
+        $listed = array_column(static::getContainer()->get(\App\Abo\Services\AboStaffService::class)->list(), 'invitationExpiresAt', 'email'); // sans requête : les courriels comptés plus bas sont ceux de l'invitation
+        $this->assertStringEndsWith($offset, (string) $listed['abo3b-nouveau@example.invalid']);
         // le courriel du droit d'IA ouvert par setUp part aussi : seuls ceux de l'invitée comptent
         $toInvitee = static fn (array $ms): int => count(array_filter($ms, static fn ($m): bool => in_array('abo3b-nouveau@example.invalid', array_map(static fn ($a): string => $a->getAddress(), $m->getTo()), true)));
         $this->assertSame(1, $toInvitee($this->getMailerMessages()), 'le lien de 7 jours');
@@ -291,6 +296,39 @@ class AboStaffTest extends WebTestCase
     }
 
     // ---- aides ------------------------------------------------------------------------------------------------------------------------
+
+    /** Lot ABO-LANG (décision du chef, 21/11/2026) : un courriel suit la langue de son DESTINATAIRE, sinon celle du site, jamais celle de la requête */
+    public function testEveryEmailFollowsTheLanguageOfItsRecipientNeverTheRequest(): void
+    {
+        // l'abonné choisit sa langue dans son profil (fr, en ou null) ; le site de test parle français
+        $this->assertSame('LOCALE_INVALID', $this->json('PATCH', '/api/profile', ['locale' => 'de'], 400, self::CLIENT)['code']);
+        $this->json('PATCH', '/api/profile', ['locale' => 'en'], 200, self::CLIENT);
+        $this->assertSame('en', $this->json('GET', '/api/profile', null, 200, self::CLIENT)['locale']);
+        [$s] = $this->subscriptions($this->benefit('Yoga langue', false), 1);
+        $team = '/api/site/abonnements/' . $s->getId() . '/fil?locale=fr';
+
+        // l'équipe répond depuis un écran en français : le courriel part dans la langue de l'abonné
+        $this->assertTrue($this->json('POST', $team, ['body' => 'Bonjour'], 201)['emailed']);
+        $this->assertSame('You have a message from the shop', $this->getMailerMessage()?->getSubject());
+        $html = (string) $this->getMailerMessage()?->getHtmlBody();
+        $this->assertStringContainsString('Manage your subscription from your account', $html);
+        $this->assertStringNotContainsString('Gérez votre abonnement', $html);
+
+        // sans langue choisie : celle du site, même si l'équipe écrit depuis un écran en anglais
+        $this->json('PATCH', '/api/profile', ['locale' => null], 200, self::CLIENT);
+        $this->assertNull($this->json('GET', '/api/profile', null, 200, self::CLIENT)['locale']);
+        $this->db->executeStatement('UPDATE subscription SET thread_emailed_at = NULL WHERE id = ?', [$s->getId()]);
+        $this->assertTrue($this->json('POST', '/api/site/abonnements/' . $s->getId() . '/fil?locale=en', ['body' => 'Encore'], 201)['emailed']);
+        $this->assertSame('Vous avez un message de la boutique', $this->getMailerMessage()?->getSubject());
+
+        // l'invitation d'un intervenant : dans la langue dite pour lui (gardée sur son compte), jamais celle de l'administrateur
+        $this->json('POST', '/api/site/abonnements/intervenants?locale=fr', ['email' => 'abo3b-nouveau@example.invalid', 'firstName' => 'Nina', 'lastName' => 'Nouvelle', 'locale' => 'en'], 200);
+        $subjects = array_map(static fn ($m): ?string => $m->getSubject(), array_values(array_filter($this->getMailerMessages(),
+            static fn ($m): bool => in_array('abo3b-nouveau@example.invalid', array_map(static fn ($a): string => $a->getAddress(), $m->getTo()), true))));
+        $this->assertCount(1, $subjects);
+        $this->assertStringEndsWith(': your staff access', (string) $subjects[0]);
+        $this->assertSame('en', $this->db->fetchOne('SELECT locale FROM "user" WHERE email = ?', ['abo3b-nouveau@example.invalid']));
+    }
 
     private function prov(): TenantEntityManagerProvider
     {

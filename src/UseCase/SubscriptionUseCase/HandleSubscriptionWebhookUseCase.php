@@ -193,7 +193,7 @@ class HandleSubscriptionWebhookUseCase
                 }
                 $em->flush();
                 if ($subscription->getStatus() === Subscription::STATUS_CANCELED && $before !== Subscription::STATUS_CANCELED) {
-                    $this->mailer->notify($subscription, 'canceled', $locale, $host);
+                    $this->mailer->notify($subscription, 'canceled', $host);
                 }
 
                 return ['status' => 'processed', 'detail' => $subscription->getStatus()];
@@ -307,12 +307,12 @@ class HandleSubscriptionWebhookUseCase
                 $subscription->setStatus(Subscription::STATUS_CANCELED)->setCanceledAt($subscription->getCanceledAt() ?? new \DateTimeImmutable());
                 $em->flush();
             }
-            $this->mailer->notify($subscription, 'canceled_unpaid', $locale, $host, ['rows' => ['Montant impayé' => $amount, 'Essais de paiement' => (string) $attempt]]);
+            $this->mailer->notify($subscription, 'canceled_unpaid', $host, ['rows' => ['subscription_notice.row.unpaid' => $amount, 'subscription_notice.row.attempts' => (string) $attempt]]);
 
             return ['status' => 'processed', 'detail' => sprintf('résilié après %d essai(s) de paiement', $attempt)];
         }
-        $this->mailer->notify($subscription, 'payment_failed', $locale, $host, [
-            'rows' => ['Montant dû' => $amount, 'Essai' => sprintf('%d sur %d', $attempt, SubscriptionService::MAX_FAILED_PAYMENTS), 'Prochain essai' => $next->format('d/m/Y')],
+        $this->mailer->notify($subscription, 'payment_failed', $host, [
+            'rows' => ['subscription_notice.row.due' => $amount, 'subscription_notice.row.attempt' => sprintf('%d / %d', $attempt, SubscriptionService::MAX_FAILED_PAYMENTS), 'subscription_notice.row.next_attempt' => $next->format('d/m/Y')],
             'payUrl' => $issue['hostedInvoiceUrl'],
         ]);
 

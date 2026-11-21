@@ -613,6 +613,20 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     public function getNotificationLevel(): ?string { return $this->notificationLevel; }
     public function setNotificationLevel(?string $level): static { $this->notificationLevel = \App\Services\Notification\NotificationLevel::isValid($level) ? $level : null; return $this; }
 
+    /** Lot ABO-LANG (21/11/2026) : langue du compte (`fr`, `en`) ; null : celle du site. Les courriels suivent la langue du destinataire */
+    #[ORM\Column(name: 'locale', length: 5, nullable: true)]
+    private ?string $locale = null;
+
+    public function getLocale(): ?string { return $this->locale; }
+    /** Toute autre valeur que `fr` ou `en` (après minuscules, `fr-CA` compris) vide la langue : celle du site s'applique */
+    public function setLocale(?string $locale): static
+    {
+        $code = is_string($locale) ? strtolower(substr(trim($locale), 0, 2)) : '';
+        $this->locale = in_array($code, ['fr', 'en'], true) ? $code : null;
+
+        return $this;
+    }
+
     public function getSignupChannel(): ?string { return $this->signupChannel; }
     public function setSignupChannel(?string $signupChannel): static { $this->signupChannel = $signupChannel; return $this; }
     public function getCreatedAt(): ?\DateTimeImmutable { return $this->createdAt; }

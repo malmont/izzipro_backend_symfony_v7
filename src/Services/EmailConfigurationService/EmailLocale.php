@@ -36,6 +36,15 @@ final class EmailLocale
         return $this->site->siteLocale() === self::ENGLISH ? self::ENGLISH : self::FRENCH;
     }
 
+    /**
+     * Lot ABO-LANG (21/11/2026) : la langue d'un courriel adressé à ce compte, celle du DESTINATAIRE (`user.locale`), sinon celle du site ;
+     * jamais celle de la requête (une réponse de l'équipe partait dans la langue de l'administrateur).
+     */
+    public function forUser(?\App\Entity\User $user): string
+    {
+        return $this->language($user?->getLocale());
+    }
+
     public function fromRequest(Request $request): string
     {
         return $this->language($request->query->get('locale'));

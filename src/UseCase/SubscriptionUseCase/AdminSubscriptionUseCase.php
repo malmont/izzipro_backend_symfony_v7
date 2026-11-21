@@ -18,8 +18,6 @@ use Symfony\Bundle\SecurityBundle\Security;
  */
 final class AdminSubscriptionUseCase
 {
-    private const LOCALE = 'fr';
-
     public function __construct(
         private readonly SubscriptionService $service,
         private readonly SubscriptionMailer $mailer,
@@ -33,7 +31,7 @@ final class AdminSubscriptionUseCase
     public function cancel(Subscription $subscription, bool $atPeriodEnd, string $host): void
     {
         $this->service->cancel($subscription, $atPeriodEnd);
-        $this->mailer->notify($subscription, $atPeriodEnd ? 'cancel_scheduled' : 'canceled', self::LOCALE, $host);
+        $this->mailer->notify($subscription, $atPeriodEnd ? 'cancel_scheduled' : 'canceled', $host);
         $this->trace($atPeriodEnd ? 'cancel_at_period_end' : 'cancel_now', $subscription);
     }
 
@@ -57,7 +55,7 @@ final class AdminSubscriptionUseCase
         } else {
             $this->service->pause($subscription);
         }
-        $this->mailer->notify($subscription, 'paused', self::LOCALE, $host);
+        $this->mailer->notify($subscription, 'paused', $host);
         $this->trace('pause', $subscription);
     }
 
