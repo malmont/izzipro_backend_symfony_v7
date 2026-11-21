@@ -128,8 +128,8 @@ partagée par tous). Essai : `tests/Functional/Boutique/FichesHorsLigneTest.php`
 | Devis de caisse (`cashRegisterId`), vente en caisse | inchangés (règle `isPos` de la caisse) |
 
 La création de la commande (`/api/order/create`, `create-guest`) n'ajoute pas de refus : elle exige une intention de paiement
-VÉRIFIÉE, qui ne se crée plus pour un article hors ligne, une fois le lot CHECKOUT-PANIER livré (la commande se créera alors toujours
-depuis le panier gardé avec l'intention ; d'ici là, le corps de la commande n'est lié à l'intention que par son montant). Un article
+VÉRIFIÉE, qui ne se crée plus pour un article hors ligne, et elle se crée toujours depuis le panier gardé avec l'intention (lot
+CHECKOUT-PANIER, « Paiement d'un panier »). Un article
 passé hors ligne APRÈS l'intention donne sa commande au client qui a payé (jamais de paiement sans commande). Le devis
 `POST /api/cart/quote` applique la règle à toute la route, même avec un `cashRegisterId` (un visiteur peut en poser un ; le caissier
 est un compte d'équipe). Les lectures dont le corps dépend de qui lit (fiche, by-slug, by-category, avis) portent
@@ -433,6 +433,23 @@ intent Stripe) et la commande naît **une seule fois par paiement**, du navigate
   Migration `Version20261009190000`, script `scripts/migrate_all_v2_checkout_sessions.sh`. Tests :
   `tests/Functional/Boutique/CheckoutApiTest.php`. Vérifié en réel sur `demo` (Stripe test) : commandes 11 et 13
   (client, appel répété), 12 (invité, créée par le webhook).
+- **La commande est celle du panier PAYÉ** (lot CHECKOUT-PANIER, 21/11/2026, faille relevée par la relecture de
+  FICHES-HORS-LIGNE) : avant ce lot, seul le MONTANT liait la commande au paiement, et un client pouvait payer un article puis
+  commander un autre article au même total (hors ligne, autre variante, article de caisse seule, autre transporteur). Désormais la
+  commande se crée TOUJOURS depuis le panier coté et gardé avec l'intention (`checkout_session.cart` : articles, transporteur,
+  livraison, réservation), quel que soit le chemin ; le corps n'est plus qu'un contrôle (`CheckoutCartGuard`), comparé sur des
+  lignes normalisées (variante, quantité, personnalisation ; location : début, fin, forfait, type de durée, passagers ; ordre et
+  champs en plus ignorés, `productId` compris), sur le transporteur et les frais de livraison s'ils sont envoyés, et sur l'adresse
+  (pays, province, code postal connus au devis).
+  - `create-intent` : un `order` envoyé qui diffère du panier coté → **409 `CART_MISMATCH`**, AVANT tout paiement (aucune
+    intention). Le corps est gardé sans ses clés de panier : la commande les prendra du panier.
+  - `order/create`, `create-guest` : un corps différent du panier payé → **409 `CART_MISMATCH`**, avant la réservation du paiement :
+    l'autorisation reste entière (un corps juste la consomme ; le webhook crée la commande du panier payé si `order` a été gardé ;
+    sinon elle expire sans débit). Aucun panier gardé avec ce paiement : 409 `CART_MISMATCH`.
+  - Webhook : **jamais de refus** (l'argent est pris) ; un écart avec le corps gardé (session d'avant le lot) est noté en incident de
+    la plateforme (`checkout/panier`, avertissement, sans donnée du client) et la commande se crée sur le panier payé.
+  - Le tunnel de la boutique envoie les mêmes lignes à `create-intent` et à la commande (vérifié par le chef) : il ne voit jamais
+    le refus. Essai : `tests/Functional/Boutique/CheckoutPanierTest.php`.
 - **Pays absent** (commandes invité 9 et 10 de demo, hors taxes) : une province canadienne (code ou nom) ou un code
   postal canadien suffit à reconnaître le Canada (`TaxEngine::normalizeAddress`, adresse de l'invité).
 - **Abonnement en double** (`POST /api/subscriptions`) : un abonnement encore `incomplete` à la même formule et quantité
@@ -543,6 +560,7 @@ obligatoires (ajouter une validation refuserait des adresses acceptées aujourd'
 | `PAYMENT_REQUIRED` | 402 | Un paiement en ligne est requis pour cette commande. |
 | `PAYMENT_ALREADY_USED` | 409 | Ce paiement est déjà associé à une commande. |
 | `ORDER_IN_PROGRESS` | 409 | La commande de ce paiement est en cours de création : réessayez dans un instant. |
+| `CART_MISMATCH` | 409 | La commande ne correspond pas au panier payé (ou à payer, à `create-intent`) : corps différent du panier coté (articles, quantités, réservation, transporteur, livraison, adresse) ; lot CHECKOUT-PANIER |
 | `QUOTE_INVALID`, `VARIANT_NOT_FOUND`, `CARRIER_NOT_FOUND`, `BAD_REQUEST` | 400 | commande refusée après le paiement (autorisation annulée) : code, message et `errors[]` du devis repris tels quels |
 | `ORDER_REFUSED` | 400 | Commande refusée. / dernier message d'échec gardé sur la trace du paiement (`checkout_session.last_error`) |
 | codes par statut (`BAD_REQUEST`, `FORBIDDEN`…) | — | tout autre refus sans code propre |
